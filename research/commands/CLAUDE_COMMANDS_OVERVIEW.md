@@ -1,103 +1,556 @@
-# Claude Code Custom Commands & Workflows Overview
+# CLAUDE_COMMANDS_OVERVIEW.md
+
+> Unified overview of Claude Code built-in slash commands, custom Markdown commands, subagents, MCP-powered commands, and practical workflows. Consolidated from:
+> - Claude-Code-Complete-Guide-2026.md
+> - Claude_Commands_Updated_2026.md
+> - Original CLAUDE_COMMANDS_OVERVIEW.md
+
+---
 
 ## 1. Executive Summary
-"Claude Code" (Anthropic's agentic CLI) is a highly extensible tool that moves beyond simple chat by integrating directly with your shell and file system. Its power lies in **Custom Commands** (Slash Commands) and **Context Configuration** (`CLAUDE.md`).
 
-Unlike traditional CLIs with static binaries, Claude Code's "commands" are typically **Markdown files** containing prompt engineering, shell scripts, and MCP (Model Context Protocol) tool calls. This makes them easy to read, modify, and share.
+Claude Code is Anthropic’s agentic CLI for deep codebase work. Instead of a fixed binary with hard‑coded subcommands, it exposes a **command fabric** composed of:
 
-**Key Insight:** The "best" commands aren't single binaries, but **Command Suites** (repositories of `.md` recipes) and **MCP Servers** that expose functionality to Claude.
+| Layer | What it is | Typical examples | Primary value |
+| --- | --- | --- | --- |
+| **Built‑in slash commands** | First‑class commands compiled into Claude Code | `/clear`, `/compact`, `/permissions`, `/status`, `/agents` | Control session, tools, models, and context |
+| **Custom Markdown commands** | `.md` files mapped to slash commands | `/commit`, `/plan`, `/db:migrate`, `/ci-full` | Encode repeatable workflows as prompts + shell + tools |
+| **MCP‑provided commands** | Commands surfaced by Model Context Protocol servers | `/github:pr-create`, `/github:review` | Integrate external systems (GitHub, DB, browsers, etc.) |
+| **Subagents** | Specialized AI profiles with constrained tools | `SecurityAuditor`, `FrontendDeveloper` | Parallel work, specialization, and safety via scoped capabilities |
+| **CLAUDE.md + memory** | Long‑lived project and user context | Tech stack, style guide, routing rules | Makes commands & agents project‑aware and consistent |
 
----
-
-## 2. Top Repositories & Command Suites
-The following repositories contain curated collections of commands, sub-agents, and workflow templates.
-
-| Repository | Focus | Best For |
-| :--- | :--- | :--- |
-| **`awesome-claude-code`** (Various authors*) | Curated Lists | Finding the latest tools, MCP servers, and community guides. |
-| **`VoltAgent/awesome-claude-code-subagents`** | Specialized Agents | "Sub-agents" designed for specific domains (e.g., security audit, QA). |
-| **`ruvnet/claude-flow`** | `CLAUDE.md` Templates | Standardizing project context. Contains templates for React, Python, etc. |
-| **`quemsah/awesome-claude-plugins`** | Metrics & Discovery | Automated tracking of popular plugins and tools across GitHub. |
-
-*\*Note: "Awesome" lists are community-driven. The `jqueryscript` and `awesomeclaude.ai` forks are popular entry points.*
+The most effective setups treat commands as **versioned infrastructure-as-prompt**: workflow recipes, not ad‑hoc chats. Teams standardize on a small set of built‑ins plus 10–30 well‑designed custom commands and 3–7 subagents, wired together by permissions, MCP servers, and CLAUDE.md.
 
 ---
 
-## 3. Essential Command Recipes (The "Must-Haves")
-These are specific high-value commands you should implement in your `.claude/commands/` directory.
+## 2. Core Concepts in One View
 
-### 🛠️ The "Sanity" Commit (`/commit`)
-*   **Goal:** Prevent bad code from entering history.
-*   **Mechanism:** Runs `git diff`, checks for `TODO`/`FIXME`/`console.log`, and generates a semantic commit message.
-*   **Workflow:**
-    1.  User types `/commit "optional context"`.
-    2.  Claude reads staged files.
-    3.  If "blockers" (like debug prints) exist -> Aborts with warning.
-    4.  If clean -> Generates Conventional Commit message & executes `git commit`.
+### 2.1 Command Types
 
-### 🔄 The Context Refresher (`/catchup`)
-*   **Goal:** Re-sync Claude after a `/clear` or long session.
-*   **Mechanism:** Reads `git status` and uncommitted changes to "catch up" on what happened since context was wiped.
-*   **Workflow:** `/clear` -> `/catchup` -> Claude is back in context without re-reading the whole repo.
+| Type | Definition | Where it lives | How you invoke it |
+| --- | --- | --- | --- |
+| **Built‑in slash command** | Native Claude Code feature | Inside Claude CLI | Type `/clear`, `/compact`, `/model` in a Claude session |
+| **Project custom command** | Markdown workflow file scoped to a repo | `.claude/commands/**.md` | `/deploy`, `/db:migrate`, `/plan`, `/ticket` |
+| **User‑level custom command** | Global command available across projects | `~/.claude/commands/**.md` | `/user:commit`, `/user:review`, `/user:security:scan` |
+| **MCP dynamic command** | Command exported by an MCP server as a prompt | Defined by MCP server config | `/github:issue-create`, `/github:review` |
 
-### 🎫 Ticket Manager (`/ticket`)
-*   **Goal:** Turn a Jira/GitHub issue into code.
-*   **Mechanism:** Uses **GitHub MCP** or **Jira MCP**.
-*   **Workflow:**
-    1.  `/ticket PROJ-123`
-    2.  Claude fetches issue details via MCP.
-    3.  Create branch `feat/PROJ-123`.
-    4.  Implements changes based on acceptance criteria.
+### 2.2 High‑leverage primitives
 
-### 🧱 Project Scaffolding (`/project:new`)
-*   **Goal:** Standardized file creation (Namespaced).
-*   **Location:** `.claude/commands/project/new.md` (Invoked as `/project:new`).
-*   **Workflow:** prompts for parameters (component name, type) and creates file + test + storybook entry simultaneously.
+- **Permissions system**: Fine‑grained allow/deny lists for `Read`, `Write`, `Bash`, and each MCP server. Used to create safe profiles (e.g. read‑only security audit vs full‑autonomy local dev).
+- **CLAUDE.md**: Single source of truth for:
+  - Tech stack
+  - Build/test commands
+  - Architecture and conventions
+  - Subagent routing hints (when to use which specialist)
+- **Subagents**: YAML‑configured agents in `.claude/agents/` with their own instructions, model, tools, and permission scopes.
+- **MCP servers**: External backends (GitHub, Postgres, Playwright, Sentry, Jira, etc.) that expose tools and sometimes ready‑made prompts.
 
 ---
 
-## 4. The Architecture of Custom Commands
+## 3. Built‑in Slash Commands
 
-### File Structure
-Commands are Markdown files. The filename becomes the command.
-```text
-.claude/
-  commands/
-    commit.md        -> /commit
-    review.md        -> /review
-    test/
-      ui.md          -> /test:ui
-  CLAUDE.md          -> (Auto-loaded Context)
+Built‑ins are always available and form the operational backbone of Claude Code.
+
+### 3.1 Context Management
+
+| Command | Purpose | Typical usage |
+| --- | --- | --- |
+| `/clear` | Wipe entire conversation history | Hard reset when context is corrupted or switching projects mid‑session |
+| `/compact [focus]` | Summarize prior turns, keep a compressed context | Preserve decisions while freeing tokens (e.g. after long debugging sessions) |
+| `/rewind [steps]` | Remove the last N turns from context | Undo a few bad turns before they pollute the rest of the session |
+| `/catchup` | Re‑sync Claude with repo state after a reset | Run after `/clear` to re‑ingest current Git status and uncommitted changes |
+
+**Recommended habits**
+
+- Prefer `/compact` every 30–50 turns instead of over‑using `/clear`.
+- Use `/rewind` right after a misstep to avoid “reasoning on bad facts”.
+- Use `/catchup` as your standard bridge from a fresh context back to the repo.
+
+---
+
+### 3.2 Configuration
+
+| Command | What it configures | Notes |
+| --- | --- | --- |
+| `/permissions` | Which tools are allowed (and where) | Backed by `~/.claude/settings.json` permission profiles |
+| `/model [name]` | Active Claude model for this session | Typical strategy: Opus for planning, Sonnet for implementation, Haiku for subagents |
+| `/config` | Interactive wizard for models, directories, MCP, permissions, memory | Fastest way to bootstrap a new environment |
+
+**Example permission profile (code review mode)**
+
+```json
+{
+  "permissions": {
+    "allowedTools": [
+      "Read",
+      "Write(src/**, !src/deprecated/**)",
+      "Bash(git *, npm run test)",
+      "MCP(github)"
+    ],
+    "deniedTools": [
+      "Write(.env*)",
+      "Write(config/production.*)",
+      "Bash(rm *)",
+      "Bash(sudo *)"
+    ]
+  }
+}
 ```
 
-### The `CLAUDE.md` Context File
-This is not a command, but the **brain** behind the commands. It should contain:
-*   **Build/Test Commands:** `npm run build`, `pytest`.
-*   **Style Guide:** "Use Functional Components", "Snake_case for variables".
-*   **Architecture:** High-level system design.
-*   **Note:** Use `ruvnet/claude-flow` templates to generate this.
+---
 
-### MCP: The Engine
-Custom commands often just wrap **MCP Tools**.
-*   **Filesystem MCP:** Reads/Writes code.
-*   **GitHub MCP:** Manages PRs/Issues.
-*   **Postgres MCP:** Queries DBs directly.
-*   **Playwright MCP:** E2E testing / Browser automation.
+### 3.3 Navigation & Session State
+
+| Command | Purpose |
+| --- | --- |
+| `/add-dir [paths...]` | Attach additional working directories (monorepos, multi‑service repos) |
+| `/status` | Show current model, directories, MCP servers, permissions, memory state, token usage |
+| `/agents` | List built‑in and custom subagents, their tools, and when they are auto‑delegated |
+| `/memory` | View, add, and clear persistent memory items |
+
+Patterns:
+- Use `/add-dir` instead of starting separate sessions per package in a monorepo.
+- Use `/memory` for cross‑session facts (style guides, API invariants, architectural constraints).
 
 ---
 
-## 5. Implementation Strategy for You
-To build a robust Claude Code environment, follow this "Starter Pack" plan:
+### 3.4 Utility & Operations
 
-1.  **Initialize Context:** Create a `CLAUDE.md` in your root using a template from `claude-flow` that matches your tech stack.
-2.  **Install Core MCPs:** Ensure `filesystem` and `github` MCP servers are active.
-3.  **Create "Global" Commands (`~/.claude/commands/`):**
-    *   `commit.md` (The sanity checker).
-    *   `review.md` (For PR reviews).
-4.  **Create "Project" Commands (`.claude/commands/`):**
-    *   `deploy.md` (Specific to your infra).
-    *   `db:migrate.md` (Safe migration runner).
+| Command | Purpose |
+| --- | --- |
+| `/help` | List built‑in and discovered custom slash commands with descriptions |
+| `/doctor` | Health check: CLI version, API key, MCP connectivity, permissions, shell integration |
+| `/terminal-setup [shell]` | Install aliases (`claude`, `claude-continue`, etc.) and shell completions |
+| `/hooks` | Configure lifecycle hooks (pre/post tool use, subagent delegation/return) via `~/.claude/hooks.yaml` |
+| `/usage` and `/cost` | Inspect token usage and estimated spend per model and session |
 
-**References:**
-*   [Anthropic Custom Commands Docs](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/commands)
-*   [Awesome Claude Code (GitHub)](https://github.com/topics/claude-code)
+Lifecycle hooks enable guardrails such as “request approval before destructive Bash commands” or “log all Write operations to an audit file”.
+
+---
+
+## 4. Custom Commands (Markdown‑based)
+
+Custom commands are where teams encode **repeatable workflows**.
+
+### 4.1 Command Locations & Naming
+
+```text
+~/.claude/commands/              # User-level (global)
+  commit.md                      # /user:commit
+  review.md                      # /user:review
+  security/scan.md               # /user:security:scan
+
+.claude/commands/                # Project-level (scoped to repo)
+  deploy.md                      # /deploy
+  test/unit.md                   # /test:unit
+  test/e2e.md                    # /test:e2e
+  db/migrate.md                  # /db:migrate
+  project/new.md                 # /project:new
+```
+
+- Folder nesting becomes `:` namespaces: `test/unit.md` → `/test:unit`.
+- User‑level commands are ideal for global workflows (semantic commits, generic reviews).
+- Project commands should capture repo‑specific tasks (CI pipeline, deploys, DB migrations).
+
+### 4.2 Anatomy of a Command
+
+Each command is a Markdown file with YAML frontmatter and a prompt body:
+
+```markdown
+---
+name: review
+description: Code review checking security, performance, and best practices
+model: opus
+tools:
+  - Read
+  - MCP(github)
+---
+
+# Code Review Command
+
+You are a senior engineer reviewing code changes.
+
+## Review Focus
+1. Security
+2. Performance
+3. Maintainability
+
+## Input
+```bash
+{cmd:git diff HEAD~1}
+```
+
+## Output Format
+- **File:** path (line)
+- **Severity:** Critical / Warning / Info
+- **Category:** Security / Performance / Maintainability
+- **Description:**
+- **Suggestion:**
+- **Example:**
+```
+
+#### Supported command‑time syntaxes
+
+| Syntax | Meaning |
+| --- | --- |
+| `{cmd:...}` | Execute a shell command and splice output into the prompt |
+| `{file:path}` | Include the contents of a file |
+| `{{args}}` | Raw arguments passed after the slash command |
+| `{{env:VAR}}` | Substitute an environment variable |
+
+Frontmatter controls **name, description, model override, tool restrictions**, and optionally tags or categories.
+
+---
+
+### 4.3 Essential Command Recipes
+
+These are the “must‑have” commands most teams benefit from immediately.
+
+#### 4.3.1 Semantic Commit (`/commit`)
+
+- **Goal:** Prevent low‑quality or unsafe changes from entering Git history.
+- **Behavior:**
+  - Runs `git diff --staged` via `{cmd:git diff --staged}`.
+  - Scans for debug leftovers (`console.log`, `debugger`, `TODO`, `FIXME`, commented‑out blocks, hard‑coded secrets).
+  - If blockers are present → abort with a detailed report.
+  - If clean → generate a Conventional Commit message `type(scope): description` and optionally run `git commit`.
+
+Typical flow:
+
+```bash
+git add src/**
+claude
+> /commit
+→ Analyzing staged changes…
+→ ✓ No debug code found
+→ Suggested commit: feat(auth): add OAuth2 login flow
+→ Execute this commit? [y/n]
+```
+
+#### 4.3.2 Task Planner (`/plan`)
+
+- **Goal:** Turn a vague request into a concrete, ordered implementation plan.
+- **Inputs:** Human task description via `{{args}}`.
+- **Outputs:**
+  - Requirements analysis
+  - Architectural approach and trade‑offs
+  - Files to create/modify/delete
+  - Step‑by‑step checklist with complexity estimate
+  - Testing strategy, risks, success criteria
+
+Great as the first step in the **Explore → Plan → Code → Review** cycle.
+
+#### 4.3.3 Ticket Worker (`/ticket` or `/fix-issue`)
+
+- **Goal:** Turn tracked work items (GitHub/Jira) into concrete branches and code changes.
+- **Mechanism:**
+  - Use MCP GitHub or Jira to fetch issue details.
+  - Create a branch (`feat/PROJ-123` or `fix/issue-123`).
+  - Optionally call `/plan` internally.
+  - Implement changes & run tests.
+
+Example sketch:
+
+```markdown
+Issue number: {{args}}
+
+```bash
+{cmd:gh issue view {{args}}}
+{cmd:git checkout -b fix/issue-{{args}}}
+```
+```
+
+#### 4.3.4 Project Scaffolder (`/project:new`)
+
+- **Goal:** Enforce consistent structure for new slices of the system.
+- **Typical behavior:** Ask for a component/feature name and type, then:
+  - Create implementation file
+  - Create test file
+  - Add Storybook/route entry if applicable
+
+#### 4.3.5 CI / Quality Gate (`/ci-full`)
+
+Runs your full local CI suite:
+
+```markdown
+{cmd:npm run lint}
+{cmd:npm run typecheck}
+{cmd:npm test}
+{cmd:npm run build}
+{cmd:npm run test:e2e || echo "No E2E tests"}
+```
+
+Summarizes failures and suggests fixes. Typically restricted to safe Bash patterns (`Bash(npm *, git *)`).
+
+#### 4.3.6 Rubber‑Duck Debugger (`/rubber-duck`)
+
+Explains a file in plain language and surfaces potential risks, misunderstandings, and simplifications. Very effective for onboarding and for untangling legacy modules.
+
+#### 4.3.7 Documentation Generator (`/doc-generate`)
+
+Reads a file and outputs structured docs: description, parameters, return values, examples, related APIs, performance notes, and gotchas.
+
+#### 4.3.8 Safe Dependency Updater (`/deps-update`)
+
+Combines `npm outdated`, `npm audit`, optional Snyk MCP, and a test run into a safe, explainable dependency upgrade workflow with a single semantic commit at the end.
+
+---
+
+## 5. MCP Servers & Dynamic Commands
+
+MCP (Model Context Protocol) is how Claude Code attaches external capabilities.
+
+### 5.1 Server Types
+
+- **Official servers**: `filesystem`, `github`, `postgres`, `playwright`, `sentry`, etc.
+- **Community servers**: `jira`, `slack`, `stripe`, `airtable`, `memory`, and many others.
+
+### 5.2 Installation & Configuration
+
+Via CLI:
+
+```bash
+claude mcp add github -- npx -y @modelcontextprotocol/server-github
+claude mcp add postgres -- npx -y @modelcontextprotocol/server-postgres postgresql://user:pass@localhost/db
+claude mcp add playwright -- npx -y @modelcontextprotocol/server-playwright
+```
+
+Via `settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxxx"
+      }
+    }
+  }
+}
+```
+
+### 5.3 Dynamic MCP Commands
+
+Many servers expose **prompts** that appear as slash commands, e.g. GitHub MCP:
+
+```bash
+/github:pr-create
+/github:issue-search
+/github:issue-create
+/github:review
+```
+
+These can be wrapped by your own commands (`/ticket`, `/pr:prepare`, `/release:cut`) to form high‑level workflows.
+
+---
+
+## 6. Subagents & Orchestration
+
+Subagents are named specialist agents defined in `.claude/agents/*.md`.
+
+### 6.1 Why Subagents
+
+- Isolate noisy or verbose work streams.
+- Restrict tools for safety (e.g. read‑only security auditor).
+- Parallelize independent tasks (up to ~10 subagents at once).
+- Optimize cost by assigning cheaper models to mechanical tasks.
+
+### 6.2 Defining a Subagent
+
+Example security auditor:
+
+```yaml
+---
+name: SecurityAuditor
+description: Security specialist focused on vulnerability detection
+instructions: |
+  You are a security-focused code reviewer specializing in OWASP Top 10,
+  authentication & authorization, injection attacks, and secrets management.
+model: opus
+tools:
+  - Read
+  - MCP(snyk)
+  - MCP(github)
+permissions:
+  allowedTools:
+    - Read
+    - MCP(snyk)
+    - MCP(github)
+---
+```
+
+Usage:
+
+```bash
+> Have the SecurityAuditor review src/auth.ts for vulnerabilities
+```
+
+### 6.3 Built‑in Subagents
+
+- **Explore**: Discovery and mapping, limited to `Read` + light `Bash(grep/find/ls)`.
+- **Plan**: Architecture and design, often writing ADR‑style docs.
+- **General**: Fallback when no specific agent is a better fit.
+
+### 6.4 Orchestration Patterns
+
+1. **Sequential pipeline** (Requirements → Design → Implementation → Review → QA).
+2. **Parallel specialization** (Security, performance, architecture analyses in parallel, then aggregate).
+3. **Recursive delegation** (Architect subagent further delegates to Frontend/Backend/DB specialists).
+
+In 2026, Claude Code can also **auto‑delegate** based on task complexity and sensitivity (e.g. routing auth‑heavy changes to SecurityAuditor by default).
+
+---
+
+## 7. CLAUDE.md & Memory Architecture
+
+### 7.1 Minimum viable CLAUDE.md
+
+- Tech stack and versions
+- Build/test/lint/typecheck commands
+- Directory layout and naming conventions
+- Style guide (patterns to prefer/avoid)
+- Known constraints and “gotchas”
+
+This file is auto‑loaded into context at session start, so it should answer “what is this project and how do we work here?” without extra prompting.
+
+### 7.2 Advanced CLAUDE.md with Routing
+
+Add sections like:
+
+- “When to use FrontendSpecialist vs BackendDeveloper vs PerformanceAnalyst vs SecurityAuditor.”
+- “Which MCP servers are authoritative for which domains (GitHub vs Jira vs internal API).”
+- “What permission profiles to use for dev vs review vs prod‑adjacent tasks.”
+
+Combined with explicit `/agents` and `/permissions` usage, this turns Claude Code into a **policy‑driven multi‑agent system** rather than a single assistant.
+
+---
+
+## 8. CLI Usage & Flags (Shell‑level)
+
+These are commands executed in your shell, not inside a Claude session.
+
+### 8.1 Basics
+
+```bash
+# Start interactive REPL
+claude
+
+# Start with an initial question
+claude "Explain this project structure"
+
+# One-off (print mode)
+claude -p "Review src/auth.ts for security issues"
+
+# Continue previous session
+claude -c
+
+# Continue and immediately send a new instruction
+claude -c -p "Run the tests"
+
+# Resume specific session by ID
+claude -r <session-id> "Finish the implementation"
+```
+
+### 8.2 Useful Flags
+
+```bash
+# Attach extra directories (monorepo support)
+claude --add-dir ../api ../lib
+
+# Pre-approve some tools for this run
+claude --allowedTools "Read" "Write(src/**)" "Bash(npm *)"
+
+# Replace default system prompt completely
+claude --system-prompt "You are a Python expert"
+
+# Append to default system prompt
+claude --append-system-prompt "Focus on performance optimization"
+
+# Pipe data into Claude
+cat logs.txt | claude -p "Analyze these errors and propose fixes"
+
+# Self-update the CLI
+claude update
+```
+
+### 8.3 MCP Management via CLI
+
+```bash
+claude mcp list
+claude mcp add github -- npx -y @modelcontextprotocol/server-github
+claude mcp remove github
+claude mcp test github
+```
+
+---
+
+## 9. Practical Setup Strategy (Recommended)
+
+1. **Bootstrap context**
+   - Create a solid `CLAUDE.md` using templates (e.g. for Next.js, Django, FastAPI, Go).
+   - Add 3–5 explicit memory items via `/memory` for long‑lived rules that transcend repos (commit style, review philosophy, etc.).
+
+2. **Install core MCP servers**
+   - Always: `filesystem`, `github`.
+   - As needed: `postgres`, `playwright`, `sentry`, `jira`, `stripe`, etc.
+
+3. **Define permission profiles**
+   - Full autonomy (local dev).
+   - Restricted write (code review).
+   - Read‑only audit (security/compliance).
+   - Per‑subagent scoped permissions.
+
+4. **Create or import command suites**
+   - Global: `/commit`, `/review`, `/plan`, `/rubber-duck`, `/doc-generate`, `/deps-update`, `/ci-full`.
+   - Project: `/deploy`, `/db:migrate`, `/ticket`, `/project:new`, stack‑specific commands.
+
+5. **Add 3–7 subagents**
+   - SecurityAuditor, PerformanceAnalyst, FrontendSpecialist, BackendDeveloper, TestRunner, DocsWriter, Architect.
+
+6. **Evolve via workflows**
+   - Standardize on Explore → Plan → Code → Review cycles.
+   - Encode frequently repeated flows as new commands instead of new habits.
+
+---
+
+## 10. Quick Reference Tables
+
+### 10.1 Built‑In Slash Commands (Cheat Sheet)
+
+| Category | Command | One‑line mental model |
+| --- | --- | --- |
+| Context | `/clear` | Hard reset conversation |
+| Context | `/compact [focus]` | Summarize history, keep essentials |
+| Context | `/rewind [n]` | Step back N turns |
+| Context | `/catchup` | Re‑ingest repo state after a reset |
+| Config | `/permissions` | Configure tool access & safety profiles |
+| Config | `/model` | Switch active Claude model |
+| Config | `/config` | Interactive environment wizard |
+| Nav | `/add-dir` | Attach more working directories |
+| Nav | `/status` | Show session snapshot |
+| Nav | `/agents` | List subagents and capabilities |
+| Nav | `/memory` | Manage long‑term memory items |
+| Utility | `/help` | Show built‑ins + discovered custom commands |
+| Utility | `/doctor` | Diagnose setup issues |
+| Utility | `/terminal-setup` | Install shell aliases & completions |
+| Utility | `/hooks` | Configure lifecycle hooks |
+| Utility | `/usage`, `/cost` | Inspect token and cost usage |
+
+### 10.2 High‑Value Custom Commands to Implement First
+
+| Command | Scope | Purpose |
+| --- | --- | --- |
+| `/commit` | Global | Semantic, safety‑checked Git commits |
+| `/review` | Global | Structured multi‑axis code reviews |
+| `/plan` | Global | Turn tasks into concrete plans |
+| `/rubber-duck` | Global | Explain and sanity‑check complex files |
+| `/doc-generate` | Global | Generate human‑readable documentation from code |
+| `/ci-full` | Project | Run full local CI and summarize failures |
+| `/db:migrate` | Project | Safe DB migrations with pre‑flight checks and rollback strategy |
+| `/deps-update` | Project | Safe dependency upgrades with security scanning |
+| `/ticket` or `/fix-issue` | Project | Turn issues/tickets into branches and implementations |
+| `/project:new` | Project | Scaffold new features/components in a consistent way |
+
+This overview can be dropped directly into `CLAUDE_COMMANDS_OVERVIEW.md` and extended as your command suite and subagent roster grow.
