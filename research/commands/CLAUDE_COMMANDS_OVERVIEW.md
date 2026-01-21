@@ -20,7 +20,18 @@ Claude Code is Anthropic’s agentic CLI for deep codebase work. Instead of a fi
 | **CLAUDE.md + memory** | Long‑lived project and user context | Tech stack, style guide, routing rules | Makes commands & agents project‑aware and consistent |
 
 The most effective setups treat commands as **versioned infrastructure-as-prompt**: workflow recipes, not ad‑hoc chats. Teams standardize on a small set of built‑ins plus 10–30 well‑designed custom commands and 3–7 subagents, wired together by permissions, MCP servers, and CLAUDE.md.
+### **2026 Innovation: Automatic Subagent Delegation**
 
+As of January 2026, Claude Code now **automatically routes work** to specialized subagents based on task complexity and domain sensitivity:
+
+- **Simple fixes & edits** \u2192 Main Claude agent
+- **Security-sensitive changes** (auth, crypto, secrets) \u2192 SecurityAuditor subagent
+- **Performance analysis & optimization** \u2192 PerformanceAnalyst subagent
+- **Frontend component development** \u2192 FrontendSpecialist subagent
+- **Backend/API work** \u2192 BackendDeveloper subagent
+- **Multi-step complex tasks** \u2192 Auto-chains agents sequentially
+
+This means you describe the goal in natural language, and Claude Code **intelligently orchestrates the right team** without explicit delegation commands. You can still explicitly delegate using `> Have the SecurityAuditor review...`, but auto-delegation makes it unnecessary for routine tasks.
 ---
 
 ## 2. Core Concepts in One View
@@ -97,6 +108,36 @@ Built‑ins are always available and form the operational backbone of Claude Cod
 }
 ```
 
+**Interactive Permission Configuration During a Session**
+
+When Claude Code attempts to use a tool not in your permission profile, you're prompted:
+
+```
+Claude wants to write to: src/components/Button.tsx
+Pattern: Write(src/components/**)
+
+Current permission: Not configured
+Allow this write? [y/n/always/deny]: always
+→ Added Write(src/components/**) to allowedTools
+```
+
+Choose:
+- `y` – Allow this specific use (not saved)
+- `n` – Deny this use
+- `always` – Allow and save to permissions profile
+- `deny` – Deny and save to denylist
+
+**Permission Pattern Reference**
+
+| Pattern | Matches | Blocks |
+| --- | --- | --- |
+| `Write(src/**)` | All files in `src/` | Nothing in `src/` |
+| `Write(src/**, !src/test/**)` | Files in `src/` except tests | Test files |
+| `Bash(git *, npm *)` | Git and npm commands | All other bash |
+| `Bash(!rm *, !sudo *)` | Everything except rm/sudo | Destructive commands |
+| `MCP(github)` | All GitHub MCP tools | Other MCPs |
+| `MCP(github, postgres)` | GitHub and Postgres MCPs | Other MCPs |
+
 ---
 
 ### 3.3 Navigation & Session State
@@ -124,7 +165,61 @@ Patterns:
 | `/hooks` | Configure lifecycle hooks (pre/post tool use, subagent delegation/return) via `~/.claude/hooks.yaml` |
 | `/usage` and `/cost` | Inspect token usage and estimated spend per model and session |
 
-Lifecycle hooks enable guardrails such as “request approval before destructive Bash commands” or “log all Write operations to an audit file”.
+**Lifecycle Hooks (`/hooks`)**
+
+Hooks let you inject custom logic at critical points in Claude Code's execution. Configure via interactive menu or edit `~/.claude/hooks.yaml`:
+
+```yaml
+hooks:
+  PreToolUse:
+    - name: ValidateDestructiveCommands
+      pattern: "Bash(rm *, sudo *)"
+      action: request_approval
+      message: "Destructive command detected. Approve? [y/n]"
+  
+  PostToolSuccess:
+    - name: LogAllWrites
+      pattern: "Write(src/**)"
+      action: log_to_file
+      file: ~/.claude/audit.log
+      format: "timestamp | tool | result | operator | changes"
+
+  SubagentDelegation:
+    - name: TrackDelegations
+      action: log_to_file
+      file: ~/.claude/delegations.log
+      format: "task | delegated_to | reason"
+```
+
+**Available hooks:**
+- `PreToolUse` – Before Claude uses any tool (validate, approve, log)
+- `PostToolSuccess` – After tool succeeds (record, archive, notify)
+- `PostToolFailure` – After tool fails (recover, alert, retry)
+- `SubagentDelegation` – Before delegating to a subagent
+- `SubagentReturn` – When subagent returns results
+
+**Token Usage & Cost Tracking**
+
+```bash
+> /usage
+→ Token Usage Summary:
+  This session: 24,517 tokens
+  Today: 156,280 tokens
+  This month: 1,847,291 tokens
+  
+  By model:
+    claude-opus-4.1: 1,200,000 tokens @ $0.015/K = $18.00
+    claude-sonnet-4.1: 647,291 tokens @ $0.003/K = $1.94
+    claude-haiku-4: 0 tokens (free tier)
+  
+  Projected monthly cost: $21.21
+  
+> /cost
+→ Cost Breakdown (30-day projection):
+  Estimated spend: $21.21
+  Most expensive operation: Architectural review (3x Opus runs) = $8.40
+  Cheapest operations: Bug fixes with Haiku = $0.12
+```
 
 ---
 
@@ -343,7 +438,71 @@ Many servers expose **prompts** that appear as slash commands, e.g. GitHub MCP:
 ```
 
 These can be wrapped by your own commands (`/ticket`, `/pr:prepare`, `/release:cut`) to form high‑level workflows.
+**Popular MCP Server Commands (Reference)**
 
+| MCP Server | Common Commands | Use Case |
+| --- | --- | --- |
+| **github** | `/github:pr-create`, `/github:issue-search`, `/github:issue-create`, `/github:review` | Repo management, PR workflows, issue handling |
+| **postgres** | `/db:query`, `/db:schema`, `/db:migrate` | Database queries, schema inspection, migrations |
+| **sentry** | `/sentry:errors`, `/sentry:trace`, `/sentry:alert` | Error tracking, performance monitoring, alerts |
+| **playwright** | `/test:run-browser`, `/test:screenshot`, `/test:visual-regression` | Browser automation, E2E testing, visual regression |
+| **jira** | `/jira:create-issue`, `/jira:search`, `/jira:transition` | Issue management, sprint planning |
+| **slack** | `/notify:message`, `/notify:thread`, `/notify:channel` | Team notifications, async updates |
+| **stripe** | `/stripe:customers`, `/stripe:payments`, `/stripe:refunds` | Payment processing queries |
+| **airtable** | `/airtable:fetch`, `/airtable:create`, `/airtable:update` | Database-like data management |
+
+### 5.4 Composing MCP Commands into Workflows
+
+Wrap MCP commands in custom `.claude/commands/*.md` files for higher-level workflows:
+
+**File: `.claude/commands/release/cut.md`**
+
+```markdown
+---
+name: release:cut
+description: Create a release with automated changelog and GitHub release
+model: sonnet
+tools:
+  - Read
+  - Write(CHANGELOG.md, package.json)
+  - Bash(git *, npm *)
+  - MCP(github)
+---
+
+# Release Cutter
+
+Automated release workflow.
+
+## Step 1: Fetch Latest Tags
+
+\`\`\`bash
+{cmd:git tag --list | tail -5}
+\`\`\`
+
+## Step 2: Generate Changelog
+
+\`\`\`bash
+{cmd:git log $(git describe --tags --abbrev=0)..HEAD --oneline}
+\`\`\`
+
+Using this, create a CHANGELOG entry for the next version.
+
+## Step 3: Update Version
+
+Bump \`package.json\` version using semver logic.
+
+## Step 4: Create GitHub Release
+
+Use \`/github:pr-create\` or direct GitHub API call to publish release notes.
+```
+
+**Usage:**
+
+```bash
+claude
+> /release:cut
+→ [Analyzes commits, bumps version, creates release, posts GitHub release]
+```
 ---
 
 ## 6. Subagents & Orchestration
@@ -395,11 +554,76 @@ Usage:
 
 ### 6.4 Orchestration Patterns
 
-1. **Sequential pipeline** (Requirements → Design → Implementation → Review → QA).
-2. **Parallel specialization** (Security, performance, architecture analyses in parallel, then aggregate).
-3. **Recursive delegation** (Architect subagent further delegates to Frontend/Backend/DB specialists).
+**1. Sequential Pipeline**
+```
+Requirements Analysis
+        ↓
+    Planning (Architect)
+        ↓
+   Implementation (Frontend/Backend/DB specialists)
+        ↓
+   Security Review (SecurityAuditor)
+        ↓
+   Performance Review (PerformanceAnalyst)
+        ↓
+   QA & Testing (TestRunner)
+```
 
-In 2026, Claude Code can also **auto‑delegate** based on task complexity and sensitivity (e.g. routing auth‑heavy changes to SecurityAuditor by default).
+Useful for: Complex features requiring design review before implementation.
+
+**2. Parallel Specialization**
+```
+         Main Task
+        /    |     \
+       /     |      \
+   Security | Performance | Architecture
+   Audit    | Analysis    | Review
+       \     |     /
+        \    |    /
+    Aggregate Results
+```
+
+Useful for: Code reviews, audits, or when multiple concerns need simultaneous analysis.
+
+**3. Recursive Delegation**
+```
+    Architect Agent
+        |
+        +-- FrontendSpecialist
+        |        |
+        |        +-- ComponentBuilder
+        |        +-- StyleEngineer
+        |
+        +-- BackendDeveloper
+               |
+               +-- APIDesigner
+               +-- DatabaseExpert
+```
+
+Useful for: Large systems where sub-domains need further specialization.
+
+**4. Auto-delegation (2026 Feature)**
+
+Claude Code now detects task type and automatically routes:
+
+```bash
+> Build a login form with OAuth2 integration
+
+→ Detected: Multi-domain task (frontend + auth)
+→ Delegating to FrontendSpecialist...
+→ Delegating to SecurityAuditor (OAuth2 review)...
+→ [Both agents work in parallel]
+→ Aggregating results...
+→ ✓ Complete
+```
+
+You can also **prevent auto-delegation** for a single task:
+
+```bash
+> /permissions --no-auto-delegate
+> Fix the button alignment issue
+→ Using main Claude agent (no auto-delegation)
+```
 
 ---
 
@@ -427,11 +651,153 @@ Combined with explicit `/agents` and `/permissions` usage, this turns Claude Cod
 
 ---
 
-## 8. CLI Usage & Flags (Shell‑level)
+## 8. Advanced Patterns & Workflows
+
+### 8.1 Workflow: Task Management with Claude Code
+
+For complex multi-step tasks, combine `/plan`, custom commands, and subagents:
+
+```bash
+claude
+> /plan "Implement two-factor authentication across auth system"
+→ [Detailed plan with requirements, architecture, steps, risks]
+
+> /commit  # When staging changes
+→ [Semantic commit with safety checks]
+
+> /ci-full  # Before pushing
+→ [Runs lint, tests, builds, E2E]
+
+> Have the SecurityAuditor review src/auth/2fa.ts
+→ [Security-focused review]
+
+> /github:pr-create
+→ [Creates PR with changelog]
+```
+
+### 8.2 Workflow: Safe Database Migrations
+
+```bash
+# In a project with a custom /db:migrate command
+
+claude
+> /db:migrate
+→ Analyzing pending migrations...
+→ Found: 3 migrations
+→ Pre-flight checks: ✓ Pass
+→ Estimated time: 45 seconds
+→ Proceeding with transaction wrapper...
+→ ✓ Migration complete
+→ Verified with tests: ✓ Pass
+```
+
+### 8.3 Workflow: Parallel Code Review
+
+```bash
+claude
+> Review src/api/auth.ts in parallel for security, performance, and maintainability
+
+→ Delegating to SecurityAuditor...
+→ Delegating to PerformanceAnalyst...
+→ Delegating to MaintenanceExpert...
+
+[All three work in parallel]
+
+→ SecurityAuditor: 3 issues (1 critical)
+→ PerformanceAnalyst: 2 issues (N+1 query detected)
+→ MaintenanceExpert: 1 issue (type safety)
+
+→ Aggregated report:
+   Critical: SQL injection risk in query builder
+   Performance: Add database index on user_id
+   Maintainability: Improve type annotations
+```
+
+### 8.4 Workflow: Dependency Updates with Safety Gates
+
+Use `/deps-update` custom command with permission gates:
+
+```bash
+> /permissions --profile dependency-updates
+→ Profile loaded: Read + Write(package.json) + Bash(npm *) + MCP(snyk)
+
+> /deps-update
+→ Running npm audit...
+→ Found 2 vulnerabilities
+→ Testing updates against full test suite...
+→ ✓ All tests pass
+→ Proposing commit: chore(deps): update dependencies for security
+→ /commit  # Semantic commit with blockers check
+```
+
+---
+
+## 9. Best Practices & Optimization
+
+### 9.1 When to Use Each Feature
+
+| Feature | When to use | Avoid when |
+| --- | --- | --- |
+| **`/compact`** | After 30-50 turns or approaching token limit | You need full conversation history for analysis |
+| **`/rewind`** | Immediately after a bad suggestion | The issue is deep in context (use `/compact` instead) |
+| **Custom commands** | Task is repeated 3+ times or complex multi-step | One-off task or single command |
+| **Subagents** | Need isolation, safety gates, or parallel work | Task is trivial or requires main agent's full context |
+| **MCP servers** | Need external system integration (GitHub, DB, etc.) | Everything is in the local repo |
+| **Permissions** | Code review, unfamiliar task, or safety-critical work | Solo development with trusted code |
+| **Auto-delegation** | Exploring a new codebase or complex domain task | You want full control of which agent runs |
+
+### 9.2 Performance Optimization
+
+**Token efficiency:**
+- Use `/compact [focus]` instead of `/clear` to preserve context
+- Keep CLAUDE.md concise but comprehensive
+- Use `{{args}}` in commands to avoid repeating task descriptions
+
+**Cost optimization:**
+- Assign cheaper models (Haiku) to mechanical subagents
+- Use Sonnet for balanced work
+- Reserve Opus for high-complexity tasks (architecture, design)
+
+**Speed optimization:**
+- Parallelize subagent work when possible
+- Use lighter permissions profiles to reduce approval prompts
+- Cache MCP results (e.g., repository metadata) in CLAUDE.md
+
+### 9.3 Safety & Governance
+
+**Multi-person teams:**
+- Create permission profiles for code review vs development
+- Use lifecycle hooks (`/hooks`) to log all writes and destructive commands
+- Enable approval gates for sensitive areas (auth, payments, production config)
+
+**Compliance & auditing:**
+- Store audit logs in `~/.claude/audit.log` via hooks
+- Regular review of `/usage` and `/cost` for anomalies
+- Archive completed sessions and subagent delegations
+
+**Preventing accidents:**
+- Use deny-patterns for critical files: `Write(!.env*, !config/production.*, !secrets/**)`
+- Require approval for Bash commands matching `rm *`, `sudo *`, `drop table`
+- Use `/hooks` to catch and alert on suspicious patterns
+
+### 9.4 Common Pitfalls & How to Avoid Them
+
+| Pitfall | Symptom | Fix |
+| --- | --- | --- |
+| **Token bloat** | `/status` shows 180K+ tokens used | Use `/compact focus on current task` every 30 turns |
+| **Stale context** | Claude acts like changes don't exist | Use `/catchup` after switching branches or pulling updates |
+| **Wrong agent** | Performance advice from SecurityAuditor | Review CLAUDE.md routing hints; improve auto-delegation hints |
+| **Over-automation** | Commands become brittle with repo changes | Keep commands stateless; use glob patterns, not absolute paths |
+| **Permission nightmares** | Constant approval prompts, productivity loss | Calibrate permission profiles; use `always` option wisely |
+| **Cost creep** | Unexpected $50+ monthly bill | Monitor `/cost`; prefer Haiku for subagents; use `/compact` |
+
+---
+
+## 10. CLI Usage & Flags (Shell‑level)
 
 These are commands executed in your shell, not inside a Claude session.
 
-### 8.1 Basics
+### 10.1 Basics
 
 ```bash
 # Start interactive REPL
@@ -453,7 +819,7 @@ claude -c -p "Run the tests"
 claude -r <session-id> "Finish the implementation"
 ```
 
-### 8.2 Useful Flags
+### 10.2 Useful Flags
 
 ```bash
 # Attach extra directories (monorepo support)
@@ -475,7 +841,7 @@ cat logs.txt | claude -p "Analyze these errors and propose fixes"
 claude update
 ```
 
-### 8.3 MCP Management via CLI
+### 10.3 MCP Management via CLI
 
 ```bash
 claude mcp list
@@ -486,7 +852,7 @@ claude mcp test github
 
 ---
 
-## 9. Practical Setup Strategy (Recommended)
+## 11. Practical Setup Strategy (Recommended)
 
 1. **Bootstrap context**
    - Create a solid `CLAUDE.md` using templates (e.g. for Next.js, Django, FastAPI, Go).
@@ -515,9 +881,9 @@ claude mcp test github
 
 ---
 
-## 10. Quick Reference Tables
+## 12. Quick Reference Tables
 
-### 10.1 Built‑In Slash Commands (Cheat Sheet)
+### 12.1 Built‑In Slash Commands (Cheat Sheet)
 
 | Category | Command | One‑line mental model |
 | --- | --- | --- |
@@ -538,7 +904,7 @@ claude mcp test github
 | Utility | `/hooks` | Configure lifecycle hooks |
 | Utility | `/usage`, `/cost` | Inspect token and cost usage |
 
-### 10.2 High‑Value Custom Commands to Implement First
+### 12.2 High‑Value Custom Commands to Implement First
 
 | Command | Scope | Purpose |
 | --- | --- | --- |

@@ -1,0 +1,8 @@
+{
+  "source_document_id": 12,
+  "source_path": "../.agent/application-performance/agents/frontend-developer.md",
+  "category": "persona",
+  "template_used": "templates/persona.v1.md",
+  "llm_model": "llama3.2",
+  "generated_at": "timestamp_here"
+}

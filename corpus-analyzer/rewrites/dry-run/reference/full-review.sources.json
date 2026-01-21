@@ -1,0 +1,8 @@
+{
+  "source_document_id": 4,
+  "source_path": "../.agent/workflows/full-review.md",
+  "category": "reference",
+  "template_used": "templates/reference.v1.md",
+  "llm_model": "llama3.2",
+  "generated_at": "timestamp_here"
+}

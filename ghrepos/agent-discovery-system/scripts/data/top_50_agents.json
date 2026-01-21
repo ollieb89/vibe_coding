@@ -1,0 +1,1071 @@
+[
+  {
+    "rank": 1,
+    "name": "quality-engineer",
+    "type": "prompt",
+    "category": "testing",
+    "score": 70,
+    "description": "GitHub Copilot as a Quality Engineer, specialized in systematic testing and quality assurance.",
+    "tech_stack": [
+      "ci/cd",
+      "e2e",
+      "jest",
+      "playwright",
+      "pytest",
+      "python",
+      "testing"
+    ],
+    "frameworks": [
+      "playwright",
+      "pytest",
+      "jest"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/quality-engineer.prompt.md"
+  },
+  {
+    "rank": 2,
+    "name": "prompt-builder",
+    "type": "chatmode",
+    "category": "ai_ml",
+    "score": 68,
+    "description": "Expert prompt engineering and validation system for creating high-quality prompts - Brought to you by microsoft/edge-ai",
+    "tech_stack": [
+      "flask",
+      "python",
+      "react",
+      "terraform",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "flask",
+      "terraform"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/prompt-builder.chatmode.md"
+  },
+  {
+    "rank": 3,
+    "name": "devops-architect",
+    "type": "prompt",
+    "category": "devops",
+    "score": 65,
+    "description": "GitHub Copilot as a DevOps Architect, specialized in infrastructure automation, CI/CD, and observability.",
+    "tech_stack": [
+      "ci/cd",
+      "docker",
+      "e2e",
+      "github actions",
+      "kubernetes",
+      "terraform",
+      "testing"
+    ],
+    "frameworks": [
+      "terraform"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/devops-architect.prompt.md"
+  },
+  {
+    "rank": 4,
+    "name": "expert-cpp-software-engineer",
+    "type": "chatmode",
+    "category": "architecture",
+    "score": 61,
+    "description": "Provide expert C++ software engineering guidance using modern C++ and industry best practices.",
+    "tech_stack": [
+      "ci/cd",
+      "testing"
+    ],
+    "frameworks": [],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/expert-cpp-software-engineer.chatmode.md"
+  },
+  {
+    "rank": 5,
+    "name": "python-expert",
+    "type": "prompt",
+    "category": "backend",
+    "score": 59,
+    "description": "GitHub Copilot as a Python Expert, specialized in production-ready, secure, high-performance Python code.",
+    "tech_stack": [
+      "e2e",
+      "fastapi",
+      "pytest",
+      "python",
+      "testing"
+    ],
+    "frameworks": [
+      "pytest",
+      "fastapi"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/python-expert.prompt.md"
+  },
+  {
+    "rank": 6,
+    "name": "github-actions-ci-cd-best-practices",
+    "type": "instruction",
+    "category": "testing",
+    "score": 58,
+    "description": "Comprehensive guide for building robust, secure, and efficient CI/CD pipelines using GitHub Actions. Covers workflow structure, jobs, steps, environment variables, secret management, caching, matrix strategies, testing, and deployment strategies.",
+    "tech_stack": [
+      "ci/cd",
+      "docker",
+      "e2e",
+      "express",
+      "github actions",
+      "java",
+      "jest",
+      "kubernetes",
+      "playwright",
+      "pytest",
+      "python",
+      "testing",
+      "vitest"
+    ],
+    "frameworks": [
+      "pytest",
+      "jest",
+      "playwright",
+      "vitest",
+      "express"
+    ],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/github-actions-ci-cd-best-practices.instructions.md"
+  },
+  {
+    "rank": 7,
+    "name": "expert-react-frontend-engineer",
+    "type": "agent",
+    "category": "frontend",
+    "score": 58,
+    "description": "Expert React 19.2 frontend engineer specializing in modern hooks, Server Components, Actions, TypeScript, and performance optimization",
+    "tech_stack": [
+      "e2e",
+      "jest",
+      "next.js",
+      "playwright",
+      "react",
+      "spring",
+      "testing",
+      "vitest"
+    ],
+    "frameworks": [
+      "react",
+      "jest",
+      "spring",
+      "playwright",
+      "vitest",
+      "nextjs"
+    ],
+    "source": "github_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/.github/agents/expert-react-frontend-engineer.agent.md"
+  },
+  {
+    "rank": 8,
+    "name": "power-bi-model-design-review",
+    "type": "prompt",
+    "category": "architecture",
+    "score": 55,
+    "description": "Comprehensive Power BI data model design review prompt for evaluating model architecture, relationships, and optimization opportunities.",
+    "tech_stack": [
+      "testing"
+    ],
+    "frameworks": [],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/power-bi-model-design-review.prompt.md"
+  },
+  {
+    "rank": 9,
+    "name": "ai-prompt-engineering-safety-best-practices",
+    "type": "instruction",
+    "category": "ai_ml",
+    "score": 54,
+    "description": "Comprehensive best practices for AI prompt engineering, safety frameworks, bias mitigation, and responsible AI usage for Copilot and LLMs.",
+    "tech_stack": [
+      "java",
+      "python",
+      "testing"
+    ],
+    "frameworks": [],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/ai-prompt-engineering-safety-best-practices.instructions.md"
+  },
+  {
+    "rank": 10,
+    "name": "stackhawk-security-onboarding",
+    "type": "agent",
+    "category": "backend",
+    "score": 53,
+    "description": "Automatically set up StackHawk security testing for your repository with generated configuration and GitHub Actions workflow",
+    "tech_stack": [
+      "ci/cd",
+      "django",
+      "docker",
+      "express",
+      "flask",
+      "github actions",
+      "java",
+      "kubernetes",
+      "python",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "spring",
+      "django",
+      "flask",
+      "express"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/stackhawk-security-onboarding.agent.md"
+  },
+  {
+    "rank": 11,
+    "name": "power-bi-report-design-best-practices",
+    "type": "instruction",
+    "category": "architecture",
+    "score": 52,
+    "description": "Comprehensive Power BI report design and visualization best practices based on Microsoft guidance for creating effective, accessible, and performant reports and dashboards.",
+    "tech_stack": [
+      "testing"
+    ],
+    "frameworks": [],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/power-bi-report-design-best-practices.instructions.md"
+  },
+  {
+    "rank": 12,
+    "name": "expert-nextjs-developer",
+    "type": "agent",
+    "category": "frontend",
+    "score": 51,
+    "description": "Expert Next.js 16 developer specializing in App Router, Server Components, Cache Components, Turbopack, and modern React patterns with TypeScript",
+    "tech_stack": [
+      "docker",
+      "java",
+      "next.js",
+      "react",
+      "tailwind",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "nextjs"
+    ],
+    "source": "github_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/.github/agents/expert-nextjs-developer.agent.md"
+  },
+  {
+    "rank": 13,
+    "name": "task-management",
+    "type": "prompt",
+    "category": "ai_ml",
+    "score": 50,
+    "description": "",
+    "tech_stack": [
+      "e2e",
+      "playwright",
+      "testing"
+    ],
+    "frameworks": [
+      "playwright"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/task-management.prompt.md"
+  },
+  {
+    "rank": 14,
+    "name": "technology-stack-blueprint-generator",
+    "type": "prompt",
+    "category": "frontend",
+    "score": 50,
+    "description": "Comprehensive technology stack blueprint generator that analyzes codebases to create detailed architectural documentation. Automatically detects technology stacks, programming languages, and implementation patterns across multiple platforms (.NET, Java, JavaScript, React, Python). Generates configurable blueprints with version information, licensing details, usage patterns, coding conventions, and visual diagrams. Provides implementation-ready templates and maintains architectural consistency fo",
+    "tech_stack": [
+      "angular",
+      "django",
+      "fastapi",
+      "flask",
+      "java",
+      "python",
+      "react",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "spring",
+      "django",
+      "fastapi",
+      "flask",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/technology-stack-blueprint-generator.prompt.md"
+  },
+  {
+    "rank": 15,
+    "name": "github-copilot-starter",
+    "type": "prompt",
+    "category": "frontend",
+    "score": 49,
+    "description": "Set up complete GitHub Copilot configuration for a new project based on technology stack",
+    "tech_stack": [
+      "angular",
+      "django",
+      "github actions",
+      "java",
+      "pytest",
+      "python",
+      "react",
+      "spring",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "pytest",
+      "spring",
+      "django",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/github-copilot-starter.prompt.md"
+  },
+  {
+    "rank": 16,
+    "name": "task-researcher",
+    "type": "chatmode",
+    "category": "architecture",
+    "score": 49,
+    "description": "Task research specialist for comprehensive project analysis - Brought to you by microsoft/edge-ai",
+    "tech_stack": [
+      "terraform"
+    ],
+    "frameworks": [
+      "terraform"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/task-researcher.chatmode.md"
+  },
+  {
+    "rank": 17,
+    "name": "ai-prompt-engineering-safety-review",
+    "type": "prompt",
+    "category": "ai_ml",
+    "score": 48,
+    "description": "Comprehensive AI prompt engineering safety review and improvement prompt. Analyzes prompts for safety, bias, security vulnerabilities, and effectiveness while providing detailed improvement recommendations with extensive frameworks, testing methodologies, and educational content.",
+    "tech_stack": [
+      "testing"
+    ],
+    "frameworks": [],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/ai-prompt-engineering-safety-review.prompt.md"
+  },
+  {
+    "rank": 18,
+    "name": "voidbeast-gpt41enhanced",
+    "type": "chatmode",
+    "category": "frontend",
+    "score": 48,
+    "description": "4.1 voidBeast_GPT41Enhanced 1.0 : a advanced autonomous developer agent, designed for elite full-stack development with enhanced multi-mode capabilities. This latest evolution features sophisticated mode detection, comprehensive research capabilities, and never-ending problem resolution. Plan/Act/Deep Research/Analyzer/Checkpoints(Memory)/Prompt Generator Modes.",
+    "tech_stack": [
+      "angular",
+      "next.js",
+      "react",
+      "svelte",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "svelte",
+      "nextjs",
+      "angular"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/voidbeast-gpt41enhanced.chatmode.md"
+  },
+  {
+    "rank": 19,
+    "name": "suggest-awesome-github-copilot-collections",
+    "type": "prompt",
+    "category": "devops",
+    "score": 46,
+    "description": "Suggest relevant GitHub Copilot collections from the awesome-copilot repository based on current repository context and chat history, providing automatic download and installation of collection assets.",
+    "tech_stack": [
+      "angular",
+      "ci/cd",
+      "docker",
+      "next.js",
+      "react",
+      "terraform",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "terraform",
+      "nextjs",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/suggest-awesome-github-copilot-collections.prompt.md"
+  },
+  {
+    "rank": 20,
+    "name": "expert-react-frontend-engineer",
+    "type": "chatmode",
+    "category": "frontend",
+    "score": 46,
+    "description": "Provide expert React frontend engineering guidance using modern TypeScript and design patterns.",
+    "tech_stack": [
+      "java",
+      "jest",
+      "playwright",
+      "react",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "playwright",
+      "jest"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/expert-react-frontend-engineer.chatmode.md"
+  },
+  {
+    "rank": 21,
+    "name": "java-mcp-expert",
+    "type": "chatmode",
+    "category": "ai_ml",
+    "score": 46,
+    "description": "Expert assistance for building Model Context Protocol servers in Java using reactive streams, the official MCP Java SDK, and Spring Boot integration.",
+    "tech_stack": [
+      "java",
+      "react",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "spring"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/java-mcp-expert.chatmode.md"
+  },
+  {
+    "rank": 22,
+    "name": "performance-optimization",
+    "type": "instruction",
+    "category": "frontend",
+    "score": 44,
+    "description": "The most comprehensive, practical, and engineer-authored performance optimization instructions for all languages, frameworks, and stacks. Covers frontend, backend, and database best practices with actionable guidance, scenario-based checklists, troubleshooting, and pro tips.",
+    "tech_stack": [
+      "angular",
+      "ci/cd",
+      "express",
+      "java",
+      "pytest",
+      "python",
+      "react",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "pytest",
+      "express",
+      "angular"
+    ],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/performance-optimization.instructions.md"
+  },
+  {
+    "rank": 23,
+    "name": "frontend-architect",
+    "type": "agent",
+    "category": "frontend",
+    "score": 44,
+    "description": "Create accessible, performant user interfaces with focus on user experience and modern frameworks",
+    "tech_stack": [
+      "angular",
+      "react",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "angular"
+    ],
+    "source": "superagent",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/SuperAgent-MCP/agents/frontend-architect.md"
+  },
+  {
+    "rank": 24,
+    "name": "project-workflow-analysis-blueprint-generator",
+    "type": "prompt",
+    "category": "frontend",
+    "score": 43,
+    "description": "Comprehensive technology-agnostic prompt generator for documenting end-to-end application workflows. Automatically detects project architecture patterns, technology stacks, and data flow patterns to generate detailed implementation blueprints covering entry points, service layers, data access, error handling, and testing approaches across multiple technologies including .NET, Java/Spring, React, and microservices architectures.",
+    "tech_stack": [
+      "angular",
+      "express",
+      "java",
+      "python",
+      "react",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "spring",
+      "express",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/project-workflow-analysis-blueprint-generator.prompt.md"
+  },
+  {
+    "rank": 25,
+    "name": "vuejs3",
+    "type": "instruction",
+    "category": "frontend",
+    "score": 43,
+    "description": "VueJS 3 development standards and best practices with Composition API and TypeScript",
+    "tech_stack": [
+      "e2e",
+      "jest",
+      "playwright",
+      "react",
+      "tailwind",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "jest",
+      "playwright"
+    ],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/vuejs3.instructions.md"
+  },
+  {
+    "rank": 26,
+    "name": "accessibility",
+    "type": "chatmode",
+    "category": "frontend",
+    "score": 43,
+    "description": "Expert assistant for web accessibility (WCAG 2.1/2.2), inclusive UX, and a11y testing",
+    "tech_stack": [
+      "angular",
+      "github actions",
+      "react",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "angular"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/accessibility.chatmode.md"
+  },
+  {
+    "rank": 27,
+    "name": "devops-architect",
+    "type": "agent",
+    "category": "devops",
+    "score": 43,
+    "description": "Automate infrastructure and deployment processes with focus on reliability and observability",
+    "tech_stack": [
+      "ci/cd",
+      "docker",
+      "kubernetes",
+      "terraform",
+      "testing"
+    ],
+    "frameworks": [
+      "terraform"
+    ],
+    "source": "superagent",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/SuperAgent-MCP/agents/devops-architect.md"
+  },
+  {
+    "rank": 28,
+    "name": "python-expert",
+    "type": "agent",
+    "category": "architecture",
+    "score": 43,
+    "description": "Deliver production-ready, secure, high-performance Python code following SOLID principles and modern best practices",
+    "tech_stack": [
+      "ci/cd",
+      "docker",
+      "python",
+      "testing"
+    ],
+    "frameworks": [],
+    "source": "superagent",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/SuperAgent-MCP/agents/python-expert.md"
+  },
+  {
+    "rank": 29,
+    "name": "agent-instructions",
+    "type": "prompt",
+    "category": "frontend",
+    "score": 42,
+    "description": "",
+    "tech_stack": [
+      "angular",
+      "ci/cd",
+      "docker",
+      "e2e",
+      "java",
+      "kubernetes",
+      "playwright",
+      "python",
+      "react",
+      "terraform",
+      "testing",
+      "vue"
+    ],
+    "frameworks": [
+      "react",
+      "vue",
+      "playwright",
+      "terraform",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/agent-instructions.md"
+  },
+  {
+    "rank": 30,
+    "name": "suggest-awesome-github-copilot-instructions",
+    "type": "prompt",
+    "category": "ai_ml",
+    "score": 42,
+    "description": "Suggest relevant GitHub Copilot instruction files from the awesome-copilot repository based on current repository context and chat history, avoiding duplicates with existing instructions in this repository.",
+    "tech_stack": [
+      "ci/cd",
+      "java",
+      "next.js",
+      "react",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "nextjs"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/suggest-awesome-github-copilot-instructions.prompt.md"
+  },
+  {
+    "rank": 31,
+    "name": "playwright-tester",
+    "type": "agent",
+    "category": "testing",
+    "score": 42,
+    "description": "Testing mode for Playwright tests",
+    "tech_stack": [
+      "playwright",
+      "testing"
+    ],
+    "frameworks": [
+      "playwright"
+    ],
+    "source": "github_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/.github/agents/playwright-tester.agent.md"
+  },
+  {
+    "rank": 32,
+    "name": "Dynatrace Expert",
+    "type": "agent",
+    "category": "devops",
+    "score": 41,
+    "description": "The Dynatrace Expert Agent integrates observability and security capabilities directly into GitHub workflows, enabling development teams to investigate incidents, validate deployments, triage errors, detect performance regressions, validate releases, and manage security vulnerabilities by autonomously analysing traces, logs, and Dynatrace findings. This enables targeted and precise remediation of identified issues directly within the repository.",
+    "tech_stack": [
+      "ci/cd",
+      "e2e",
+      "java",
+      "kubernetes"
+    ],
+    "frameworks": [],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/dynatrace-expert.agent.md"
+  },
+  {
+    "rank": 33,
+    "name": "backend-architect",
+    "type": "prompt",
+    "category": "backend",
+    "score": 41,
+    "description": "Expert Backend Architect specializing in designing reliable backend systems with focus on data integrity, security, and fault tolerance.",
+    "tech_stack": [
+      "express",
+      "fastapi",
+      "java",
+      "python",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "spring",
+      "express",
+      "fastapi"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/backend-architect.prompt.md"
+  },
+  {
+    "rank": 34,
+    "name": "architecture-blueprint-generator",
+    "type": "prompt",
+    "category": "backend",
+    "score": 41,
+    "description": "Comprehensive project architecture blueprint generator that analyzes codebases to create detailed architectural documentation. Automatically detects technology stacks and architectural patterns, generates visual diagrams, documents implementation patterns, and provides extensible blueprints for maintaining architectural consistency and guiding new development.",
+    "tech_stack": [
+      "angular",
+      "java",
+      "python",
+      "react",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "spring",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/architecture-blueprint-generator.prompt.md"
+  },
+  {
+    "rank": 35,
+    "name": "copilot-instructions-blueprint-generator",
+    "type": "prompt",
+    "category": "backend",
+    "score": 41,
+    "description": "Technology-agnostic blueprint generator for creating comprehensive copilot-instructions.md files that guide GitHub Copilot to produce code consistent with project standards, architecture patterns, and exact technology versions by analyzing existing codebase patterns and avoiding assumptions.",
+    "tech_stack": [
+      "angular",
+      "e2e",
+      "java",
+      "python",
+      "react",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/copilot-instructions-blueprint-generator.prompt.md"
+  },
+  {
+    "rank": 36,
+    "name": "containerization-docker-best-practices",
+    "type": "instruction",
+    "category": "architecture",
+    "score": 41,
+    "description": "Comprehensive best practices for creating optimized, secure, and efficient Docker images and managing containers. Covers multi-stage builds, image layer optimization, security scanning, and runtime best practices.",
+    "tech_stack": [
+      "ci/cd",
+      "docker",
+      "flask",
+      "github actions",
+      "java",
+      "kubernetes",
+      "python",
+      "testing"
+    ],
+    "frameworks": [
+      "flask"
+    ],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/containerization-docker-best-practices.instructions.md"
+  },
+  {
+    "rank": 37,
+    "name": "blueprint-mode",
+    "type": "chatmode",
+    "category": "testing",
+    "score": 41,
+    "description": "Executes structured workflows (Debug, Express, Main, Loop) with strict correctness and maintainability. Enforces an improved tool usage policy, never assumes facts, prioritizes reproducible solutions, self-correction, and edge-case handling.",
+    "tech_stack": [
+      "express",
+      "playwright",
+      "testing"
+    ],
+    "frameworks": [
+      "playwright",
+      "express"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/blueprint-mode.chatmode.md"
+  },
+  {
+    "rank": 38,
+    "name": "blueprint-mode-codex",
+    "type": "chatmode",
+    "category": "testing",
+    "score": 41,
+    "description": "Executes structured workflows with strict correctness and maintainability. Enforces a minimal tool usage policy, never assumes facts, prioritizes reproducible solutions, self-correction, and edge-case handling.",
+    "tech_stack": [
+      "express",
+      "playwright",
+      "testing"
+    ],
+    "frameworks": [
+      "playwright",
+      "express"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/blueprint-mode-codex.chatmode.md"
+  },
+  {
+    "rank": 39,
+    "name": "power-platform-expert",
+    "type": "chatmode",
+    "category": "frontend",
+    "score": 41,
+    "description": "Power Platform expert providing guidance on Code Apps, canvas apps, Dataverse, connectors, and Power Platform best practices",
+    "tech_stack": [
+      "jest",
+      "react",
+      "testing",
+      "vitest"
+    ],
+    "frameworks": [
+      "react",
+      "vitest",
+      "jest"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/power-platform-expert.chatmode.md"
+  },
+  {
+    "rank": 40,
+    "name": "architecture-blueprint-generator",
+    "type": "prompt",
+    "category": "backend",
+    "score": 41,
+    "description": "Comprehensive project architecture blueprint generator that analyzes codebases to create detailed architectural documentation. Automatically detects technology stacks and architectural patterns, generates visual diagrams, documents implementation patterns, and provides extensible blueprints for maintaining architectural consistency and guiding new development.",
+    "tech_stack": [
+      "angular",
+      "java",
+      "python",
+      "react",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "spring",
+      "angular"
+    ],
+    "source": "github_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/.github/agents/architecture-blueprint-generator.prompt.md"
+  },
+  {
+    "rank": 41,
+    "name": "php-mcp-expert",
+    "type": "chatmode",
+    "category": "backend",
+    "score": 40,
+    "description": "Expert assistant for PHP MCP server development using the official PHP SDK with attribute-based discovery",
+    "tech_stack": [
+      "docker",
+      "express",
+      "java",
+      "python",
+      "testing"
+    ],
+    "frameworks": [
+      "express"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/php-mcp-expert.chatmode.md"
+  },
+  {
+    "rank": 42,
+    "name": "deep-research-agent",
+    "type": "agent",
+    "category": "ai_ml",
+    "score": 40,
+    "description": "Specialist for comprehensive research with adaptive strategies and intelligent exploration",
+    "tech_stack": [
+      "java",
+      "playwright"
+    ],
+    "frameworks": [
+      "playwright"
+    ],
+    "source": "superagent",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/SuperAgent-MCP/agents/deep-research-agent.md"
+  },
+  {
+    "rank": 43,
+    "name": "Terraform Agent",
+    "type": "agent",
+    "category": "devops",
+    "score": 39,
+    "description": "Terraform infrastructure specialist with automated HCP Terraform workflows. Leverages Terraform MCP server for registry integration, workspace management, and run orchestration. Generates compliant code using latest provider/module versions, manages private registries, automates variable sets, and orchestrates infrastructure deployments with proper validation and security practices.",
+    "tech_stack": [
+      "docker",
+      "terraform",
+      "testing"
+    ],
+    "frameworks": [
+      "terraform"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/terraform.agent.md"
+  },
+  {
+    "rank": 44,
+    "name": "performance-engineer",
+    "type": "prompt",
+    "category": "frontend",
+    "score": 39,
+    "description": "Expert Performance Engineer specializing in optimizing system performance through measurement-driven analysis and bottleneck elimination.",
+    "tech_stack": [
+      "ci/cd",
+      "java",
+      "python",
+      "react",
+      "testing"
+    ],
+    "frameworks": [
+      "react"
+    ],
+    "source": "ghc_agents",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/agents/performance-engineer.prompt.md"
+  },
+  {
+    "rank": 45,
+    "name": "kotlin-springboot",
+    "type": "prompt",
+    "category": "ai_ml",
+    "score": 39,
+    "description": "Get best practices for developing applications with Spring Boot and Kotlin.",
+    "tech_stack": [
+      "express",
+      "java",
+      "react",
+      "spring",
+      "testing"
+    ],
+    "frameworks": [
+      "react",
+      "spring",
+      "express"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/kotlin-springboot.prompt.md"
+  },
+  {
+    "rank": 46,
+    "name": "folder-structure-blueprint-generator",
+    "type": "prompt",
+    "category": "frontend",
+    "score": 39,
+    "description": "Comprehensive technology-agnostic prompt for analyzing and documenting project folder structures. Auto-detects project types (.NET, Java, React, Angular, Python, Node.js, Flutter), generates detailed blueprints with visualization options, naming conventions, file placement patterns, and extension templates for maintaining consistent code organization across diverse technology stacks.",
+    "tech_stack": [
+      "angular",
+      "docker",
+      "java",
+      "python",
+      "react"
+    ],
+    "frameworks": [
+      "react",
+      "angular"
+    ],
+    "source": "ghc_prompts",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/prompts/folder-structure-blueprint-generator.prompt.md"
+  },
+  {
+    "rank": 47,
+    "name": "svelte",
+    "type": "instruction",
+    "category": "frontend",
+    "score": 39,
+    "description": "Svelte 5 and SvelteKit development standards and best practices for component-based user interfaces and full-stack applications",
+    "tech_stack": [
+      "playwright",
+      "react",
+      "svelte",
+      "testing",
+      "vitest"
+    ],
+    "frameworks": [
+      "react",
+      "playwright",
+      "vitest",
+      "svelte"
+    ],
+    "source": "ghc_instructions",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/instructions/svelte.instructions.md"
+  },
+  {
+    "rank": 48,
+    "name": "playwright-tester",
+    "type": "chatmode",
+    "category": "testing",
+    "score": 39,
+    "description": "Testing mode for Playwright tests",
+    "tech_stack": [
+      "playwright",
+      "testing"
+    ],
+    "frameworks": [
+      "playwright"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/playwright-tester.chatmode.md"
+  },
+  {
+    "rank": 49,
+    "name": "drupal-expert",
+    "type": "chatmode",
+    "category": "frontend",
+    "score": 39,
+    "description": "Expert assistant for Drupal development, architecture, and best practices using PHP 8.3+ and modern Drupal patterns",
+    "tech_stack": [
+      "java",
+      "react",
+      "testing"
+    ],
+    "frameworks": [
+      "react"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/drupal-expert.chatmode.md"
+  },
+  {
+    "rank": 50,
+    "name": "shopify-expert",
+    "type": "chatmode",
+    "category": "frontend",
+    "score": 39,
+    "description": "Expert Shopify development assistant specializing in theme development, Liquid templating, app development, and Shopify APIs",
+    "tech_stack": [
+      "java",
+      "react",
+      "testing"
+    ],
+    "frameworks": [
+      "react"
+    ],
+    "source": "ghc_chatmodes",
+    "source_path": "/home/ob/Development/Tools/vibe-tools/ghc_tools/chatmodes/shopify-expert.chatmode.md"
+  }
+]

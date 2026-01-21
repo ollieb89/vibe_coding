@@ -1,0 +1,8 @@
+{
+  "source_document_id": 3,
+  "source_path": "../.agent/workflows/pr-enhance.md",
+  "category": "spec",
+  "template_used": "templates/spec.v1.md",
+  "llm_model": "llama3.2",
+  "generated_at": "timestamp_here"
+}
