@@ -196,6 +196,18 @@ class CorpusDatabase:
             alter=True
         )
 
+    def set_gold_standard(self, doc_id: int, is_gold: bool) -> None:
+        """Toggle gold standard status for a document."""
+        self.db["documents"].update(
+            doc_id,
+            {"is_gold_standard": 1 if is_gold else 0},
+            alter=True
+        )
+    
+    def get_document(self, doc_id: int) -> Optional[Document]:
+        """Alias for get_document_by_id."""
+        return self.get_document_by_id(doc_id)
+
     def get_gold_standard_documents(
         self,
         category: Optional[DocumentCategory] = None,

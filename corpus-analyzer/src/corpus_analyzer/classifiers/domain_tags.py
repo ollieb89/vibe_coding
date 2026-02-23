@@ -61,6 +61,13 @@ DOMAIN_PATTERNS: dict[DomainTag, list[str]] = {
         r"llm", r"gpt", r"claude", r"ollama", r"openai",
         r"embedding", r"vector", r"rag", r"prompt",
     ],
+    DomainTag.DATA_SCIENCE: [
+        r"pandas", r"numpy", r"scipy", r"sklearn", r"scikit-learn",
+        r"matplotlib", r"seaborn", r"jupyter", r"huggingface",
+    ],
+    DomainTag.FASTAPI: [
+        r"fastapi", r"APIRouter", r"Depends", r"pydantic",
+    ],
 }
 
 

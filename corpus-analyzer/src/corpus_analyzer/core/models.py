@@ -39,6 +39,8 @@ class DomainTag(str, Enum):
     DEVOPS = "devops"
     SECURITY = "security"
     AI = "ai"
+    DATA_SCIENCE = "data_science"
+    FASTAPI = "fastapi"
     OTHER = "other"
 
 

@@ -188,6 +188,7 @@ Focus on:
 4. Prerequisites and requirements upfront
 Keep code blocks verbatim. Add citations in [source: path] format.
 Start with YAML frontmatter including title, description, and tags.
+Ensure logical heading hierarchy (H1 -> H2 -> H3, do not skip levels).
 IMPORTANT: OUTPUT RAW MARKDOWN ONLY. DO NOT WRAP WITH ```markdown.""",
 
     "reference": """You are a technical documentation expert specializing in API references.
@@ -198,6 +199,7 @@ Focus on:
 4. Usage examples for each function
 Keep code blocks verbatim. Add citations in [source: path] format.
 Start with YAML frontmatter including title, description, and tags.
+Ensure logical heading hierarchy (H1 -> H2 -> H3, do not skip levels).
 IMPORTANT: OUTPUT RAW MARKDOWN ONLY. DO NOT WRAP WITH ```markdown.""",
 
     "tutorial": """You are a technical documentation expert specializing in tutorials.
@@ -208,6 +210,7 @@ Focus on:
 4. Exercises and next steps
 Keep code blocks verbatim. Add citations in [source: path] format.
 Start with YAML frontmatter including title, description, and tags.
+Ensure logical heading hierarchy (H1 -> H2 -> H3, do not skip levels).
 IMPORTANT: OUTPUT RAW MARKDOWN ONLY. DO NOT WRAP WITH ```markdown.""",
 }
 
@@ -222,8 +225,140 @@ DEFAULT_SYSTEM_PROMPT = """You are a technical documentation expert. Your task i
 7. Do not use conversational filler before or after the content
 8. Refrain from conducting a "plan" or "structure" analysis loop - just output the document.
 9. Do not end with a trailing code block marker unless it closes a valid block.
+10. Ensure logical heading hierarchy (H1 -> H2 -> H3, do not skip levels).
 
 Be concise but comprehensive. Preserve important details. Do not include these instructions in the output.""",
+
+
+import concurrent.futures
+from typing import NamedTuple, Optional
+
+# ... existing imports ...
+
+class DocProcessResult(NamedTuple):
+    """Result of processing a single document."""
+    path: Optional[Path]
+    errors: list[str]
+    warnings: list[str]
+
+
+def process_document(
+    doc,
+    client: OllamaClient,
+    system_prompt: str,
+    output_dir: Path,
+    optimized: bool,
+    adv_rewriter,
+    category: str,
+) -> DocProcessResult:
+    """Process a single document."""
+    errors = []
+    warnings = []
+    output_path = None
+
+    try:
+        # Read source content
+        if doc.path.exists():
+            content = doc.path.read_text(encoding="utf-8", errors="replace")
+        else:
+            return DocProcessResult(None, [f"File not found: {doc.path}"], [])
+
+        # Pre-process: filter placeholders
+        content = preprocess_content(content)
+        
+        # Check if content needs chunking
+        if len(content) > MAX_CONTENT_LENGTH:
+            from corpus_analyzer.llm.chunked_processor import split_on_headings, merge_chunks
+            
+            warnings.append(f"Chunking large document: {doc.relative_path} ({len(content)} chars)")
+            chunks = split_on_headings(content, max_chunk_size=MAX_CONTENT_LENGTH)
+            rewritten_chunks = []
+            
+            for i, chunk in enumerate(chunks):
+                chunk_prompt = f"""Rewrite this section (Part {i+1}/{len(chunks)}) of the {category} document '{doc.title}'.
+Follow best practices and the original structure.
+
+### Section Content
+{chunk.content}
+
+## Instructions
+1. Improve structure and clarity
+2. Keep all code blocks exactly as-is (verbatim)
+3. Maintain heading hierarchy (Current section level: {chunk.level})
+4. Expand placeholders
+"""
+                rewritten_chunk = client.generate(
+                    prompt=chunk_prompt,
+                    system=system_prompt,
+                    temperature=0.3,
+                )
+                rewritten_chunk = clean_model_output(rewritten_chunk)
+                rewritten_chunks.append(rewritten_chunk)
+            
+            rewritten = merge_chunks(rewritten_chunks)
+            # Ensure frontmatter is present after merging
+            rewritten = ensure_frontmatter(rewritten, doc.title, doc.relative_path)
+            
+        else:
+            # Standard processing for normal sized docs
+            prompt = f"""Rewrite the following {category} document following best practices for this document type.
+
+## Source Document
+Path: {doc.relative_path}
+Title: {doc.title}
+
+### Content
+{content}
+
+## Instructions
+1. Improve structure and clarity
+2. Keep all code blocks exactly as-is (verbatim, do not summarize)
+3. Add a citation [source: {doc.relative_path}] at the end
+4. Ensure all headings follow a logical hierarchy (no skipping levels)
+5. Expand any placeholder text like [user-defined] into helpful descriptions
+6. Start with YAML frontmatter including title, description, and tags
+7. Do NOT wrap the output in a markdown code block (output raw text)
+8. Do not repeat these instructions in your response.
+
+Output the rewritten document in markdown format."""
+
+            # Generate rewrite
+            if optimized and adv_rewriter:
+                res = adv_rewriter.rewrite_document(doc, output_dir, optimized=True)
+                if res.success:
+                    return DocProcessResult(res.output_path, [], warnings)
+                else:
+                    errors.append(f"Advanced rewrite failed for {doc.path}: {res.error}")
+                    # Fallback to standard? For now, just return error
+                    return DocProcessResult(None, errors, warnings)
+            
+            rewritten = client.generate(
+                prompt=prompt,
+                system=system_prompt,
+                temperature=0.3,
+            )
+            
+            # Clean and ensure frontmatter
+            rewritten = clean_model_output(rewritten)
+            rewritten = ensure_frontmatter(rewritten, doc.title, doc.relative_path)
+
+        # Post-validate output
+        quality = validate_output(rewritten)
+        if quality.issues:
+            for issue in quality.issues:
+                warnings.append(f"{doc.relative_path}: {issue}")
+        
+        if quality.score < 60:
+            warnings.append(f"{doc.relative_path}: Low quality score ({quality.grade})")
+
+        # Save output
+        output_path = output_dir / f"{doc.path.stem}_rewritten.md"
+        output_path.write_text(rewritten)
+        
+        return DocProcessResult(output_path, errors, warnings)
+
+    except Exception as e:
+        return DocProcessResult(None, [f"Error processing {doc.relative_path}: {e}"], warnings)
 
 
 def rewrite_category(
@@ -232,6 +367,7 @@ def rewrite_category(
     model: str,
     output_dir: Path,
     optimized: bool = False,
+    max_workers: int = 4,
 ) -> RewriteResult:
     """Rewrite/consolidate documents in a category using LLM."""
     try:
@@ -270,118 +406,37 @@ def rewrite_category(
     system_prompt += "\n\nNEVER use '...' or '[truncated]' to summarize code or text. Write everything out in full."
 
     # Use AdvancedRewriter if optimized
-    from corpus_analyzer.generators.advanced_rewriter import AdvancedRewriter
-    adv_rewriter = AdvancedRewriter(model=model)
-    # Give the client a db reference so AdvancedRewriter can find gold docs
-    adv_rewriter.client.db = db
+    adv_rewriter = None
+    if optimized:
+        from corpus_analyzer.generators.advanced_rewriter import AdvancedRewriter
+        adv_rewriter = AdvancedRewriter(model=model)
+        # Give the client a db reference so AdvancedRewriter can find gold docs
+        adv_rewriter.client.db = db
 
-    for doc in docs:
-        try:
-            # Read source content
-            if doc.path.exists():
-                content = doc.path.read_text(encoding="utf-8", errors="replace")
-            else:
-                errors.append(f"File not found: {doc.path}")
-                continue
-
-            # Pre-process: filter placeholders
-            content = preprocess_content(content)
-            
-            # Check if content needs chunking
-            if len(content) > MAX_CONTENT_LENGTH:
-                from corpus_analyzer.llm.chunked_processor import split_on_headings, merge_chunks
-                
-                warnings.append(f"Chunking large document: {doc.relative_path} ({len(content)} chars)")
-                chunks = split_on_headings(content, max_chunk_size=MAX_CONTENT_LENGTH)
-                rewritten_chunks = []
-                
-                for i, chunk in enumerate(chunks):
-                    chunk_prompt = f"""Rewrite this section (Part {i+1}/{len(chunks)}) of the {category} document '{doc.title}'.
-Follow best practices and the original structure.
-
-### Section Content
-{chunk.content}
-
-## Instructions
-1. Improve structure and clarity
-2. Keep all code blocks exactly as-is (verbatim)
-3. Maintain heading hierarchy (Current section level: {chunk.level})
-4. Expand placeholders
-"""
-                    rewritten_chunk = client.generate(
-                        prompt=chunk_prompt,
-                        system=system_prompt,
-                        temperature=0.3,
-                    )
-                    rewritten_chunk = clean_model_output(rewritten_chunk)
-                    rewritten_chunks.append(rewritten_chunk)
-                
-                rewritten = merge_chunks(rewritten_chunks)
-                # Ensure frontmatter is present after merging
-                rewritten = ensure_frontmatter(rewritten, doc.title, doc.relative_path)
-                
-            else:
-                # Standard processing for normal sized docs
-                prompt = f"""Rewrite the following {category} document following best practices for this document type.
-
-## Source Document
-Path: {doc.relative_path}
-Title: {doc.title}
-
-### Content
-{content}
-
-## Instructions
-1. Improve structure and clarity
-2. Keep all code blocks exactly as-is (verbatim, do not summarize)
-3. Add a citation [source: {doc.relative_path}] at the end
-4. Ensure all headings follow a logical hierarchy (no skipping levels)
-5. Expand any placeholder text like [user-defined] into helpful descriptions
-6. Start with YAML frontmatter including title, description, and tags
-6. Start with YAML frontmatter including title, description, and tags
-7. Do NOT wrap the output in a markdown code block (output raw text)
-8. Do not repeat these instructions in your response.
-
-Output the rewritten document in markdown format."""
-
-                # Generate rewrite
-                if optimized:
-                    res = adv_rewriter.rewrite_document(doc, output_dir, optimized=True)
-                    if res.success:
-                        rewritten = output_dir / f"{doc.path.stem}.rewritten.md" # Placeholder, actual path in res
-                        # The AdvancedRewriter already writes the file, so we skip standard save
-                        output_files.append(res.output_path)
-                        continue
-                    else:
-                        errors.append(f"Advanced rewrite failed for {doc.path}: {res.error}")
-                        continue
-                
-                rewritten = client.generate(
-                    prompt=prompt,
-                    system=system_prompt,
-                    temperature=0.3,
-                )
-                
-                # Clean and ensure frontmatter
-                rewritten = clean_model_output(rewritten)
-                rewritten = ensure_frontmatter(rewritten, doc.title, doc.relative_path)
-
-            # Post-validate output
-            quality = validate_output(rewritten)
-            if quality.issues:
-                for issue in quality.issues:
-                    warnings.append(f"{doc.relative_path}: {issue}")
-            
-            if quality.score < 60:
-                warnings.append(f"{doc.relative_path}: Low quality score ({quality.grade})")
-
-            # Save output
-            output_path = output_dir / f"{doc.path.stem}_rewritten.md"
-            output_path.write_text(rewritten)
-            output_files.append(output_path)
-
-        except Exception as e:
-            errors.append(f"Error processing {doc.relative_path}: {e}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_doc = {
+            executor.submit(
+                process_document, 
+                doc, 
+                client, 
+                system_prompt, 
+                output_dir, 
+                optimized, 
+                adv_rewriter, 
+                category
+            ): doc for doc in docs
+        }
+        
+        for future in concurrent.futures.as_completed(future_to_doc):
+            doc = future_to_doc[future]
+            try:
+                res = future.result()
+                if res.path:
+                    output_files.append(res.path)
+                errors.extend(res.errors)
+                warnings.extend(res.warnings)
+            except Exception as e:
+                errors.append(f"Unhandled error processing {doc.relative_path}: {e}")
 
     return RewriteResult(
         docs_processed=len(output_files),
