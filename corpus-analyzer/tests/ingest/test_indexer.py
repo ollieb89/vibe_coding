@@ -3,7 +3,7 @@
 Uses real LanceDB in tmp_path with mocked OllamaEmbedder.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -16,6 +16,7 @@ class MockEmbedder:
 
     def __init__(self, model: str = "nomic-embed-text"):
         self.model = model
+        self.host = "http://localhost:11434"
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Return fake 768-dim vectors."""
@@ -33,6 +34,9 @@ class TestCorpusIndexOpen:
 
         assert index.table is not None
         assert index._embedder.model == "nomic-embed-text"
+        cols = {field.name for field in index.table.schema}
+        assert "construct_type" in cols
+        assert "summary" in cols
 
     def test_opens_existing_table(self, tmp_path) -> None:
         """open() opens existing table without error."""
@@ -191,9 +195,6 @@ class TestCorpusIndexSource:
         index.index_source(source1)
         index.index_source(source2)
 
-        # Get total chunks
-        total_chunks = len(index.table.to_pandas())
-
         # Delete file from source1
         (source1_dir / "file.md").unlink()
 
@@ -253,3 +254,105 @@ class TestCorpusIndexSource:
         result = index.index_source(source)
 
         assert result.files_indexed == 1  # Only .md file
+
+
+def test_get_existing_files_logs_warning_on_exception(tmp_path, caplog) -> None:
+    import logging
+    caplog.set_level(logging.WARNING)
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    with patch.object(index._table, "search", side_effect=RuntimeError("db error")):
+        index._get_existing_files("my-source")
+
+    assert "my-source" in caplog.text
+
+
+def test_delete_stale_chunks_logs_warning_on_exception(tmp_path, caplog) -> None:
+    import logging
+    caplog.set_level(logging.WARNING)
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    with patch.object(index._table, "search", side_effect=RuntimeError("db error")):
+        index._delete_stale_chunks("my-source", set())
+
+    assert "my-source" in caplog.text
+
+
+# --- Phase 2 extension tests ---
+
+
+def test_index_adds_construct_type(tmp_path) -> None:
+    """CLI-01: After index_source(), chunks have a non-None construct_type value."""
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "file.md").write_text("# Heading\nContent here.")
+
+    source = SourceConfig(name="my-source", path=str(source_dir), summarize=True)
+
+    with (
+        patch(
+            "corpus_analyzer.ingest.indexer.classify_file",
+            return_value="skill",
+        ) as mock_classify,
+        patch(
+            "corpus_analyzer.ingest.indexer.generate_summary",
+            return_value="Summary text.",
+        ) as mock_summary,
+    ):
+        index.index_source(source)
+
+    df = index.table.to_pandas()
+    assert len(df) > 0
+    assert "construct_type" in df.columns
+    assert "summary" in df.columns
+    assert set(df["construct_type"].dropna().tolist()) == {"skill"}
+    assert set(df["summary"].dropna().tolist()) == {"Summary text."}
+    assert any(str(t).startswith("Summary text.\n\n") for t in df["text"].tolist())
+    mock_classify.assert_called_once()
+    mock_summary.assert_called_once()
+
+
+def test_index_skips_summary_on_unchanged_file(tmp_path) -> None:
+    """CLI-01: Second index_source() call on unchanged file does not re-generate summary."""
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "file.md").write_text("# Heading\nContent here.")
+
+    source = SourceConfig(name="my-source", path=str(source_dir), summarize=True)
+
+    with (
+        patch("corpus_analyzer.ingest.indexer.classify_file", return_value="skill"),
+        patch(
+            "corpus_analyzer.ingest.indexer.generate_summary",
+            return_value="Summary text.",
+        ) as mock_summary,
+    ):
+        index.index_source(source)
+        index.index_source(source)
+
+    assert mock_summary.call_count == 1
+
+
+def test_index_rebuilds_fts_index(tmp_path) -> None:
+    """CLI-01: index_source() rebuilds FTS index with replace=True after optimize."""
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "file.md").write_text("# Heading\nContent here.")
+
+    source = SourceConfig(name="my-source", path=str(source_dir), summarize=False)
+
+    with patch.object(type(index.table), "create_fts_index", autospec=True) as mock_fts:
+        index.index_source(source)
+
+    mock_fts.assert_called_once_with(index.table, "text", replace=True)

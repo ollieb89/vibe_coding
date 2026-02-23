@@ -6,6 +6,7 @@ change detection and stale chunk cleanup.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,7 +19,9 @@ from corpus_analyzer.config.schema import SourceConfig
 from corpus_analyzer.ingest.chunker import chunk_file
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.scanner import file_content_hash, walk_source
-from corpus_analyzer.store.schema import ChunkRecord, make_chunk_id
+from corpus_analyzer.search.classifier import classify_file
+from corpus_analyzer.search.summarizer import generate_summary, should_summarize
+from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, make_chunk_id
 
 
 @dataclass
@@ -95,6 +98,9 @@ class CorpusIndex:
             # Table doesn't exist - create it
             table = db.create_table(table_name, schema=ChunkRecord)
 
+        # Ensure Phase 2 nullable columns exist regardless of table creation path.
+        ensure_schema_v2(table)
+
         return cls(table, embedder)
 
     @staticmethod
@@ -127,6 +133,7 @@ class CorpusIndex:
         self,
         source: SourceConfig,
         progress_callback: Callable[[int], None] | None = None,
+        use_llm_classification: bool = True,
     ) -> IndexResult:
         """Index a source, handling changes and stale chunks.
 
@@ -144,6 +151,7 @@ class CorpusIndex:
 
         # Build file index from existing records for this source
         existing_files = self._get_existing_files(source.name)
+        stored_summaries = self._get_stored_summaries(source.name)
 
         # Walk source files
         source_path = Path(source.path).expanduser()
@@ -180,6 +188,33 @@ class CorpusIndex:
                     progress_callback(1)
                 continue
 
+            # Classify and summarize once per changed/new file.
+            full_text = file_path.read_text(errors="replace")
+            construct_type = classify_file(
+                file_path,
+                full_text,
+                model=self._embedder.model,
+                use_llm=use_llm_classification,
+            )
+
+            stored_summary = stored_summaries.get(resolved_path)
+            summary_text = stored_summary or ""
+            if should_summarize(
+                source_summarize=source.summarize,
+                stored_summary=stored_summary,
+                content_hash_changed=True,
+            ):
+                summary_text = generate_summary(
+                    filename=file_path.name,
+                    content=full_text,
+                    model=self._embedder.model,
+                    host=self._embedder.host,
+                )
+
+            # SUMM-02: prepend summary to first chunk text before embedding.
+            if summary_text:
+                chunks[0]["text"] = f"{summary_text}\n\n{chunks[0]['text']}"
+
             # Embed chunks
             texts = [chunk["text"] for chunk in chunks]
             embeddings = self._embedder.embed_batch(texts)
@@ -200,6 +235,8 @@ class CorpusIndex:
                     "content_hash": current_hash,
                     "embedding_model": self._embedder.model,
                     "indexed_at": datetime.now(UTC).isoformat(),
+                    "construct_type": construct_type,
+                    "summary": summary_text or None,
                 }
                 new_chunk_dicts.append(chunk_dict)
                 chunks_written += 1
@@ -219,6 +256,9 @@ class CorpusIndex:
 
         # Optimize table
         self._table.optimize()
+
+        # Rebuild FTS index so hybrid search stays in sync with new content.
+        self._table.create_fts_index("text", replace=True)
 
         elapsed = time.time() - start_time
         return IndexResult(
@@ -257,8 +297,27 @@ class CorpusIndex:
                     files[file_path] = content_hash
 
             return files
+        except Exception as exc:
+            logging.warning("Failed to query existing files for source '%s': %s", source_name, exc)
+            return {}
+
+    def _get_stored_summaries(self, source_name: str) -> dict[str, str | None]:
+        """Get mapping of file paths to stored summary strings for a source."""
+        try:
+            results = (
+                self._table.search()
+                .where(f"source_name = '{source_name}'")
+                .limit(10000)
+                .to_list()
+            )
+
+            summaries: dict[str, str | None] = {}
+            for row in results:
+                file_path = row.get("file_path", "")
+                if file_path:
+                    summaries[file_path] = row.get("summary")
+            return summaries
         except Exception:
-            # Table might be empty or query failed
             return {}
 
     def _delete_stale_chunks(self, source_name: str, current_files: set[str]) -> None:
@@ -292,11 +351,11 @@ class CorpusIndex:
                     # Build IN clause
                     id_list = ", ".join(f"'{cid}'" for cid in batch)
                     self._table.delete(f"chunk_id IN ({id_list})")
-        except Exception:
-            # If deletion fails, continue (not critical)
-            pass
+        except Exception as exc:
+            logging.warning("Failed to delete stale chunks for source '%s': %s", source_name, exc)
 
     def close(self) -> None:
         """Close the index and release resources."""
         # LanceDB handles cleanup automatically
+        pass
         pass
