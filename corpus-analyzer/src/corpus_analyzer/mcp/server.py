@@ -15,7 +15,7 @@ from corpus_analyzer.ingest.embedder import OllamaEmbedder  # noqa: E402,I001
 from corpus_analyzer.ingest.indexer import CorpusIndex  # noqa: E402,I001
 from corpus_analyzer.search.engine import CorpusSearch  # noqa: E402,I001
 from corpus_analyzer.search.formatter import extract_snippet  # noqa: E402,I001
-from corpus_analyzer.cli import CONFIG_PATH, DATA_DIR  # noqa: E402,I001
+from corpus_analyzer.config.schema import CONFIG_PATH, DATA_DIR  # noqa: E402,I001
 
 
 @lifespan

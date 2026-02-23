@@ -194,7 +194,7 @@ class CorpusIndex:
                 file_path,
                 full_text,
                 model=self._embedder.model,
-                use_llm=use_llm_classification,
+                use_llm=source.use_llm_classification,
             )
 
             stored_summary = stored_summaries.get(resolved_path)

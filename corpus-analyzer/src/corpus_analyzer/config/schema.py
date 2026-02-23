@@ -6,7 +6,13 @@ including embedding settings and source definitions.
 
 from __future__ import annotations
 
+from pathlib import Path
+from platformdirs import user_config_dir, user_data_dir
+
 from pydantic import BaseModel, Field
+
+CONFIG_PATH = Path(user_config_dir("corpus")) / "corpus.toml"
+DATA_DIR = Path(user_data_dir("corpus"))
 
 
 class EmbeddingConfig(BaseModel):
@@ -52,6 +58,17 @@ class SourceConfig(BaseModel):
 
     exclude: list[str] = Field(default_factory=list)
     """Glob patterns for files to exclude."""
+
+    summarize: bool = False
+    """Whether to generate and embed AI summaries for chunks in this source."""
+
+    use_llm_classification: bool = False
+    """Whether to use LLM-based classification for construct type detection.
+
+    When True, Ollama is called to classify each changed file during indexing.
+    When False (default), rule-based classification is used.
+    Set to True per source for richer classification when LLM cost is acceptable.
+    """
 
 
 class CorpusConfig(BaseModel):

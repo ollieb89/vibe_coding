@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from corpus_analyzer.config import load_config
+from corpus_analyzer.config import load_config, CorpusConfig
+from corpus_analyzer.config.schema import DATA_DIR
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex
 from corpus_analyzer.search.engine import CorpusSearch
@@ -67,8 +68,11 @@ def _open_engine() -> tuple[CorpusSearch, Any]:
     config = load_config(config_path)
     data_dir = Path(user_data_dir("corpus"))
     embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
-    index = CorpusIndex.open(data_dir, embedder)
-    engine = CorpusSearch(index.table, embedder)
+    try:
+        index = CorpusIndex.open(DATA_DIR, embedder)
+        engine = CorpusSearch(index.table, embedder)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to open index. Have you run 'corpus index'? Error: {exc}") from exc
     _ENGINE_CACHE[cache_key] = (engine, config, mtime)
     return engine, config
 

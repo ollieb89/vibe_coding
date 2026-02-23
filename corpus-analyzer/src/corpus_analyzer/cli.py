@@ -7,14 +7,13 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from platformdirs import user_config_dir, user_data_dir
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from corpus_analyzer import __version__
-from corpus_analyzer.config import load_config, save_config, CorpusConfig, SourceConfig
-from corpus_analyzer.settings import settings as app_settings
+from corpus_analyzer.config import SourceConfig, load_config, save_config
+from corpus_analyzer.config.schema import CONFIG_PATH, DATA_DIR
 from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.scanner import scan_directory
 from corpus_analyzer.extractors import extract_document
@@ -23,6 +22,7 @@ from corpus_analyzer.ingest.indexer import CorpusIndex
 from corpus_analyzer.ingest.scanner import walk_source
 from corpus_analyzer.search.engine import CorpusSearch
 from corpus_analyzer.search.formatter import extract_snippet
+from corpus_analyzer.settings import settings as app_settings
 
 app = typer.Typer(
     name="corpus-analyzer",
@@ -30,10 +30,6 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 console = Console()
-
-# XDG paths for config and data
-CONFIG_PATH = Path(user_config_dir("corpus")) / "corpus.toml"
-DATA_DIR = Path(user_data_dir("corpus"))
 
 
 def version_callback(value: bool) -> None:

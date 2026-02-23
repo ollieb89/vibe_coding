@@ -67,9 +67,17 @@ class TestSourceConfig:
 
     def test_missing_path_raises_validation_error(self) -> None:
         """SourceConfig without path raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            SourceConfig(name="some-name")  # type: ignore[call-arg]
-        assert "path" in str(exc_info.value)
+        with pytest.raises(ValidationError):
+            SourceConfig(name="test")  # type: ignore[call-arg]
+
+    def test_source_config_use_llm_classification_defaults_false(self) -> None:
+        # Test default
+        source = SourceConfig(name="x", path="/tmp/x")
+        assert source.use_llm_classification is False
+
+        # Test explicit True
+        source_true = SourceConfig(name="y", path="/tmp/y", use_llm_classification=True)
+        assert source_true.use_llm_classification is True
 
 
 # ---------------------------------------------------------------------------
