@@ -7,7 +7,6 @@ computing file hashes, and detecting when files need reindexing.
 from __future__ import annotations
 
 import hashlib
-import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -30,34 +29,10 @@ def file_content_hash(path: Path) -> str:
     return sha256.hexdigest()
 
 
-def needs_reindex(path: Path, stored_mtime: float, stored_hash: str) -> bool:
-    """Determine if a file needs to be reindexed.
-
-    Uses a fast path: if mtime is unchanged, returns False immediately.
-    If mtime changed, computes the hash and returns True only if the
-    hash also differs (content actually changed, not just touched).
-
-    Args:
-        path: Path to the file to check.
-        stored_mtime: Last known modification time from the index.
-        stored_hash: Last known content hash from the index.
-
-    Returns:
-        True if the file needs reindexing, False otherwise.
-    """
-    current_mtime = path.stat().st_mtime
-
-    # Fast path: mtime unchanged
-    if current_mtime == stored_mtime:
-        return False
-
-    # Mtime changed, check if content actually changed
-    current_hash = file_content_hash(path)
-    return current_hash != stored_hash
-
-
 def walk_source(
-    source_path: Path, include: list[str], exclude: list[str]
+    base_path: Path,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
 ) -> Iterator[Path]:
     """Walk a source directory and yield matching files.
 
@@ -72,26 +47,27 @@ def walk_source(
     Yields:
         Path objects for matching files.
     """
-    if not source_path.exists():
+    if not base_path.exists():
         return
 
-    for root, _dirs, files in os.walk(source_path):
-        root_path = Path(root)
+    if include is None:
+        include = ["**/*"]
+    if exclude is None:
+        exclude = []
 
-        for filename in files:
-            file_path = root_path / filename
-            rel_path = file_path.relative_to(source_path)
-            rel_str = str(rel_path)
+    for path in base_path.rglob("*"):
+        if not path.is_file():
+            continue
 
-            # Check exclude patterns first
-            excluded = any(_match_glob(rel_str, pattern) for pattern in exclude)
-            if excluded:
-                continue
+        rel_path = path.relative_to(base_path)
 
-            # Check include patterns
-            included = any(_match_glob(rel_str, pattern) for pattern in include)
-            if included:
-                yield file_path
+        # Check excludes first
+        if any(_match_glob(str(rel_path), pattern) for pattern in exclude):
+            continue
+
+        # Check includes
+        if any(_match_glob(str(rel_path), pattern) for pattern in include):
+            yield path
 
 
 def _match_glob(path: str, pattern: str) -> bool:

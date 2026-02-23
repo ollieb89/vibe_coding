@@ -11,7 +11,6 @@ from corpus_analyzer.ingest.chunker import (
 )
 from corpus_analyzer.ingest.scanner import (
     file_content_hash,
-    needs_reindex,
     walk_source,
 )
 
@@ -21,6 +20,5 @@ __all__ = [
     "chunk_markdown",
     "chunk_python",
     "file_content_hash",
-    "needs_reindex",
     "walk_source",
 ]

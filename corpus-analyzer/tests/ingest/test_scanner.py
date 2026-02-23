@@ -10,7 +10,6 @@ import pytest
 
 from corpus_analyzer.ingest.scanner import (
     file_content_hash,
-    needs_reindex,
     walk_source,
 )
 
@@ -55,57 +54,6 @@ class TestFileContentHash:
 
         assert len(hash_result) == 64
         assert all(c in "0123456789abcdef" for c in hash_result)
-
-
-# ---------------------------------------------------------------------------
-# needs_reindex tests
-# ---------------------------------------------------------------------------
-
-
-class TestNeedsReindex:
-    """Tests for needs_reindex function."""
-
-    def test_same_mtime_returns_false(self, tmp_path: Path) -> None:
-        """Same mtime returns False (fast path, no hash check)."""
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("content")
-
-        mtime = file_path.stat().st_mtime
-        stored_hash = "anything"  # Won't be checked
-
-        result = needs_reindex(file_path, mtime, stored_hash)
-
-        assert result is False
-
-    def test_different_mtime_different_content_returns_true(self, tmp_path: Path) -> None:
-        """Different mtime and different content returns True."""
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("original content")
-
-        old_mtime = 0.0  # Different from current
-        old_hash = file_content_hash(file_path)
-
-        # Change content
-        file_path.write_text("changed content")
-
-        result = needs_reindex(file_path, old_mtime, old_hash)
-
-        assert result is True
-
-    def test_different_mtime_same_content_returns_false(self, tmp_path: Path) -> None:
-        """Different mtime but same content returns False (touch without change)."""
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("unchanged content")
-
-        old_mtime = 0.0  # Different from current
-        old_hash = file_content_hash(file_path)
-
-        # Touch file without changing content
-        file_path.touch()
-
-        result = needs_reindex(file_path, old_mtime, old_hash)
-
-        assert result is False
 
 
 # ---------------------------------------------------------------------------
