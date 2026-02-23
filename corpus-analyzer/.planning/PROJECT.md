@@ -6,14 +6,7 @@ Corpus is a local semantic search engine for AI agent libraries. It indexes agen
 
 v1.0 ships as a CLI tool (`corpus add`, `corpus index`, `corpus search`, `corpus status`) backed by LanceDB with hybrid BM25+vector retrieval. An MCP server (`corpus mcp serve`) exposes search to Claude Code and other agents. A Python API (`from corpus import search`) enables programmatic access.
 
-## Current Milestone: v1.1 Search Quality
-
-**Goal:** Eliminate noise from search results by controlling which files get indexed and improving construct classification accuracy.
-
-**Target features:**
-- Configurable extension allowlist in `corpus.toml` — users control exactly which file types are indexed (no more `.sh`, `.html`, config files polluting results)
-- Frontmatter-aware construct classifier — reads YAML frontmatter (`component_type`, tags) to accurately classify skills, workflows, agent configs
-- Accurate `--construct` filtering — classification accuracy makes the existing filter flag actually useful
+v1.1 adds configurable extension allowlists per source (no more config files polluting results) and frontmatter-aware construct classification — YAML `type:` and `component_type:` fields are classified at 0.95 confidence, making `--construct` filtering reliably accurate.
 
 ## Core Value
 
@@ -36,14 +29,13 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ FastMCP server with pre-warmed embeddings, `corpus_search` tool (MCP-01–MCP-06) — v1.0
 - ✓ Python API: `search()`, `index()`, `SearchResult` dataclass (API-01–API-03) — v1.0
 - ✓ Safety: no CLI KeyErrors, no silent exception swallowing, MCP `content_error` signaling — v1.0
+- ✓ Per-source extension allowlist in corpus.toml; default covers doc/code types, excludes junk (CONF-06, CONF-07, CONF-08) — v1.1
+- ✓ Frontmatter-aware construct classifier: `type:`, `component_type:`, `tags` at 0.95/0.95/0.70 confidence (CLASS-04, CLASS-05) — v1.1
+- ✓ `classification_source` + `classification_confidence` persisted in LanceDB; schema v3 in-place migration — v1.1
 
 ### Active
 
-<!-- v1.1 Search Quality -->
-
-- [ ] Configurable extension allowlist in corpus.toml (CONF-06)
-- [ ] Frontmatter-aware construct classifier (CLASS-04, CLASS-05)
-- [ ] Accurate --construct filter results via improved classification (SEARCH-06)
+(None — planning v2 requirements)
 
 ### Out of Scope
 
@@ -56,11 +48,11 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.0 shipped 2026-02-23.**
+**v1.1 shipped 2026-02-23.**
 
-- ~6,100 lines Python source
+- ~6,248 lines Python source
 - Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text)
-- 164 tests passing (pytest)
+- 192 tests passing (pytest)
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
 
@@ -68,6 +60,7 @@ Known limitations heading into v2 planning:
 - Search returns file-level results; chunk-level line ranges would improve precision
 - TypeScript/JS files use line-based chunking (no AST awareness)
 - Cold-start on first index after KEEP_ALIVE expiry still possible (pre-warm only covers MCP startup)
+- `use_llm_classification` parameter on `index_source()` is dead code (method reads from SourceConfig directly)
 
 ## Constraints
 
@@ -93,6 +86,11 @@ Known limitations heading into v2 planning:
 | FTS rebuild only in `index_source()` | Redundant rebuild in `CorpusSearch.__init__` was wasteful | ✓ Good — ~20% faster search init |
 | MCP `content_error` field vs exception | Avoids breaking existing clients; explicit error signal | ✓ Good — graceful degradation |
 | Path constants in `config/schema.py` | Avoid circular imports from dual definitions | ✓ Good — single source of truth |
+| `ClassificationResult` dataclass (not raw string) | Structured data enables confidence + source tracking | ✓ Good — clean extension point for LLM/rule/frontmatter sources |
+| Frontmatter priority > rule-based | Explicit declaration is higher signal than heuristics | ✓ Good — 0.95 vs 0.60 confidence gap makes priority clear |
+| `type:` confidence 0.95, `tags:` confidence 0.70 | Explicit type is direct match; tags are softer signal | ✓ Good — appropriate weighting |
+| `ensure_schema_v3()` in-place migration | Existing users don't rebuild index on upgrade | ✓ Good — idempotent, zero data loss |
+| Extension allowlist default includes doc/code types | Sensible out-of-box behavior without requiring config | ✓ Good — excludes `.sh`, `.html`, `.json`, `.lock`, binaries automatically |
 
 ---
-*Last updated: 2026-02-23 after v1.1 milestone started*
+*Last updated: 2026-02-23 after v1.1 milestone*

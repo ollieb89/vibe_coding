@@ -20,3 +20,24 @@
 
 ---
 
+
+## v1.1 Search Quality (Shipped: 2026-02-23)
+
+**Phases completed:** 2 phases, 4 plans
+**Timeline:** 2026-02-23 (1 day)
+**Python LOC:** ~6,248
+
+**Delivered:** Eliminated index noise via per-source extension allowlists and lifted `--construct` filtering accuracy from heuristic to 0.95-confidence via YAML frontmatter signals.
+
+**Key accomplishments:**
+- Per-source extension allowlist (`SourceConfig.extensions`) with sensible defaults — excludes `.sh`, `.html`, `.json`, `.lock`, binaries automatically
+- Extension filtering wired end-to-end: corpus.toml → walk_source → indexer → CLI warning on file removal
+- `ClassificationResult` dataclass with confidence + source tracking (frontmatter/rule_based/llm)
+- Frontmatter-first classifier: `type:` / `component_type:` → 0.95 confidence; `tags:` → 0.70 confidence
+- LanceDB schema v3 with `classification_source` + `classification_confidence` fields; idempotent in-place migration
+- `--construct` filter now leverages high-confidence frontmatter classifications persisted in LanceDB
+
+**Archive:** `.planning/milestones/v1.1-ROADMAP.md`
+
+---
+
