@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-23 after v1.1 milestone started)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 5 (Extension Filtering) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-23 — Milestone v1.1 Search Quality started
+Status: Roadmap created, ready to plan Phase 5
+Last activity: 2026-02-23 — v1.1 roadmap created (Phases 5–6)
 
 Progress: [░░░░░░░░░░] 0% (v1.1 not started)
 
@@ -40,5 +40,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: v1.1 milestone initialized — requirements being defined
-Resume with: /gsd:plan-phase [N]
+Stopped at: v1.1 roadmap created — Phases 5 and 6 defined
+Resume with: /gsd:plan-phase 5

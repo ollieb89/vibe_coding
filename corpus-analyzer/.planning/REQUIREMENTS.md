@@ -48,17 +48,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-06 | — | Pending |
-| CONF-07 | — | Pending |
-| CONF-08 | — | Pending |
-| CLASS-04 | — | Pending |
-| CLASS-05 | — | Pending |
+| CONF-06 | Phase 5 | Pending |
+| CONF-07 | Phase 5 | Pending |
+| CONF-08 | Phase 5 | Pending |
+| CLASS-04 | Phase 6 | Pending |
+| CLASS-05 | Phase 6 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 5 total
-- Mapped to phases: 0
-- Unmapped: 5 ⚠️
+- Mapped to phases: 5
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-23*
-*Last updated: 2026-02-23 after initial definition*
+*Last updated: 2026-02-23 after roadmap creation (v1.1 phases 5–6 assigned)*
