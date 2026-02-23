@@ -65,7 +65,12 @@ Plans:
   2. The MCP server starts without blocking and the first search query completes without cold-start latency (embedding pre-warmed at startup)
   3. `from corpus import search` returns structured results with `path`, `file_type`, `construct_type`, `summary`, `score`, and `snippet`
   4. MCP server writes nothing to stdout; all logging goes to stderr (Claude Code compatibility)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — pyproject.toml setup (fastmcp dep + corpus entry point) + FastMCP server module with lifespan pre-warm and corpus_search tool
+- [ ] 03-02-PLAN.md — Python public API (SearchResult, search(), index()) + corpus re-export package + enhanced corpus status command
+- [ ] 03-03-PLAN.md — corpus mcp serve CLI subcommand + unit tests for MCP server and Python API
 
 ## Progress
 
@@ -76,4 +81,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/5 | Not started | - |
 | 2. Search Core | 0/TBD | Not started | - |
-| 3. Agent Interfaces | 0/TBD | Not started | - |
+| 3. Agent Interfaces | 0/3 | Not started | - |
