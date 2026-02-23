@@ -77,6 +77,33 @@ def test_search_invalid_filter_exits_non_zero() -> None:
     assert "Invalid source filter value" in result.stdout
 
 
+def test_search_result_missing_relevance_score_does_not_raise() -> None:
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = [
+            {
+                "file_path": "/fake/path.md",
+                "text": "fake content",
+                "construct_type": "documentation",
+                # _relevance_score intentionally missing
+            }
+        ]
+        mock_search_cls.return_value = mock_search
+
+        result = runner.invoke(app, ["search", "query"])
+
+    assert result.exit_code == 0
+
+
 def test_status_outputs_expected_metrics() -> None:
     with (
         patch("corpus_analyzer.cli.load_config", return_value=_config()),

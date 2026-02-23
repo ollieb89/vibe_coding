@@ -200,7 +200,7 @@ def search_command(
         console.print(
             f"[bold blue]{result['file_path']}[/]  "
             f"[dim]{result.get('construct_type') or 'documentation'}[/]  "
-            f"[dim]score: {result['_relevance_score']:.3f}[/]"
+            f"[dim]score: {result.get('_relevance_score', 0.0):.3f}[/]"
         )
         if result.get("summary"):
             console.print(f"  [italic]{result['summary']}[/italic]")
