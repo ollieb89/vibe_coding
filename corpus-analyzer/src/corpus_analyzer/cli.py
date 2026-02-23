@@ -337,10 +337,24 @@ def status_command(
 db_app = typer.Typer(help="Manage the corpus database.")
 samples_app = typer.Typer(help="Manage document samples.")
 templates_app = typer.Typer(help="Manage document templates.")
+mcp_app = typer.Typer(help="MCP server commands.")
 
 app.add_typer(db_app, name="db")
 app.add_typer(samples_app, name="samples")
 app.add_typer(templates_app, name="templates")
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.command("serve")
+def mcp_serve() -> None:
+    """Start the corpus MCP server over stdio (for Claude Code and other MCP clients).
+
+    Register with Claude Code:
+        { "command": "corpus", "args": ["mcp", "serve"] }
+    """
+    from corpus_analyzer.mcp.server import mcp  # lazy import
+
+    mcp.run()  # defaults to stdio transport
 
 
 @db_app.command("initialize")
