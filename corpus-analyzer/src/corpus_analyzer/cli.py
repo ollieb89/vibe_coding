@@ -16,6 +16,7 @@ from corpus_analyzer.config import SourceConfig, load_config, save_config
 from corpus_analyzer.config.schema import CONFIG_PATH, DATA_DIR
 from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.scanner import scan_directory
+from corpus_analyzer.core.utils import file_content_hash, get_file_mtime
 from corpus_analyzer.extractors import extract_document
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex
@@ -415,24 +416,88 @@ def extract(
         list[str] | None,
         typer.Option("--ext", "-e", help="File extensions to include"),
     ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Re-extract all files, ignoring cached fingerprints"),
+    ] = False,
 ) -> None:
-    """Extract documents from a directory into a corpus database."""
+    """Extract documents from a directory into a corpus database.
+
+    Files that are already indexed and whose content has not changed since the last
+    extraction are skipped automatically.  Pass --force to bypass this check and
+    re-process every file regardless.
+    """
     if extensions is None:
         extensions = [".md", ".py", ".txt", ".rst"]
 
     console.print(f"[bold]Scanning[/] {source}")
+    if force:
+        console.print("[yellow]--force: skipping change-detection cache[/]")
+
     db = CorpusDatabase(output)
     db.initialize()
 
-    file_count = 0
+    count_new = 0
+    count_updated = 0
+    count_skipped = 0
+
     for file_path in scan_directory(source, extensions):
+        path_str = str(file_path)
+        rel = file_path.relative_to(source)
+
+        # Determine whether to skip this file and whether it is new vs updated.
+        # resolved_hash / resolved_mtime are lazily computed and reused below.
+        resolved_hash: str | None = None
+        resolved_mtime: float | None = None
+        is_new = True
+
+        if not force:
+            fingerprint = db.get_file_fingerprint(path_str)
+            if fingerprint is not None:
+                stored_hash, stored_mtime = fingerprint
+                # Treat a blank hash as "not yet fingerprinted" (legacy migrated row);
+                # skip tier checks and re-extract so it gets a proper fingerprint.
+                is_new = not stored_hash
+                if stored_hash:
+                    resolved_mtime = get_file_mtime(file_path)
+
+                    # Tier 1: mtime unchanged → skip without reading file content
+                    if resolved_mtime == stored_mtime:
+                        count_skipped += 1
+                        continue
+
+                    # Tier 2: mtime changed → verify via content hash
+                    resolved_hash = file_content_hash(file_path)
+                    if resolved_hash == stored_hash:
+                        # Content identical; update stored mtime to avoid future hash reads
+                        db.update_file_fingerprint(path_str, resolved_hash, resolved_mtime)
+                        count_skipped += 1
+                        continue
+
+                    # Tier 3: content changed → fall through to re-extract
+
         doc = extract_document(file_path, source)
         if doc:
+            # Reuse already-computed hash/mtime where available; otherwise compute now.
+            doc.content_hash = (
+                resolved_hash if resolved_hash is not None else file_content_hash(file_path)
+            )
+            doc.last_modified = (
+                resolved_mtime if resolved_mtime is not None else get_file_mtime(file_path)
+            )
             db.insert_document(doc)
-            file_count += 1
-            console.print(f"  [dim]Extracted:[/] {file_path.relative_to(source)}")
+            if is_new:
+                count_new += 1
+                console.print(f"  [dim]New:[/]      {rel}")
+            else:
+                count_updated += 1
+                console.print(f"  [dim]Updated:[/]  {rel}")
 
-    console.print(f"\n[bold green]✓[/] Extracted {file_count} documents to {output}")
+    total = count_new + count_updated
+    console.print(
+        f"\n[bold green]✓[/] {total} extracted ({count_new} new, {count_updated} updated), "
+        f"[dim]{count_skipped} unchanged[/] — {output}"
+    )
 
 
 @app.command()

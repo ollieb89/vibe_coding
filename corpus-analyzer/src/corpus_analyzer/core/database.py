@@ -49,7 +49,9 @@ class CorpusDatabase:
                 category_confidence REAL DEFAULT 0.0,
                 domain_tags TEXT,  -- JSON
                 quality_score REAL DEFAULT 0.0,
-                is_gold_standard INTEGER DEFAULT 0
+                is_gold_standard INTEGER DEFAULT 0,
+                content_hash TEXT DEFAULT '',
+                last_modified REAL DEFAULT 0.0
             );
 
             CREATE TABLE IF NOT EXISTS chunks (
@@ -66,6 +68,15 @@ class CorpusDatabase:
             CREATE INDEX IF NOT EXISTS idx_documents_file_type ON documents(file_type);
             CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
         """)
+
+        # Migrate existing databases that pre-date the change-detection columns.
+        existing_cols = {
+            row[1] for row in self.db.execute("PRAGMA table_info(documents)").fetchall()
+        }
+        if "content_hash" not in existing_cols:
+            self.db.execute("ALTER TABLE documents ADD COLUMN content_hash TEXT DEFAULT ''")
+        if "last_modified" not in existing_cols:
+            self.db.execute("ALTER TABLE documents ADD COLUMN last_modified REAL DEFAULT 0.0")
 
     def insert_document(self, doc: Document) -> int:
         """Insert or update a document and return its ID."""
@@ -89,6 +100,43 @@ class CorpusDatabase:
         self.db["documents"].insert(data, alter=True)
         return self.db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
+    def get_file_fingerprint(self, path_str: str) -> tuple[str, float] | None:
+        """Return the stored (content_hash, last_modified) for a path, or None if not indexed.
+
+        Args:
+            path_str: Absolute path string as stored in the database.
+
+        Returns:
+            Tuple of (content_hash, last_modified) or None if path not found.
+        """
+        row = self.db.execute(
+            "SELECT content_hash, last_modified FROM documents WHERE path = ?", [path_str]
+        ).fetchone()
+        if row is None:
+            return None
+        return (row[0] or "", float(row[1] or 0.0))
+
+    def update_file_fingerprint(
+        self, path_str: str, content_hash: str, last_modified: float
+    ) -> None:
+        """Update only the change-detection fingerprint for an already-indexed document.
+
+        Called when mtime changed but content hash is unchanged — avoids a full re-extract.
+
+        Args:
+            path_str: Absolute path string identifying the document.
+            content_hash: SHA256 hash of the file content.
+            last_modified: Current mtime of the file.
+        """
+        cursor = self.db.execute(
+            "UPDATE documents SET content_hash = ?, last_modified = ? WHERE path = ?",
+            [content_hash, last_modified, path_str],
+        )
+        if cursor.rowcount == 0:
+            raise ValueError(
+                f"update_file_fingerprint: no document found for path {path_str!r}"
+            )
+
     def _doc_to_dict(self, doc: Document) -> dict:
         """Convert a Document model to a database dictionary."""
         return {
@@ -111,6 +159,8 @@ class CorpusDatabase:
             "domain_tags": json.dumps([t.value for t in doc.domain_tags]),
             "quality_score": doc.quality_score,
             "is_gold_standard": 1 if doc.is_gold_standard else 0,
+            "content_hash": doc.content_hash,
+            "last_modified": doc.last_modified,
         }
 
     def insert_chunk(self, chunk: Chunk) -> int:
@@ -269,4 +319,6 @@ class CorpusDatabase:
             domain_tags=[DomainTag(t) for t in json.loads(row.get("domain_tags") or "[]")],
             quality_score=float(row.get("quality_score") if row.get("quality_score") is not None else 0.0),
             is_gold_standard=bool(row.get("is_gold_standard") if row.get("is_gold_standard") is not None else 0),
+            content_hash=row.get("content_hash") or "",
+            last_modified=float(row.get("last_modified") or 0.0),
         )

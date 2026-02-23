@@ -123,5 +123,9 @@ class Document(BaseModel):
     quality_score: float = 0.0
     is_gold_standard: bool = False
 
+    # Change-detection fingerprint (populated during extract)
+    content_hash: str = ""
+    last_modified: float = 0.0
+
     # Chunks (populated separately)
     chunks: list[Chunk] = Field(default_factory=list)

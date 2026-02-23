@@ -6,27 +6,10 @@ computing file hashes, and detecting when files need reindexing.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterator
 from pathlib import Path
 
-
-def file_content_hash(path: Path) -> str:
-    """Compute SHA256 hash of file content.
-
-    Reads the file in chunks to handle large files efficiently.
-
-    Args:
-        path: Path to the file to hash.
-
-    Returns:
-        Hexadecimal string of the SHA256 digest.
-    """
-    sha256 = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(65536):  # 64KB chunks
-            sha256.update(chunk)
-    return sha256.hexdigest()
+from corpus_analyzer.core.utils import file_content_hash as file_content_hash  # re-export
 
 
 def walk_source(
