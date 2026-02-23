@@ -28,7 +28,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Deleting a file from disk and running `corpus index` removes its chunks from the index (no ghost documents)
   4. User can run `corpus add <dir>` to append a directory to `corpus.toml` as a named source with optional `--name`
   5. All supported file types (`.md`, `.py`, `.ts`, `.js`, `.json`, `.yaml`) are extracted and embedded with structure-aware chunking
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — TDD: LanceDB ChunkRecord schema and make_chunk_id() helper
+- [ ] 01-02-PLAN.md — TDD: CorpusConfig Pydantic models and TOML load/save I/O
+- [ ] 01-03-PLAN.md — TDD: File chunker (md/py/lines) and scanner with change detection
+- [ ] 01-04-PLAN.md — Embedder (OllamaEmbedder) and core indexer (CorpusIndex) engine
+- [ ] 01-05-PLAN.md — CLI commands: corpus add and corpus index with progress bar
 
 ### Phase 2: Search Core
 **Goal**: Users can query the index with natural language and get ranked, relevant results with snippets — filterable by source, file type, and construct type
@@ -60,6 +67,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/5 | Not started | - |
 | 2. Search Core | 0/TBD | Not started | - |
 | 3. Agent Interfaces | 0/TBD | Not started | - |
