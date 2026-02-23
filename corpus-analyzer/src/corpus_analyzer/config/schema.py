@@ -9,10 +9,15 @@ from __future__ import annotations
 from pathlib import Path
 from platformdirs import user_config_dir, user_data_dir
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 CONFIG_PATH = Path(user_config_dir("corpus")) / "corpus.toml"
 DATA_DIR = Path(user_data_dir("corpus"))
+
+DEFAULT_EXTENSIONS: list[str] = [
+    ".md", ".py", ".ts", ".tsx", ".js", ".jsx", ".yaml", ".yml", ".txt"
+]
+"""Default file extensions to index for documentation and code types."""
 
 
 class EmbeddingConfig(BaseModel):
@@ -69,6 +74,27 @@ class SourceConfig(BaseModel):
     When False (default), rule-based classification is used.
     Set to True per source for richer classification when LLM cost is acceptable.
     """
+
+    extensions: list[str] = Field(default_factory=lambda: list(DEFAULT_EXTENSIONS))
+    """File extensions to index for this source (e.g. [".md", ".py"]).
+
+    Defaults to common documentation and code types. Set to an empty list to skip
+    all files in this source. The leading dot is required but normalized automatically.
+    """
+
+    @field_validator("extensions", mode="before")
+    @classmethod
+    def normalize_extensions(cls, v: object) -> list[str]:
+        """Normalize extension strings: lowercase, ensure leading dot."""
+        if not isinstance(v, list):
+            raise ValueError("extensions must be a list of strings")
+        result: list[str] = []
+        for raw in v:
+            ext = str(raw).strip().lower()
+            if ext and not ext.startswith("."):
+                ext = f".{ext}"
+            result.append(ext)
+        return result
 
 
 class CorpusConfig(BaseModel):

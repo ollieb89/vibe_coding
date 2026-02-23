@@ -33,16 +33,20 @@ def walk_source(
     base_path: Path,
     include: list[str] | None = None,
     exclude: list[str] | None = None,
+    extensions: list[str] | None = None,
 ) -> Iterator[Path]:
     """Walk a source directory and yield matching files.
 
     Files are yielded if they match any include pattern and do not
-    match any exclude pattern.
+    match any exclude pattern. If extensions is provided, only files
+    with matching suffixes are yielded.
 
     Args:
-        source_path: Root directory to walk.
+        base_path: Root directory to walk.
         include: Glob patterns for files to include.
         exclude: Glob patterns for files to exclude.
+        extensions: List of file extensions to allow (e.g., [".md", ".py"]).
+            If None, all extensions are allowed. If empty list, no files are yielded.
 
     Yields:
         Path objects for matching files.
@@ -67,6 +71,9 @@ def walk_source(
 
         # Check includes
         if any(_match_glob(str(rel_path), pattern) for pattern in include):
+            # Extension filter: applied after include/exclude
+            if extensions is not None and path.suffix.lower() not in extensions:
+                continue
             yield path
 
 
