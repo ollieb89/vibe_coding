@@ -1,16 +1,23 @@
 """CLI entry point using Typer."""
 
+import time
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
+from platformdirs import user_config_dir, user_data_dir
 from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from corpus_analyzer import __version__
-from corpus_analyzer.config import settings
+from corpus_analyzer.config import load_config, save_config, CorpusConfig, SourceConfig
+from corpus_analyzer.settings import settings as app_settings
 from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.scanner import scan_directory
 from corpus_analyzer.extractors import extract_document
+from corpus_analyzer.ingest.embedder import OllamaEmbedder
+from corpus_analyzer.ingest.indexer import CorpusIndex
+from corpus_analyzer.ingest.scanner import walk_source
 
 app = typer.Typer(
     name="corpus-analyzer",
@@ -18,6 +25,10 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 console = Console()
+
+# XDG paths for config and data
+CONFIG_PATH = Path(user_config_dir("corpus")) / "corpus.toml"
+DATA_DIR = Path(user_data_dir("corpus"))
 
 
 def version_callback(value: bool) -> None:
@@ -30,12 +41,117 @@ def version_callback(value: bool) -> None:
 @app.callback()
 def main(
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option("--version", "-v", callback=version_callback, is_eager=True),
     ] = None,
 ) -> None:
     """Document Corpus Analyzer - Extract, categorize, and analyze docs."""
     pass
+
+
+@app.command("add")
+def add_command(
+    directory: Annotated[str, typer.Argument(help="Directory path to add as a source")],
+    name: Annotated[str | None, typer.Option("--name", "-n", help="Source name (default: directory basename)")] = None,
+    include: Annotated[list[str], typer.Option("--include", help="Glob patterns to include")] = ["**/*"],
+    exclude: Annotated[list[str], typer.Option("--exclude", help="Glob patterns to exclude")] = [],
+    force: Annotated[bool, typer.Option("--force", help="Re-add if source already exists")] = False,
+) -> None:
+    """Add a directory to corpus.toml as a named source."""
+    # Resolve source name
+    source_name = name if name else Path(directory).name
+
+    # Load config
+    config = load_config(CONFIG_PATH)
+
+    # Check for duplicates
+    existing_by_name = next((s for s in config.sources if s.name == source_name), None)
+    existing_by_path = next((s for s in config.sources if s.path == directory), None)
+
+    if (existing_by_name or existing_by_path) and not force:
+        console.print(f"[red]Error:[/] Source '{source_name}' or path '{directory}' already exists. Use --force to re-add.")
+        raise typer.Exit(code=1)
+
+    # If force, remove existing
+    if force:
+        config.sources = [s for s in config.sources if s.name != source_name and s.path != directory]
+
+    # Add new source
+    config.sources.append(SourceConfig(
+        name=source_name,
+        path=directory,
+        include=list(include),
+        exclude=list(exclude),
+    ))
+
+    # Save config
+    save_config(CONFIG_PATH, config)
+
+    console.print(f"[green]✔[/] Added source '[bold]{source_name}[/]' ({directory})")
+    console.print("  Run [bold]corpus index[/] to index it.")
+
+
+@app.command("index")
+def index_command(
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Print each file as it is processed")] = False,
+) -> None:
+    """Index all configured sources into LanceDB."""
+    # Load config
+    config = load_config(CONFIG_PATH)
+
+    if not config.sources:
+        console.print("[yellow]No sources configured. Run 'corpus add <dir>' first.[/]")
+        raise typer.Exit(code=0)
+
+    # Validate Ollama connection
+    embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
+    try:
+        embedder.validate_connection()
+    except RuntimeError as e:
+        console.print(f"[red]Error:[/] {e}")
+        raise typer.Exit(code=1)
+
+    # Open index
+    index = CorpusIndex.open(DATA_DIR, embedder)
+
+    # Index each source
+    for source in config.sources:
+        source_path = Path(source.path).expanduser()
+
+        # Validate source path exists
+        if not source_path.exists():
+            console.print(f"[yellow]Warning:[/] Source path not found: {source.path} — skipping")
+            continue
+
+        # Count total files
+        total = sum(1 for _ in walk_source(source_path, source.include, source.exclude))
+
+        if total == 0:
+            console.print(f"[yellow]Warning:[/] No files found in source: {source.name}")
+            continue
+
+        # Progress bar
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("{task.completed}/{task.total} files"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task(f"Indexing {source.name}...", total=total)
+
+            def progress_callback(n: int) -> None:
+                progress.advance(task_id, n)
+
+            result = index.index_source(source, progress_callback=progress_callback)
+
+        # Print summary
+        console.print(
+            f"[green]✔[/] Indexed [bold]{source.name}[/]: "
+            f"{result.files_indexed} files, {result.chunks_written} chunks "
+            f"({result.elapsed:.1f}s) — {result.files_skipped} unchanged"
+        )
 
 
 # CLI Groups
@@ -50,7 +166,7 @@ app.add_typer(templates_app, name="templates")
 
 @db_app.command("initialize")
 def db_init(
-    path: Annotated[Path, typer.Option("--path", "-p", help="Database path")] = settings.database_path,
+    path: Annotated[Path, typer.Option("--path", "-p", help="Database path")] = app_settings.database_path,
 ) -> None:
     """Initialize the corpus database schema."""
     db = CorpusDatabase(path)
@@ -60,7 +176,7 @@ def db_init(
 
 @db_app.command("inspect")
 def db_inspect(
-    path: Annotated[Path, typer.Option("--path", "-p", help="Database path")] = settings.database_path,
+    path: Annotated[Path, typer.Option("--path", "-p", help="Database path")] = app_settings.database_path,
 ) -> None:
     """Inspect database schema and sample data."""
     from corpus_analyzer.utils.ui import print_sample_data, print_table_schema
@@ -85,9 +201,9 @@ def extract(
     source: Annotated[Path, typer.Argument(help="Source directory to scan")],
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Output database path")
-    ] = settings.database_path,
+    ] = app_settings.database_path,
     extensions: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--ext", "-e", help="File extensions to include"),
     ] = None,
 ) -> None:
@@ -112,16 +228,20 @@ def extract(
 
 @app.command()
 def classify(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = settings.database_path,
+    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
+    use_full_content: Annotated[bool, typer.Option("--full-content", help="Use full document content for better classification")] = True,
 ) -> None:
-    """Classify documents by type and domain tags."""
+    """Classify documents by type and domain tags with enhanced analysis."""
     from corpus_analyzer.classifiers.document_type import classify_documents
     from corpus_analyzer.classifiers.domain_tags import tag_documents
 
     console.print(f"[bold]Classifying documents in[/] {database}")
+    if use_full_content:
+        console.print("[dim]Using full content analysis for enhanced classification[/]")
+
     db = CorpusDatabase(database)
 
-    classified = classify_documents(db)
+    classified = classify_documents(db, use_full_content=use_full_content)
     tagged = tag_documents(db)
 
     console.print(f"[bold green]✓[/] Classified {classified} documents")
@@ -130,10 +250,10 @@ def classify(
 
 @app.command()
 def analyze(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = settings.database_path,
+    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Reports output directory")
-    ] = settings.reports_dir,
+    ] = app_settings.reports_dir,
 ) -> None:
     """Analyze document shapes and generate reports per category."""
     from corpus_analyzer.analyzers.shape import generate_shape_reports
@@ -147,7 +267,7 @@ def analyze(
 
 @app.command("analyze-quality")
 def analyze_quality(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = settings.database_path,
+    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
 ) -> None:
     """Analyze document quality and mark gold standard patterns."""
     from corpus_analyzer.analyzers.quality import QualityAnalyzer
@@ -155,14 +275,14 @@ def analyze_quality(
     console.print(f"[bold]Analyzing document quality in[/] {database}")
     db = CorpusDatabase(database)
     analyzer = QualityAnalyzer(db)
-    
+
     count = analyzer.analyze_all()
     console.print(f"[bold green]✓[/] Analyzed {count} documents and marked gold standards")
 
 
 @samples_app.command("extract")
 def samples_extract(
-    database: Annotated[Path, typer.Option("--db", "-d", help="Corpus database path")] = settings.database_path,
+    database: Annotated[Path, typer.Option("--db", "-d", help="Corpus database path")] = app_settings.database_path,
     output: Annotated[Path, typer.Option("--output", "-o", help="Output directory")] = Path("source_docs"),
     limit: Annotated[int, typer.Option("--limit", "-l", help="Samples per category")] = 2,
 ) -> None:
@@ -180,10 +300,10 @@ def samples_extract(
 
 @templates_app.command("generate")
 def templates_generate(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = settings.database_path,
+    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Templates output directory")
-    ] = settings.templates_dir,
+    ] = app_settings.templates_dir,
 ) -> None:
     """Generate templates from shape analysis."""
     from corpus_analyzer.generators.templates import generate_from_analysis
@@ -197,11 +317,11 @@ def templates_generate(
 
 @templates_app.command("freeze")
 def templates_freeze(
-    templates_dir: Annotated[Path, typer.Option("--dir", "-d", help="Templates directory")] = settings.templates_dir,
+    templates_dir: Annotated[Path, typer.Option("--dir", "-d", help="Templates directory")] = app_settings.templates_dir,
 ) -> None:
     """Freeze templates with contracts."""
     from corpus_analyzer.generators.templates import TEMPLATE_CONTRACTS, TEMPLATES
-    
+
     if not templates_dir.exists():
         console.print(f"[bold red]Error:[/] Templates directory not found at {templates_dir}")
         raise typer.Exit(1)
@@ -209,11 +329,11 @@ def templates_freeze(
     for name in TEMPLATES:
         src = templates_dir / f"{name}.md"
         dst = templates_dir / f"{name}.v1.md"
-        
+
         if src.exists():
             content = src.read_text()
             contract = TEMPLATE_CONTRACTS.get(name, "<!-- TEMPLATE CONTRACT -->")
-            
+
             if contract in content:
                 console.print(f"[yellow]Skipping {name}, already has contract[/]")
                 continue
@@ -227,43 +347,177 @@ def templates_freeze(
 
 @app.command()
 def rewrite(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = settings.database_path,
+    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
     category: Annotated[str, typer.Option("--category", "-c", help="Document category to rewrite")] = "howto",
-    model: Annotated[str, typer.Option("--model", "-m", help="Ollama model name")] = settings.ollama_model,
+    model: Annotated[str, typer.Option("--model", "-m", help="Ollama model name")] = app_settings.ollama_model,
     output: Annotated[
-        Optional[Path], typer.Option("--output", "-o", help="Output directory for rewritten docs")
+        Path | None, typer.Option("--output", "-o", help="Output directory for rewritten docs")
     ] = None,
     optimized: Annotated[bool, typer.Option("--optimized", help="Use gold standard patterns for optimization")] = False,
+    use_templates: Annotated[bool, typer.Option("--templates", help="Use template-based rewriting")] = True,
+    auto_category: Annotated[bool, typer.Option("--auto-category", help="Auto-select best category based on classification confidence")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed progress information")] = False,
 ) -> None:
-    """Rewrite/consolidate documents using local LLM (Ollama)."""
-    from corpus_analyzer.llm.rewriter import rewrite_category
+    """Rewrite/consolidate documents using enhanced unified rewriter."""
+    from corpus_analyzer.core.models import DocumentCategory
+    from corpus_analyzer.llm.unified_rewriter import UnifiedRewriter
 
     console.print(f"[bold]Rewriting[/] {category} [bold]documents with[/] {model}")
+
+    db = CorpusDatabase(database)
+
+    # Auto-select category if requested
+    if auto_category:
+        console.print("[dim]Analyzing classifications to auto-select best category...[/]")
+
+        # Get classification statistics
+        category_scores = {}
+        for doc in db.get_documents():
+            if doc.id and doc.category != DocumentCategory.UNKNOWN:
+                if doc.category not in category_scores:
+                    category_scores[doc.category] = []
+                category_scores[doc.category].append(doc.category_confidence)
+
+        if category_scores:
+            # Find category with highest average confidence and most documents
+            best_category = max(
+                category_scores.keys(),
+                key=lambda c: (len(category_scores[c]), sum(category_scores[c]) / len(category_scores[c]))
+            )
+            avg_confidence = sum(category_scores[best_category]) / len(category_scores[best_category])
+
+            console.print(f"[bold green]→[/] Auto-selected: {best_category.value} ({len(category_scores[best_category])} docs, {avg_confidence:.2f} avg confidence)")
+            category = best_category.value
+        else:
+            console.print("[yellow]Warning: Could not auto-select category, using provided category[/]")
 
     if output is None:
         output = Path(f"output/{category}")
     output.mkdir(parents=True, exist_ok=True)
 
-    result = rewrite_category(
-        db=CorpusDatabase(database),
-        category=category,
+    # Show document count and estimated time
+    doc_category = DocumentCategory(category)
+    docs = list(db.get_documents(category=doc_category))
+    total_docs = len(docs)
+
+    if total_docs == 0:
+        console.print(f"[yellow]No documents found in category: {category}[/]")
+        return
+
+    console.print(f"[bold]Processing {total_docs} documents[/] in category '{category}'")
+
+    if verbose:
+        # Show sample of documents to be processed
+        console.print("\n[dim]Sample documents to be processed:[/]")
+        for doc in docs[:5]:
+            console.print(f"  • {doc.relative_path}")
+        if len(docs) > 5:
+            console.print(f"  ... and {len(docs) - 5} more")
+
+    # Initialize unified rewriter
+    rewriter = UnifiedRewriter(
         model=model,
+        templates_dir=app_settings.templates_dir,
+        use_templates=use_templates,
+        use_llm_fallback=True
+    )
+
+    # Start rewrite with progress tracking
+    console.print("\n[bold blue]Starting rewrite process...[/]")
+    start_time = time.time()
+
+    result = rewriter.rewrite_category(
+        db=db,
+        category=category,
         output_dir=output,
         optimized=optimized,
     )
-    
+
+    elapsed_time = time.time() - start_time
+
+    # Show completion summary
+    console.print(f"\n[bold green]✓ Rewrite completed in {elapsed_time:.1f} seconds[/]")
+
     if result.errors:
-        for err in result.errors:
-            console.print(f"[bold red]Error:[/] {err}")
-    
+        console.print(f"\n[bold red]Errors ({len(result.errors)}):[/]")
+        for err in result.errors[:10]:  # Limit displayed errors
+            console.print(f"  [red]✗[/] {err}")
+        if len(result.errors) > 10:
+            console.print(f"  [dim]... and {len(result.errors) - 10} more[/]")
+
     if result.warnings:
         console.print(f"\n[bold yellow]Warnings ({len(result.warnings)}):[/]")
         for warn in result.warnings[:10]:  # Limit displayed warnings
             console.print(f"  [yellow]⚠[/] {warn}")
         if len(result.warnings) > 10:
             console.print(f"  [dim]... and {len(result.warnings) - 10} more[/]")
-            
+
+    # Show quality summary
+    if result.quality_scores:
+        avg_quality = sum(result.quality_scores.values()) / len(result.quality_scores)
+        console.print("\n[bold]Quality Summary:[/]")
+        console.print(f"  Average quality score: {avg_quality:.1f}/100")
+        console.print(f"  Documents processed: {len(result.quality_scores)}")
+        console.print(f"  Processing rate: {len(result.quality_scores)/elapsed_time:.2f} docs/sec")
+
+        # Show best and worst
+        if len(result.quality_scores) > 1:
+            best_doc = max(result.quality_scores, key=result.quality_scores.get)
+            worst_doc = min(result.quality_scores, key=result.quality_scores.get)
+            console.print(f"  Best: {best_doc} ({result.quality_scores[best_doc]:.1f})")
+            console.print(f"  Worst: {worst_doc} ({result.quality_scores[worst_doc]:.1f})")
+
     console.print(f"\n[bold green]✓[/] Rewrote {result.docs_processed} documents to {output}")
+
+
+@app.command()
+def review(
+    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
+    category: Annotated[str | None, typer.Option("--category", "-c", help="Filter by category")] = None,
+    limit: Annotated[int, typer.Option("--limit", "-l", help="Number of docs to review")] = 10,
+) -> None:
+    """Manually review documents and mark as Gold Standard."""
+    from corpus_analyzer.core.models import DocumentCategory
+
+    db = CorpusDatabase(database)
+
+    doc_category = None
+    if category:
+        try:
+            doc_category = DocumentCategory(category)
+        except ValueError:
+            console.print(f"[bold red]Error:[/] Unknown category: {category}")
+            raise typer.Exit(1)
+
+    docs = list(db.get_documents(category=doc_category))
+    # Filter out already gold standard? Or maybe allow toggling off?
+    # Let's show non-gold first.
+    docs = [d for d in docs if not d.is_gold_standard]
+
+    if not docs:
+        console.print("[yellow]No documents to review.[/]")
+        return
+
+    console.print(f"[bold]Found {len(docs)} documents to review.[/]")
+
+    count = 0
+    for doc in docs[:limit]:
+        console.rule(f"[bold blue]{doc.title}[/]")
+        console.print(f"Path: {doc.relative_path}")
+        console.print(f"Category: {doc.category.value} (Confidence: {doc.category_confidence:.2f})")
+        console.print(f"Quality Score: {doc.quality_score}")
+        console.print(f"\n[dim]{doc.path.read_text()[:500]}...[/dim]\n")
+
+        should_mark = typer.confirm(f"Mark '{doc.title}' as Gold Standard?")
+        if should_mark:
+            db.set_gold_standard(doc.id, True)
+            console.print("[green]Marked as Gold Standard[/]")
+            count += 1
+
+        if not typer.confirm("Continue to next?"):
+            break
+
+    console.print(f"\n[bold green]✓[/] Marked {count} documents as gold standard.")
 
 
 if __name__ == "__main__":
