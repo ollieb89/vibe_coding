@@ -5,7 +5,7 @@ from typing import Iterator
 import ollama
 from pydantic import BaseModel
 
-from corpus_analyzer.config import settings
+from corpus_analyzer.settings import settings
 
 
 class OllamaClient:
