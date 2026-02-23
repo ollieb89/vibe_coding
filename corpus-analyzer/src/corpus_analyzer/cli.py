@@ -1,6 +1,8 @@
 """CLI entry point using Typer."""
 
+import json as json_module
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -8,6 +10,7 @@ import typer
 from platformdirs import user_config_dir, user_data_dir
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.table import Table
 
 from corpus_analyzer import __version__
 from corpus_analyzer.config import load_config, save_config, CorpusConfig, SourceConfig
@@ -18,6 +21,8 @@ from corpus_analyzer.extractors import extract_document
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex
 from corpus_analyzer.ingest.scanner import walk_source
+from corpus_analyzer.search.engine import CorpusSearch
+from corpus_analyzer.search.formatter import extract_snippet
 
 app = typer.Typer(
     name="corpus-analyzer",
@@ -109,7 +114,7 @@ def index_command(
         embedder.validate_connection()
     except RuntimeError as e:
         console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     # Open index
     index = CorpusIndex.open(DATA_DIR, embedder)
@@ -152,6 +157,180 @@ def index_command(
             f"{result.files_indexed} files, {result.chunks_written} chunks "
             f"({result.elapsed:.1f}s) — {result.files_skipped} unchanged"
         )
+
+
+@app.command("search")
+def search_command(
+    query: Annotated[str, typer.Argument(help="Natural language search query")],
+    source: Annotated[str | None, typer.Option("--source", "-s", help="Filter by source name")] = None,
+    type_: Annotated[str | None, typer.Option("--type", "-t", help="Filter by file type (.md, .py, etc.)")] = None,
+    construct: Annotated[str | None, typer.Option("--construct", "-c", help="Filter by construct type")] = None,
+    limit: Annotated[int, typer.Option("--limit", "-n", help="Maximum number of results")] = 10,
+) -> None:
+    """Search the indexed corpus with a natural language query."""
+    config = load_config(CONFIG_PATH)
+
+    embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
+    try:
+        embedder.validate_connection()
+    except RuntimeError as e:
+        console.print(f"[red]Error:[/] {e}")
+        raise typer.Exit(code=1)
+
+    index = CorpusIndex.open(DATA_DIR, embedder)
+    search = CorpusSearch(index.table, embedder)
+
+    try:
+        results = search.hybrid_search(
+            query,
+            source=source,
+            file_type=type_,
+            construct_type=construct,
+            limit=limit,
+        )
+    except ValueError as e:
+        console.print(f"[red]Error:[/] {e}")
+        raise typer.Exit(code=1) from e
+
+    if not results:
+        console.print(f'[yellow]No results for "[bold]{query}[/bold]"[/yellow]')
+        return
+
+    for result in results:
+        console.print(
+            f"[bold blue]{result['file_path']}[/]  "
+            f"[dim]{result.get('construct_type') or 'documentation'}[/]  "
+            f"[dim]score: {result['_relevance_score']:.3f}[/]"
+        )
+        if result.get("summary"):
+            console.print(f"  [italic]{result['summary']}[/italic]")
+        console.print(f"  {extract_snippet(str(result['text']), query)}")
+        console.print()
+
+
+def _human_age(ts: str) -> str:
+    """Convert ISO timestamp to human-readable age string ('2 hours ago')."""
+    try:
+        dt = datetime.fromisoformat(ts).replace(tzinfo=UTC)
+        delta = datetime.now(UTC) - dt
+        secs = int(delta.total_seconds())
+        if secs < 60:
+            return f"{secs} seconds ago"
+        elif secs < 3600:
+            return f"{secs // 60} minutes ago"
+        elif secs < 86400:
+            return f"{secs // 3600} hours ago"
+        else:
+            return f"{secs // 86400} days ago"
+    except Exception:
+        return ts
+
+
+def _count_stale_files(source: SourceConfig, indexed_at: str) -> int:
+    """Count files in source directory modified after the last index time."""
+    try:
+        indexed_dt = datetime.fromisoformat(indexed_at)
+        source_path = Path(source.path).expanduser()
+        return sum(
+            1 for fp in walk_source(source_path, source.include, source.exclude)
+            if fp.stat().st_mtime > indexed_dt.timestamp()
+        )
+    except Exception:
+        return 0
+
+
+@app.command("status")
+def status_command(
+    json_output: Annotated[bool, typer.Option("--json", help="Output as JSON for scripting")] = False,
+) -> None:
+    """Show index health: sources, staleness, chunk count, embedding model status."""
+    config = load_config(CONFIG_PATH)
+    embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
+
+    # Test model reachability
+    try:
+        embedder.validate_connection()
+        model_status = "connected"
+    except RuntimeError:
+        model_status = "unreachable"
+
+    # Open index and get stats
+    try:
+        index = CorpusIndex.open(DATA_DIR, embedder)
+        search = CorpusSearch(index.table, embedder)
+        stats = search.status(config.embedding.model)
+    except Exception:
+        if json_output:
+            console.print(json_module.dumps({"error": "Index not found. Run 'corpus index' first."}))
+        else:
+            console.print("[yellow]Index not found. Run 'corpus index' first.[/]")
+        raise typer.Exit(code=0) from None
+
+    last_indexed = str(stats.get("last_indexed", "never"))
+    files_total = int(stats.get("files", 0))
+    chunks_total = int(stats.get("chunks", 0))
+
+    # Per-source staleness
+    source_rows = []
+    total_stale = 0
+    for source in config.sources:
+        stale_count = _count_stale_files(source, last_indexed) if last_indexed != "never" else 0
+        total_stale += stale_count
+        source_rows.append({
+            "name": source.name,
+            "path": source.path,
+            "stale_files": stale_count,
+            "health": "current" if stale_count == 0 else "stale",
+        })
+
+    db_path = DATA_DIR / "corpus.lance"
+    db_size = db_path.stat().st_size if db_path.exists() else 0
+
+    if json_output:
+        output_data = {
+            "health": "current" if total_stale == 0 else "stale",
+            "files": files_total,
+            "chunks": chunks_total,
+            "last_indexed": last_indexed,
+            "stale_files": total_stale,
+            "model": {
+                "name": config.embedding.model,
+                "status": model_status,
+            },
+            "sources": source_rows,
+            "database": {
+                "path": str(DATA_DIR),
+                "size_bytes": db_size,
+            },
+        }
+        console.print(json_module.dumps(output_data, indent=2))
+        return
+
+    # Rich table output
+    age_str = _human_age(last_indexed) if last_indexed != "never" else "never"
+    health_str = "[green]OK[/green]" if total_stale == 0 else f"[yellow]{total_stale} files changed since last index[/yellow]"
+    model_str = f"{config.embedding.model}  [green]connected[/]" if model_status == "connected" else f"{config.embedding.model}  [red]unreachable[/]"
+
+    table = Table(title="[bold]Index Status[/]", show_header=True)
+    table.add_column("Metric", style="bold", min_width=18)
+    table.add_column("Value")
+    table.add_row("Health", health_str)
+    table.add_row("Files", str(files_total))
+    table.add_row("Chunks", str(chunks_total))
+    table.add_row("Last indexed", f"{last_indexed}  [dim]({age_str})[/dim]")
+    table.add_row("Model", model_str)
+    table.add_row("Database", str(DATA_DIR))
+    console.print(table)
+
+    if source_rows:
+        src_table = Table(title="[bold]Sources[/]", show_header=True)
+        src_table.add_column("Name", style="bold")
+        src_table.add_column("Path")
+        src_table.add_column("Status")
+        for row in source_rows:
+            icon = "[green]current[/]" if row["stale_files"] == 0 else f"[yellow]{row['stale_files']} stale[/]"
+            src_table.add_row(str(row["name"]), str(row["path"]), icon)
+        console.print(src_table)
 
 
 # CLI Groups
@@ -371,7 +550,7 @@ def rewrite(
         console.print("[dim]Analyzing classifications to auto-select best category...[/]")
 
         # Get classification statistics
-        category_scores = {}
+        category_scores: dict[DocumentCategory, list[float]] = {}
         for doc in db.get_documents():
             if doc.id and doc.category != DocumentCategory.UNKNOWN:
                 if doc.category not in category_scores:
@@ -462,8 +641,8 @@ def rewrite(
 
         # Show best and worst
         if len(result.quality_scores) > 1:
-            best_doc = max(result.quality_scores, key=result.quality_scores.get)
-            worst_doc = min(result.quality_scores, key=result.quality_scores.get)
+            best_doc = max(result.quality_scores, key=lambda key: result.quality_scores[key])
+            worst_doc = min(result.quality_scores, key=lambda key: result.quality_scores[key])
             console.print(f"  Best: {best_doc} ({result.quality_scores[best_doc]:.1f})")
             console.print(f"  Worst: {worst_doc} ({result.quality_scores[worst_doc]:.1f})")
 
@@ -485,9 +664,9 @@ def review(
     if category:
         try:
             doc_category = DocumentCategory(category)
-        except ValueError:
+        except ValueError as e:
             console.print(f"[bold red]Error:[/] Unknown category: {category}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     docs = list(db.get_documents(category=doc_category))
     # Filter out already gold standard? Or maybe allow toggling off?
@@ -510,6 +689,8 @@ def review(
 
         should_mark = typer.confirm(f"Mark '{doc.title}' as Gold Standard?")
         if should_mark:
+            if doc.id is None:
+                continue
             db.set_gold_standard(doc.id, True)
             console.print("[green]Marked as Gold Standard[/]")
             count += 1
