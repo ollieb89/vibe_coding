@@ -82,11 +82,15 @@ async def corpus_search(
     results = []
     for row in raw_results:
         file_path = str(row.get("file_path", ""))
+        content_error: str | None = None
         try:
             full_content = Path(file_path).read_text(errors="replace")
-        except OSError:
+        except OSError as exc:
+            logging.warning("Cannot read file after indexing: %s — %s", file_path, exc)
             full_content = ""
-        results.append({
+            content_error = f"File not found: {file_path}"
+
+        result_dict: dict[str, Any] = {
             "path": file_path,
             "score": float(row.get("_relevance_score", 0.0)),
             "snippet": extract_snippet(str(row.get("text", "")), query),
@@ -94,6 +98,11 @@ async def corpus_search(
             "construct_type": str(row.get("construct_type") or "documentation"),
             "summary": str(row.get("summary") or ""),
             "file_type": str(row.get("file_type", "")),
-        })
+        }
+
+        if content_error is not None:
+            result_dict["content_error"] = content_error
+
+        results.append(result_dict)
 
     return {"results": results}
