@@ -248,7 +248,7 @@ def _count_stale_files(source: SourceConfig, indexed_at: str) -> int:
         indexed_dt = datetime.fromisoformat(indexed_at)
         source_path = Path(source.path).expanduser()
         return sum(
-            1 for fp in walk_source(source_path, source.include, source.exclude)
+            1 for fp in walk_source(source_path, source.include, source.exclude, extensions=source.extensions)
             if fp.stat().st_mtime > indexed_dt.timestamp()
         )
     except Exception:
