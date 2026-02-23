@@ -37,7 +37,11 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. Running `corpus index` on a source with an allowlist skips `.sh`, `.html`, `.json`, `.lock`, and binary files without error or warning
   3. A source with no `extensions` key automatically applies a default allowlist covering `.md`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.yaml`, `.yml`, `.txt`
   4. The default allowlist excludes `.sh`, `.html`, `.json`, `.lock`, and binary files even with no user configuration
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — TDD: SourceConfig.extensions field + walk_source extension filtering
+- [ ] 05-02-PLAN.md — Integrate extensions into indexer, reconcile stale chunks, CLI output
 
 ### Phase 6: Frontmatter Classification
 **Goal**: The construct classifier reads YAML frontmatter from markdown files as a high-confidence signal, making `--construct` filtering reliably accurate
@@ -61,5 +65,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Search Core | v1.0 | 5/5 | Complete | 2026-02-23 |
 | 3. Agent Interfaces | v1.0 | 3/3 | Complete | 2026-02-23 |
 | 4. Defensive Hardening | v1.0 | 2/2 | Complete | 2026-02-23 |
-| 5. Extension Filtering | v1.1 | 0/TBD | Not started | - |
+| 5. Extension Filtering | v1.1 | 0/2 | Not started | - |
 | 6. Frontmatter Classification | v1.1 | 0/TBD | Not started | - |
