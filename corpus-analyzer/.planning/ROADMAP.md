@@ -52,7 +52,11 @@ Plans:
   2. A markdown file with a recognized frontmatter type declaration is classified with confidence >= 0.9
   3. Frontmatter `tags` field values are surfaced as classification signals alongside `type` and `component_type`
   4. Files without frontmatter continue to be classified using existing rule-based signals with no regression in test suite
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — TDD: ClassificationResult datatype + classify_by_frontmatter() + confidence scores
+- [ ] 06-02-PLAN.md — Schema evolution (classification_source/confidence fields) + indexer wiring
 
 ## Progress
 
@@ -66,4 +70,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Agent Interfaces | v1.0 | 3/3 | Complete | 2026-02-23 |
 | 4. Defensive Hardening | v1.0 | 2/2 | Complete | 2026-02-23 |
 | 5. Extension Filtering | v1.1 | 0/2 | Not started | - |
-| 6. Frontmatter Classification | v1.1 | 0/TBD | Not started | - |
+| 6. Frontmatter Classification | v1.1 | 0/2 | Not started | - |
