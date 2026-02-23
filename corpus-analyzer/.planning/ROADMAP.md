@@ -84,11 +84,11 @@ Plans:
   3. MCP `full_content` surfaces an error signal (log or field) when a file cannot be read after indexing
   4. `needs_reindex()` dead code removed from `ingest/scanner.py`
   5. FTS index rebuilt only once per index cycle (not redundantly on CorpusSearch construction)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Fix CLI-02 KeyError + INGEST-07 silent swallow + MCP-02 silent OSError
-- [ ] 04-02-PLAN.md — Tech debt: remove dead code, fix redundant FTS rebuild, expose use_llm_classification, resolve DATA_DIR dual source-of-truth
+- [ ] 04-01-PLAN.md — TDD: Fix CLI-02 KeyError, INGEST-07 silent swallows, MCP-02 silent OSError (3 safety fixes with tests)
+- [ ] 04-02-PLAN.md — Tech debt: DATA_DIR consolidation, use_llm_classification config field, remove dead code and redundant FTS rebuild, retroactive VERIFICATION.md for phases 1-3
 
 ## Progress
 
