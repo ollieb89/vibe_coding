@@ -6,6 +6,15 @@ Corpus is a local semantic search engine for AI agent libraries. It indexes agen
 
 v1.0 ships as a CLI tool (`corpus add`, `corpus index`, `corpus search`, `corpus status`) backed by LanceDB with hybrid BM25+vector retrieval. An MCP server (`corpus mcp serve`) exposes search to Claude Code and other agents. A Python API (`from corpus import search`) enables programmatic access.
 
+## Current Milestone: v1.1 Search Quality
+
+**Goal:** Eliminate noise from search results by controlling which files get indexed and improving construct classification accuracy.
+
+**Target features:**
+- Configurable extension allowlist in `corpus.toml` — users control exactly which file types are indexed (no more `.sh`, `.html`, config files polluting results)
+- Frontmatter-aware construct classifier — reads YAML frontmatter (`component_type`, tags) to accurately classify skills, workflows, agent configs
+- Accurate `--construct` filtering — classification accuracy makes the existing filter flag actually useful
+
 ## Core Value
 
 Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
@@ -30,9 +39,11 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ### Active
 
-<!-- Requirements for next milestone — to be defined via /gsd:new-milestone -->
+<!-- v1.1 Search Quality -->
 
-(none yet — planning next milestone)
+- [ ] Configurable extension allowlist in corpus.toml (CONF-06)
+- [ ] Frontmatter-aware construct classifier (CLASS-04, CLASS-05)
+- [ ] Accurate --construct filter results via improved classification (SEARCH-06)
 
 ### Out of Scope
 
@@ -84,4 +95,4 @@ Known limitations heading into v2 planning:
 | Path constants in `config/schema.py` | Avoid circular imports from dual definitions | ✓ Good — single source of truth |
 
 ---
-*Last updated: 2026-02-23 after v1.0 milestone*
+*Last updated: 2026-02-23 after v1.1 milestone started*

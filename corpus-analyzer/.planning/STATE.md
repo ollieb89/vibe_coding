@@ -2,18 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-23 after v1.0 milestone)
+See: .planning/PROJECT.md (updated 2026-02-23 after v1.1 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Planning next milestone
+**Current focus:** v1.1 Search Quality
 
 ## Current Position
 
-Phase: v1.0 complete — all 4 phases shipped
-Status: Milestone archived, ready for next milestone planning
-Last activity: 2026-02-23 — v1.0 milestone archived, git tagged
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-23 — Milestone v1.1 Search Quality started
 
-Progress: [██████████] 100% (v1.0 complete)
+Progress: [░░░░░░░░░░] 0% (v1.1 not started)
 
 ## Performance Metrics
 
@@ -34,12 +35,10 @@ None.
 
 ### Blockers/Concerns
 
-None for v1.0. Heading into next milestone:
-- Chunk-level results (CHUNK-01–03) identified as high-value v2 work
-- TypeScript/JS AST chunking (IDX-01) deferred to v2
+None.
 
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: v1.0 milestone archived
-Resume with: /gsd:new-milestone
+Stopped at: v1.1 milestone initialized — requirements being defined
+Resume with: /gsd:plan-phase [N]
