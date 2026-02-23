@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from corpus_analyzer.config import load_config, CorpusConfig
+from corpus_analyzer.config import load_config
 from corpus_analyzer.config.schema import DATA_DIR
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex
@@ -52,7 +52,6 @@ def _open_engine() -> tuple[CorpusSearch, Any]:
 
     Cache is invalidated if the corpus.toml file changes on disk.
     """
-    from platformdirs import user_data_dir
 
     config_path = _find_config()
     cache_key = str(config_path)
@@ -66,13 +65,13 @@ def _open_engine() -> tuple[CorpusSearch, Any]:
             return cached[0], cached[1]
 
     config = load_config(config_path)
-    data_dir = Path(user_data_dir("corpus"))
     embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
     try:
         index = CorpusIndex.open(DATA_DIR, embedder)
         engine = CorpusSearch(index.table, embedder)
     except Exception as exc:
-        raise RuntimeError(f"Failed to open index. Have you run 'corpus index'? Error: {exc}") from exc
+        msg = f"Failed to open index. Have you run 'corpus index'? Error: {exc}"
+        raise RuntimeError(msg) from exc
     _ENGINE_CACHE[cache_key] = (engine, config, mtime)
     return engine, config
 
@@ -149,6 +148,7 @@ def index(*, verbose: bool = False) -> list[dict[str, Any]]:
             "files_indexed": result.files_indexed,
             "chunks_written": result.chunks_written,
             "files_skipped": result.files_skipped,
+            "files_removed": result.files_removed,
             "elapsed": result.elapsed,
         }
         results.append(entry)
