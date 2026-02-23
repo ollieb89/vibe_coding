@@ -15,6 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Foundation** - Embedding pipeline, LanceDB schema, source config, and ingestion pipeline
 - [ ] **Phase 2: Search Core** - Hybrid search engine, construct classification, AI summaries, and CLI commands
 - [ ] **Phase 3: Agent Interfaces** - MCP server, Python API, and index status UX
+- [ ] **Phase 4: Defensive Hardening** - Close audit gaps (silent failures, crash risks) and clear tech debt before v1.0 archive
 
 ## Phase Details
 
@@ -72,6 +73,23 @@ Plans:
 - [ ] 03-02-PLAN.md — Python public API (SearchResult, search(), index()) + corpus re-export package + enhanced corpus status command
 - [ ] 03-03-PLAN.md — corpus mcp serve CLI subcommand + unit tests for MCP server and Python API
 
+### Phase 4: Defensive Hardening
+**Goal**: Eliminate all silent failure paths and crash risks identified in the v1.0 audit, and remove accumulated tech debt before archiving the milestone
+**Depends on**: Phase 3
+**Requirements**: CLI-02 (hardening), INGEST-07 (hardening), MCP-02 (hardening)
+**Gap Closure:** Closes gaps from v1.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. `corpus search` never raises KeyError — `result.get('_relevance_score', 0.0)` used in cli.py:203
+  2. Stale chunk deletion and file scan failures log a warning instead of silently swallowing exceptions
+  3. MCP `full_content` surfaces an error signal (log or field) when a file cannot be read after indexing
+  4. `needs_reindex()` dead code removed from `ingest/scanner.py`
+  5. FTS index rebuilt only once per index cycle (not redundantly on CorpusSearch construction)
+**Plans**: TBD
+
+Plans:
+- [ ] 04-01-PLAN.md — Fix CLI-02 KeyError + INGEST-07 silent swallow + MCP-02 silent OSError
+- [ ] 04-02-PLAN.md — Tech debt: remove dead code, fix redundant FTS rebuild, expose use_llm_classification, resolve DATA_DIR dual source-of-truth
+
 ## Progress
 
 **Execution Order:**
@@ -82,3 +100,4 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. Foundation | 0/5 | Not started | - |
 | 2. Search Core | 0/TBD | Not started | - |
 | 3. Agent Interfaces | 0/3 | Not started | - |
+| 4. Defensive Hardening | 0/2 | Not started | - |
