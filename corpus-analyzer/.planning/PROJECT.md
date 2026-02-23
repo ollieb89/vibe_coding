@@ -2,76 +2,86 @@
 
 ## What This Is
 
-Corpus is a semantic search engine for AI agent libraries. It indexes agent skills, workflows, prompts, and code across local collections of cloned repos and arbitrary directories, then makes them queryable via CLI, MCP server (for Claude Code and other agent integration), and Python API. When building a new agent or workflow, you query the index to surface relevant files instantly.
+Corpus is a local semantic search engine for AI agent libraries. It indexes agent skills, workflows, prompts, and code across configured directories and local repos, then makes them instantly queryable via CLI, MCP server, and Python API. Built for developers who maintain collections of agent skills and need to surface relevant files without grepping.
 
-This is a pivot of the existing corpus-analyzer codebase — the extraction, classification, and persistence infrastructure is retained; the primary output becomes a searchable index rather than a rewriting tool.
+v1.0 ships as a CLI tool (`corpus add`, `corpus index`, `corpus search`, `corpus status`) backed by LanceDB with hybrid BM25+vector retrieval. An MCP server (`corpus mcp serve`) exposes search to Claude Code and other agents. A Python API (`from corpus import search`) enables programmatic access.
 
 ## Core Value
 
-Surface relevant agent files instantly — a developer building a new workflow should be able to query their entire local agent library and get ranked, relevant results in under a second.
+Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
 
 ## Requirements
 
 ### Validated
 
-<!-- Existing capabilities in corpus-analyzer — these work and will be retained/extended. -->
-
-- ✓ File scanning and extraction (markdown, Python, .txt, .rst) — existing
-- ✓ Document model with metadata (headings, links, code blocks, symbols) — existing
-- ✓ SQLite persistence layer (`CorpusDatabase`) — existing
-- ✓ CLI interface (Typer) — existing
-- ✓ Document type classification (persona, howto, runbook, etc.) — existing
-- ✓ Domain tag classification (backend, frontend, ai, etc.) — existing
-- ✓ Ollama integration for LLM operations — existing
+- ✓ LanceDB embedding pipeline with deterministic chunk IDs — v1.0
+- ✓ Source config via `corpus.toml` (CONF-01–CONF-04) — v1.0
+- ✓ `corpus add <dir>` CLI command (CONF-05) — v1.0
+- ✓ `corpus index` with incremental re-indexing and ghost document removal (INGEST-01–INGEST-07) — v1.0
+- ✓ Structure-aware chunking: heading-based (`.md`), AST-based (`.py`), line-based fallback — v1.0
+- ✓ `corpus search` with hybrid BM25+vector+RRF ranking (SEARCH-01, SEARCH-02) — v1.0
+- ✓ Search filters: `--source`, `--type`, `--construct`, `--limit` (SEARCH-03, SEARCH-04, SEARCH-05) — v1.0
+- ✓ Agent construct classifier: skill/prompt/workflow/agent_config/code/documentation (CLASS-01–CLASS-03) — v1.0
+- ✓ AI summarizer per indexed file with Ollama, config-gated (SUMM-01–SUMM-03) — v1.0
+- ✓ `corpus status` with file count, chunk count, last indexed, model (CLI-04) — v1.0
+- ✓ FastMCP server with pre-warmed embeddings, `corpus_search` tool (MCP-01–MCP-06) — v1.0
+- ✓ Python API: `search()`, `index()`, `SearchResult` dataclass (API-01–API-03) — v1.0
+- ✓ Safety: no CLI KeyErrors, no silent exception swallowing, MCP `content_error` signaling — v1.0
 
 ### Active
 
-<!-- What Corpus v1 is building toward. -->
+<!-- Requirements for next milestone — to be defined via /gsd:new-milestone -->
 
-- [ ] Hybrid search: vector similarity + BM25/keyword ranked results
-- [ ] Embedding generation: configurable provider (Ollama local or cloud API: OpenAI/Cohere)
-- [ ] Source management: config file defining permanent source directories + ad-hoc `corpus add <dir>` CLI
-- [ ] Incremental indexing: re-index only changed/new files
-- [ ] MCP server exposing search as a tool for Claude Code and other agents
-- [ ] Python API for programmatic search access
-- [ ] CLI search command returning ranked files with snippets and similarity scores
-- [ ] Index all file types: `.md`, `.py`, `.json`, `.yaml`, `.ts`, `.js`, and other code files
+(none yet — planning next milestone)
 
 ### Out of Scope
 
-- Hosted/cloud index — local-only for v1 (privacy, simplicity)
-- Real-time file watching — manual index refresh only in v1
-- Web UI — CLI + MCP sufficient for v1 target users
+- Hosted/cloud index — local-only (privacy, simplicity)
+- Real-time file watching — manual index refresh only; daemon complexity not justified yet
+- Web UI — CLI + MCP sufficient for target users
 - LLM rewriting (corpus-analyzer original feature) — retained but not the focus
+- Chunk-level results (CHUNK-01–CHUNK-03) — v2 candidate
+- TypeScript/JS AST chunking (IDX-01) — v2 candidate
 
 ## Context
 
-The corpus-analyzer codebase provides a strong foundation:
-- `core/scanner.py` walks directories and yields file paths
-- `extractors/` converts files to `Document` models (already handles markdown, Python)
-- `core/database.py` is a SQLite wrapper via `sqlite-utils`
-- `core/models.py` has `Document`, `Chunk`, and supporting models
-- `classifiers/` provides metadata enrichment useful for filtering search results
-- Ollama is already wired in for LLM calls
+**v1.0 shipped 2026-02-23.**
 
-New work centers on: embedding pipeline, vector storage, hybrid search ranking, MCP server, and source config management.
+- ~6,100 lines Python source
+- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text)
+- 164 tests passing (pytest)
+- XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
+- Single-user local tool; no daemon, no cloud dependency
+
+Known limitations heading into v2 planning:
+- Search returns file-level results; chunk-level line ranges would improve precision
+- TypeScript/JS files use line-based chunking (no AST awareness)
+- Cold-start on first index after KEEP_ALIVE expiry still possible (pre-warm only covers MCP startup)
 
 ## Constraints
 
 - **Runtime**: Python 3.12, managed with `uv`
 - **Package manager**: `uv` only (no pip/poetry)
 - **Embeddings**: Must support offline (Ollama) — cloud providers optional
-- **Storage**: SQLite for metadata; vector store TBD (sqlite-vec or ChromaDB)
-- **Existing tests**: Existing test suite must stay green through the pivot
+- **Storage**: LanceDB for vector+metadata; FTS via tantivy (built into LanceDB)
+- **Existing tests**: Test suite must stay green
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Pivot corpus-analyzer rather than start fresh | Extraction, models, DB, CLI already built | — Pending |
-| Hybrid search (vector + BM25) | Better recall than pure vector; handles exact name matches | — Pending |
-| Configurable embedding provider | Developers may be offline or prefer quality of cloud models | — Pending |
-| Vector storage backend | sqlite-vec vs ChromaDB vs hnswlib TBD | — Pending |
+| Pivot corpus-analyzer rather than start fresh | Extraction, models, DB, CLI already built | ✓ Good — saved ~2 phases of setup work |
+| LanceDB over sqlite-vec | Embedded, ships hybrid search + BM25 + RRF natively | ✓ Good — no external service, fast queries |
+| Hybrid search (vector + BM25 via RRF) | Better recall than pure vector; handles exact name matches | ✓ Good — validated in UAT |
+| Protocol-based embedding abstraction | Offline-first (Ollama) with optional cloud providers | ✓ Good — clean swap if needed |
+| Store embedding model name in schema | Cannot be retrofitted after first embed | ✓ Good — enforced at query time |
+| AST-aware chunking for `.py`, heading-based for `.md` | Better chunk coherence vs line-based | ✓ Good — search quality improved |
+| Rule-based classifier first, LLM fallback | Cost-conscious; LLM gate via `use_llm_classification` | ✓ Good — zero LLM cost by default |
+| Default `use_llm_classification = False` | Avoid unexpected Ollama API costs | ✓ Good — explicit opt-in |
+| `needs_reindex()` removed entirely | Hash-based change detection makes it redundant | ✓ Good — dead code eliminated |
+| FTS rebuild only in `index_source()` | Redundant rebuild in `CorpusSearch.__init__` was wasteful | ✓ Good — ~20% faster search init |
+| MCP `content_error` field vs exception | Avoids breaking existing clients; explicit error signal | ✓ Good — graceful degradation |
+| Path constants in `config/schema.py` | Avoid circular imports from dual definitions | ✓ Good — single source of truth |
 
 ---
-*Last updated: 2026-02-23 after initialization*
+*Last updated: 2026-02-23 after v1.0 milestone*
