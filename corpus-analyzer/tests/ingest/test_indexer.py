@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from corpus_analyzer.config.schema import SourceConfig
+from corpus_analyzer.search.classifier import ClassificationResult
 from corpus_analyzer.ingest.indexer import CorpusIndex, IndexResult  # type: ignore[attr-defined]
 
 
@@ -325,7 +326,7 @@ def test_index_adds_construct_type(tmp_path) -> None:
     with (
         patch(
             "corpus_analyzer.ingest.indexer.classify_file",
-            return_value="skill",
+            return_value=ClassificationResult("skill", 0.6, "rule_based"),
         ) as mock_classify,
         patch(
             "corpus_analyzer.ingest.indexer.generate_summary",
@@ -357,7 +358,7 @@ def test_index_skips_summary_on_unchanged_file(tmp_path) -> None:
     source = SourceConfig(name="my-source", path=str(source_dir), summarize=True)
 
     with (
-        patch("corpus_analyzer.ingest.indexer.classify_file", return_value="skill"),
+        patch("corpus_analyzer.ingest.indexer.classify_file", return_value=ClassificationResult("skill", 0.6, "rule_based")),
         patch(
             "corpus_analyzer.ingest.indexer.generate_summary",
             return_value="Summary text.",
@@ -367,6 +368,35 @@ def test_index_skips_summary_on_unchanged_file(tmp_path) -> None:
         index.index_source(source)
 
     assert mock_summary.call_count == 1
+
+
+def test_indexer_stores_frontmatter_classification(tmp_path: Path) -> None:
+    """CLASS-04: Indexer stores classification_source and classification_confidence."""
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+
+    file_content = "---\ntype: skill\n---\n# My Skill\nContent."
+    (source_dir / "skill.md").write_text(file_content)
+
+    source = SourceConfig(
+        name="my-source",
+        path=str(source_dir),
+        summarize=False,
+        use_llm_classification=False
+    )
+
+    index.index_source(source)
+
+    df = index.table.to_pandas()
+    assert len(df) > 0
+    row = df.iloc[0]
+
+    assert row["construct_type"] == "skill"
+    assert row["classification_source"] == "frontmatter"
+    assert abs(row["classification_confidence"] - 0.95) < 0.01
 
 
 def test_index_rebuilds_fts_index(tmp_path) -> None:

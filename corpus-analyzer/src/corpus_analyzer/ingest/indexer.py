@@ -21,7 +21,7 @@ from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.scanner import file_content_hash, walk_source
 from corpus_analyzer.search.classifier import classify_file
 from corpus_analyzer.search.summarizer import generate_summary, should_summarize
-from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, make_chunk_id
+from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, ensure_schema_v3, make_chunk_id
 
 
 @dataclass
@@ -102,6 +102,7 @@ class CorpusIndex:
 
         # Ensure Phase 2 nullable columns exist regardless of table creation path.
         ensure_schema_v2(table)
+        ensure_schema_v3(table)
 
         return cls(table, embedder)
 
@@ -197,7 +198,7 @@ class CorpusIndex:
 
             # Classify and summarize once per changed/new file.
             full_text = file_path.read_text(errors="replace")
-            construct_type = classify_file(
+            classify_result = classify_file(
                 file_path,
                 full_text,
                 model=self._embedder.model,
@@ -242,7 +243,9 @@ class CorpusIndex:
                     "content_hash": current_hash,
                     "embedding_model": self._embedder.model,
                     "indexed_at": datetime.now(UTC).isoformat(),
-                    "construct_type": construct_type,
+                    "construct_type": classify_result.construct_type,
+                    "classification_source": classify_result.source,
+                    "classification_confidence": classify_result.confidence,
                     "summary": summary_text or None,
                 }
                 new_chunk_dicts.append(chunk_dict)

@@ -132,6 +132,8 @@ class TestChunkRecordInstantiation:
             "indexed_at",
             "construct_type",
             "summary",
+            "classification_source",
+            "classification_confidence",
         }
         actual = set(ChunkRecord.model_fields.keys())
         assert expected_fields == actual, f"Missing fields: {expected_fields - actual}"
