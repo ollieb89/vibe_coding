@@ -47,7 +47,14 @@ Plans:
   3. User can filter results with `--source`, `--type`, `--construct`, and `--limit` flags
   4. Each indexed file has a construct type label (`skill`, `prompt`, `workflow`, `agent_config`, `code`, `documentation`) visible in results
   5. `corpus status` shows file count, chunk count, last indexed timestamp, and embedding model in use
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Schema extension (ChunkRecord + SourceConfig) and Wave 0 test scaffolds
+- [ ] 02-02-PLAN.md — TDD: CorpusSearch hybrid search engine (BM25+vector+RRF, filters, status)
+- [ ] 02-03-PLAN.md — TDD: ConstructClassifier (rule-based + LLM fallback) and extract_snippet formatter
+- [ ] 02-04-PLAN.md — TDD: Summarizer and CorpusIndex.index_source() extension for classify+summarize
+- [ ] 02-05-PLAN.md — CLI commands: corpus search and corpus status with Rich output
 
 ### Phase 3: Agent Interfaces
 **Goal**: Claude Code and other agents can search the corpus index programmatically via MCP, and Python scripts can query it via `from corpus import search`
