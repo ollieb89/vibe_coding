@@ -149,3 +149,53 @@ class TestWalkSource:
 
         assert len(files) == 1
         assert files[0].name == "guide.md"
+
+    def test_extensions_filter_single(self, tmp_path: Path) -> None:
+        """Extensions filter yields only matching files."""
+        # Setup dummy files
+        (tmp_path / "readme.md").touch()
+        (tmp_path / "script.py").touch()
+        (tmp_path / "run.sh").touch()
+
+        results = list(walk_source(tmp_path, include=["**/*"], exclude=[], extensions=[".md"]))
+
+        assert len(results) == 1
+        assert results[0].name == "readme.md"
+
+    def test_extensions_filter_multiple(self, tmp_path: Path) -> None:
+        """Extensions filter with multiple extensions yields union."""
+        (tmp_path / "readme.md").touch()
+        (tmp_path / "script.py").touch()
+        (tmp_path / "run.sh").touch()
+
+        results = list(walk_source(tmp_path, include=["**/*"], exclude=[], extensions=[".md", ".py"]))
+
+        assert len(results) == 2
+        names = {p.name for p in results}
+        assert names == {"readme.md", "script.py"}
+
+    def test_extensions_empty_yields_nothing(self, tmp_path: Path) -> None:
+        """Empty extensions list yields no files."""
+        (tmp_path / "readme.md").touch()
+
+        results = list(walk_source(tmp_path, include=["**/*"], exclude=[], extensions=[]))
+
+        assert len(results) == 0
+
+    def test_extensions_none_no_filter(self, tmp_path: Path) -> None:
+        """None extensions means no filtering (backward compatible)."""
+        (tmp_path / "readme.md").touch()
+        (tmp_path / "script.py").touch()
+
+        results = list(walk_source(tmp_path, include=["**/*"], exclude=[], extensions=None))
+
+        assert len(results) == 2
+
+    def test_extensions_case_insensitive(self, tmp_path: Path) -> None:
+        """Extensions filter matches case-insensitively."""
+        (tmp_path / "FILE.MD").touch()
+
+        results = list(walk_source(tmp_path, include=["**/*"], exclude=[], extensions=[".md"]))
+
+        assert len(results) == 1
+        assert results[0].name == "FILE.MD"

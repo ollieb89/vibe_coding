@@ -79,6 +79,36 @@ class TestSourceConfig:
         source_true = SourceConfig(name="y", path="/tmp/y", use_llm_classification=True)
         assert source_true.use_llm_classification is True
 
+    def test_extensions_default(self) -> None:
+        """SourceConfig without extensions field gets default allowlist."""
+        config = SourceConfig(name="x", path="/x")
+        assert config.extensions == [".md", ".py", ".ts", ".tsx", ".js", ".jsx", ".yaml", ".yml", ".txt"]
+
+    def test_extensions_custom_explicit(self) -> None:
+        """SourceConfig with explicit extensions uses provided list."""
+        config = SourceConfig(name="x", path="/x", extensions=[".md", ".py"])
+        assert config.extensions == [".md", ".py"]
+
+    def test_extensions_normalizes_uppercase(self) -> None:
+        """Extension strings are normalized to lowercase."""
+        config = SourceConfig(name="x", path="/x", extensions=[".MD", ".PY"])
+        assert config.extensions == [".md", ".py"]
+
+    def test_extensions_normalizes_missing_dot(self) -> None:
+        """Missing leading dots are automatically added."""
+        config = SourceConfig(name="x", path="/x", extensions=["md", "py"])
+        assert config.extensions == [".md", ".py"]
+
+    def test_extensions_empty_list_allowed(self) -> None:
+        """Empty extensions list is allowed and stored as empty."""
+        config = SourceConfig(name="x", path="/x", extensions=[])
+        assert config.extensions == []
+
+    def test_extensions_mixed_normalization(self) -> None:
+        """Mixed format extensions are all normalized correctly."""
+        config = SourceConfig(name="x", path="/x", extensions=["MD", ".py", "ts"])
+        assert config.extensions == [".md", ".py", ".ts"]
+
 
 # ---------------------------------------------------------------------------
 # CorpusConfig tests
