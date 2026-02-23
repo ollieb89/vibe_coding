@@ -33,6 +33,7 @@ class IndexResult:
         files_indexed: Number of files that had changes and were (re)indexed.
         chunks_written: Number of chunk records written to LanceDB.
         files_skipped: Number of files that were unchanged and skipped.
+        files_removed: Number of files removed from index (stale or extension-excluded).
         elapsed: Time elapsed in seconds.
     """
 
@@ -40,7 +41,8 @@ class IndexResult:
     files_indexed: int
     chunks_written: int
     files_skipped: int
-    elapsed: float
+    files_removed: int = 0
+    elapsed: float = 0.0
 
 
 class CorpusIndex:
@@ -162,7 +164,12 @@ class CorpusIndex:
         new_chunk_dicts: list[dict[str, object]] = []
         current_file_hashes: dict[str, str] = {}
 
-        for file_path in walk_source(source_path, source.include, source.exclude):
+        for file_path in walk_source(
+            source_path,
+            source.include,
+            source.exclude,
+            extensions=source.extensions,
+        ):
             files_found += 1
             resolved_path = str(file_path.resolve())
             current_hash = file_content_hash(file_path)
@@ -253,12 +260,15 @@ class CorpusIndex:
         # Delete stale chunks (files no longer in source)
         if files_found > 0 or existing_files:
             self._delete_stale_chunks(source.name, set(current_file_hashes.keys()))
-
         # Optimize table
         self._table.optimize()
 
         # Rebuild FTS index so hybrid search stays in sync with new content.
         self._table.create_fts_index("text", replace=True)
+
+        # Count files that will be removed (stale or extension-excluded)
+        files_to_remove = set(existing_files.keys()) - set(current_file_hashes.keys())
+        files_removed = len(files_to_remove)
 
         elapsed = time.time() - start_time
         return IndexResult(
@@ -266,6 +276,7 @@ class CorpusIndex:
             files_indexed=files_indexed,
             chunks_written=chunks_written,
             files_skipped=files_skipped,
+            files_removed=files_removed,
             elapsed=elapsed,
         )
 

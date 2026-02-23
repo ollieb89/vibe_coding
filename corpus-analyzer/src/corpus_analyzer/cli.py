@@ -124,8 +124,24 @@ def index_command(
             console.print(f"[yellow]Warning:[/] Source path not found: {source.path} — skipping")
             continue
 
+        # Show active extensions on first index so user can adjust corpus.toml if needed
+        is_first_run = len(index._get_existing_files(source.name)) == 0
+        if is_first_run:
+            ext_str = ", ".join(source.extensions) if source.extensions else "(none — all files skipped)"
+            console.print(
+                f"[dim]Active extensions for {source.name}: {ext_str}[/dim]\n"
+                f"[dim]Add 'extensions = [...]' to this source in corpus.toml to customize.[/dim]"
+            )
+
         # Count total files
-        total = sum(1 for _ in walk_source(source_path, source.include, source.exclude))
+        total = sum(
+            1 for _ in walk_source(
+                source_path, 
+                source.include, 
+                source.exclude, 
+                extensions=source.extensions
+            )
+        )
 
         if total == 0:
             console.print(f"[yellow]Warning:[/] No files found in source: {source.name}")
@@ -153,6 +169,10 @@ def index_command(
             f"{result.files_indexed} files, {result.chunks_written} chunks "
             f"({result.elapsed:.1f}s) — {result.files_skipped} unchanged"
         )
+        if result.files_removed > 0:
+            console.print(
+                f"[yellow]Removed {result.files_removed} file(s) no longer in extension allowlist.[/]"
+            )
 
 
 @app.command("search")
