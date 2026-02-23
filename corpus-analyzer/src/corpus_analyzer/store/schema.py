@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 
+import lancedb  # type: ignore[import-untyped]
 from lancedb.pydantic import LanceModel, Vector  # type: ignore[import-untyped]
 
 
@@ -46,6 +47,22 @@ def make_chunk_id(
     """
     raw = source_name + file_path + str(start_line) + text
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def ensure_schema_v2(table: lancedb.table.Table) -> None:
+    """Add Phase 2 nullable columns to an existing chunks table if they don't exist.
+
+    Uses LanceDB's add_columns API for in-place schema evolution — no data loss
+    and no table rebuild required. Safe to call on every CorpusIndex.open() call.
+
+    Args:
+        table: The LanceDB chunks table to upgrade.
+    """
+    existing_cols = {field.name for field in table.schema}
+    if "construct_type" not in existing_cols:
+        table.add_columns({"construct_type": "cast(NULL as string)"})
+    if "summary" not in existing_cols:
+        table.add_columns({"summary": "cast(NULL as string)"})
 
 
 class ChunkRecord(LanceModel):  # type: ignore[misc]
@@ -106,4 +123,18 @@ class ChunkRecord(LanceModel):  # type: ignore[misc]
 
     Stored as ``str`` rather than ``datetime`` to avoid pyarrow type-coercion
     surprises across LanceDB versions.
+    """
+
+    # --- Phase 2 fields (nullable, added via schema evolution) --------------
+    construct_type: str | None = None
+    """Agent construct type: skill, prompt, workflow, agent_config, code, documentation.
+
+    Set to None for chunks indexed before Phase 2. Populated during corpus index
+    after Phase 2 lands. Treat None as 'documentation' in search display.
+    """
+
+    summary: str | None = None
+    """1-2 sentence AI summary of the file generated at index time via Ollama.
+
+    Set to None for chunks indexed before Phase 2 or when summarize=False on source.
     """

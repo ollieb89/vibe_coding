@@ -117,7 +117,7 @@ class TestChunkRecordInstantiation:
         assert fields["chunk_id"].annotation is str
 
     def test_all_required_fields_present(self) -> None:
-        """All 11 required fields exist in the model_fields mapping."""
+        """All required fields exist in the model_fields mapping."""
         expected_fields = {
             "chunk_id",
             "file_path",
@@ -130,6 +130,8 @@ class TestChunkRecordInstantiation:
             "content_hash",
             "embedding_model",
             "indexed_at",
+            "construct_type",
+            "summary",
         }
         actual = set(ChunkRecord.model_fields.keys())
         assert expected_fields == actual, f"Missing fields: {expected_fields - actual}"

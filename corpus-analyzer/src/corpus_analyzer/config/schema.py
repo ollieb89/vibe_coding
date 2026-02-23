@@ -7,8 +7,8 @@ including embedding settings and source definitions.
 from __future__ import annotations
 
 from pathlib import Path
-from platformdirs import user_config_dir, user_data_dir
 
+from platformdirs import user_config_dir, user_data_dir
 from pydantic import BaseModel, Field, field_validator
 
 CONFIG_PATH = Path(user_config_dir("corpus")) / "corpus.toml"

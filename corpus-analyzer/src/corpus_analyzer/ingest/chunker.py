@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-def chunk_lines(path: Path, window: int = 50, overlap: int = 10) -> list[dict[str, Any]]:
+def chunk_lines(path: Path, window: int = 20, overlap: int = 5) -> list[dict[str, Any]]:
     """Split a file into overlapping line windows.
 
     Args:
@@ -56,7 +56,7 @@ def chunk_lines(path: Path, window: int = 50, overlap: int = 10) -> list[dict[st
     return chunks
 
 
-def chunk_markdown(path: Path, max_words: int = 512) -> list[dict[str, Any]]:
+def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
     """Split a markdown file on ATX headings.
 
     Args:
@@ -121,7 +121,7 @@ def chunk_markdown(path: Path, max_words: int = 512) -> list[dict[str, Any]]:
         if word_count > max_words:
             # Sub-split large sections using chunk_lines approach
             section_chunks = _subsplit_section(
-                section_lines, start_idx + 1, window=50, overlap=10
+                section_lines, start_idx + 1, window=20, overlap=5
             )
             chunks.extend(section_chunks)
         else:
@@ -249,6 +249,79 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
     return chunks
 
 
+def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> list[dict[str, Any]]:
+    """Enforce maximum character limit on chunks, splitting if necessary.
+    
+    Args:
+        chunks: List of chunks to process.
+        max_chars: Maximum characters allowed per chunk.
+        
+    Returns:
+        List of chunks with character limit enforced.
+    """
+    result = []
+    for chunk in chunks:
+        text = chunk["text"]
+        if len(text) <= max_chars:
+            result.append(chunk)
+            continue
+            
+        # Split oversized chunk into smaller pieces
+        lines = text.split("\n")
+        current_lines = []
+        current_start = chunk["start_line"]
+        current_line_num = chunk["start_line"]
+        
+        for line in lines:
+            # Handle extremely long individual lines
+            if len(line) > max_chars:
+                # Flush current buffer first
+                if current_lines:
+                    result.append({
+                        "text": "\n".join(current_lines),
+                        "start_line": current_start,
+                        "end_line": current_line_num - 1,
+                    })
+                    current_lines = []
+                    current_start = current_line_num
+                
+                # Split the long line into chunks
+                for i in range(0, len(line), max_chars):
+                    chunk_text = line[i:i + max_chars]
+                    result.append({
+                        "text": chunk_text,
+                        "start_line": current_line_num,
+                        "end_line": current_line_num,
+                    })
+                current_start = current_line_num + 1
+            else:
+                # Check if adding this line would exceed limit
+                test_text = "\n".join(current_lines + [line])
+                if len(test_text) > max_chars and current_lines:
+                    # Finalize current chunk
+                    result.append({
+                        "text": "\n".join(current_lines),
+                        "start_line": current_start,
+                        "end_line": current_line_num - 1,
+                    })
+                    # Start new chunk
+                    current_lines = [line]
+                    current_start = current_line_num
+                else:
+                    current_lines.append(line)
+            current_line_num += 1
+        
+        # Add remaining lines
+        if current_lines:
+            result.append({
+                "text": "\n".join(current_lines),
+                "start_line": current_start,
+                "end_line": chunk["end_line"],
+            })
+    
+    return result
+
+
 def chunk_file(path: Path) -> list[dict[str, Any]]:
     """Dispatch chunking based on file extension.
 
@@ -257,18 +330,37 @@ def chunk_file(path: Path) -> list[dict[str, Any]]:
 
     Returns:
         List of chunks with "text", "start_line", and "end_line" keys.
+        Returns empty list if file can't be read as text.
 
     Raises:
         ValueError: If file extension is not supported.
     """
     ext = path.suffix.lower()
 
-    if ext == ".md":
-        return chunk_markdown(path)
-    elif ext == ".py":
-        return chunk_python(path)
-    elif ext in (".ts", ".js", ".json", ".yaml", ".yml", ".txt", ".toml"):
-        return chunk_lines(path)
-    else:
-        # Default to line-based chunking for unknown types
-        return chunk_lines(path)
+    # Skip known binary file types
+    binary_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', 
+                         '.ttf', '.otf', '.eot', '.svg', '.pdf', '.zip', '.tar', 
+                         '.gz', '.bz2', '.7z', '.exe', '.dll', '.so', '.dylib',
+                         '.bin', '.dat', '.db', '.sqlite', '.sqlite3'}
+    if ext in binary_extensions:
+        return []
+
+    try:
+        if ext == ".md":
+            chunks = chunk_markdown(path)
+        elif ext == ".py":
+            chunks = chunk_python(path)
+        elif ext in (".ts", ".js", ".json", ".yaml", ".yml", ".txt", ".toml"):
+            chunks = chunk_lines(path)
+        else:
+            # Default to line-based chunking for unknown types
+            chunks = chunk_lines(path)
+        
+        # Enforce maximum character limit on all chunks
+        return _enforce_char_limit(chunks, max_chars=4000)
+    except UnicodeDecodeError:
+        # Skip files that can't be decoded as UTF-8
+        return []
+    except Exception:
+        # Skip any other problematic files
+        return []
