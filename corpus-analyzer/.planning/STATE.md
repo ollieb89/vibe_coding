@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24 — v2 milestone planned)
 
 ## Current Position
 
-Phase: 17 complete (Schema v4 — Chunk Data Layer)
-Plan: 2 of 2 in Phase 17 complete (17-02 GREEN implementation done)
-Status: Phase 17 complete — CHUNK-01 zero-hallucination contract implemented; 330 tests green
-Last activity: 2026-02-24 — 17-02 GREEN implementation committed (e0ca208)
+Phase: 17 complete (v2 in progress); v3 planning started
+Plan: —
+Status: v2 Phase 17 done (330 tests green); defining v3.0 requirements
+Last activity: 2026-02-24 — v3.0 Intelligent Search milestone planning started
 
-Progress: [██░░░░░░░░] 20% of v2 (Phase 17 complete — 2 of 2 plans done)
+Progress: [██░░░░░░░░] 20% of v2 (Phase 17 complete — 2 of 2 plans done); v3 planning in progress
 
 ## Performance Metrics
 
@@ -109,6 +109,6 @@ None — 330 tests passing. Ruff-clean. Mypy-clean. Phase 17 complete.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: 17-02-PLAN.md complete — GREEN implementation committed (e0ca208)
+Stopped at: v3.0 milestone planning — defining requirements
 Resume file: None
-Next step: Phase 18 (search layer improvements using chunk_name/chunk_text)
+Next step: Complete v3.0 requirements and roadmap; then resume v2 at Phase 18
