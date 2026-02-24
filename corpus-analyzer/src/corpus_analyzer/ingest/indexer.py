@@ -412,17 +412,20 @@ class CorpusIndex:
 
             # GRAPH: extract relationship edges from ## Related Skills section.
             if graph_store is not None and registry is not None and full_text:
-                slugs = extract_related_slugs(full_text)
-                if slugs:
-                    graph_store.clear_edges_for(resolved_path)
-                    edges: list[tuple[str, bool, str]] = []
-                    for slug in slugs:
-                        resolved_target = registry.resolve(slug)
-                        if resolved_target is not None:
-                            edges.append((str(resolved_target), True, "related_skill"))
-                        else:
-                            edges.append((slug, False, "related_skill"))
-                    graph_store.write_edges(resolved_path, edges)
+                try:
+                    slugs = extract_related_slugs(full_text)
+                    if slugs:
+                        graph_store.clear_edges_for(resolved_path)
+                        edges: list[tuple[str, bool, str]] = []
+                        for slug in slugs:
+                            resolved_target = registry.resolve(slug)
+                            if resolved_target is not None:
+                                edges.append((str(resolved_target), True, "related_skill"))
+                            else:
+                                edges.append((slug, False, "related_skill"))
+                        graph_store.write_edges(resolved_path, edges)
+                except Exception as exc:  # noqa: BLE001
+                    logging.warning("Failed to write graph edges for '%s': %s", resolved_path, exc)
 
             # Embed chunks
             texts = [chunk["text"] for chunk in chunks]
