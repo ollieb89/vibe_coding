@@ -341,7 +341,7 @@ def graph_command(
 ) -> None:
     """Show upstream and downstream relationships for a component."""
     if show_duplicates:
-        config = load_config()
+        config = load_config(CONFIG_PATH)
         source_roots = [Path(s.path) for s in config.sources]
         registry = SlugRegistry.build(source_roots)
         dupes = registry.duplicates
