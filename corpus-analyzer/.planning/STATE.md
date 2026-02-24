@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 10 of 12 (Manual Ruff Leaf-to-Hub)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-24 — Phase 10 Plan 2 complete (E501 leaf-module wrapping, 19 violations fixed, 281 tests passing)
+Last activity: 2026-02-24 — Phase 10 Plan 3 complete (E501 hub/test wrapping, 12 violations fixed, 281 tests passing; zero non-cli.py violations)
 
 Progress: [██░░░░░░░░] 20% (v1.3)
 
@@ -34,7 +34,7 @@ Progress: [██░░░░░░░░] 20% (v1.3)
 - Timeline: 1 day (2026-02-24)
 
 **v1.3 Summary (in progress):**
-- Total plans completed: 2
+- Total plans completed: 3
 - Phases: 4 (9–12)
 
 ## Accumulated Context
@@ -54,6 +54,8 @@ Recent decisions affecting current work:
 - [10-01]: ruff --fix (safe only) sufficient for scripts/ F401/W293; no --unsafe-fixes needed
 - [Phase 10-02]: Wrap for-loop CLASSIFICATION_RULES unpacking by parenthesising the iterable, not the variables
 - [Phase 10-02]: shape.py f-string: extract depth_rows local variable to avoid unreadable inline generator expression
+- [10-03]: database.py ternary: use explicit 'is not None' for nullable float/bool fields — 'or' shortcut mishandles 0.0
+- [10-03]: Long test docstrings: wrap as multi-line PEP 257 (summary + blank + detail), not noqa suppression
 
 ### Pending Todos
 
@@ -67,5 +69,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 10-02-PLAN.md (E501 leaf-module wrapping)
+Stopped at: Completed 10-03-PLAN.md (E501 hub/test wrapping — zero non-cli.py violations)
 Resume file: None
