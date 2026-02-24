@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 
 ## Current Position
 
-Phase: 20 (Python Method Sub-Chunking)
-Plan: 02 complete
-Status: Phase 20 in progress — 2/? plans done
-Last activity: 2026-02-24 — 20-02 SUB-02 per-method chunk extraction
+Phase: 21 (TypeScript Method Sub-Chunking)
+Plan: 01 complete
+Status: Phase 21 complete — 1/1 plans done
+Last activity: 2026-02-24 — 21-01 SUB-03 TypeScript method sub-chunking
 
-Progress: [=         ] 1/7 phases — v2.1 in progress
+Progress: [==        ] 2/7 phases — v2.1 in progress
 
 ## Performance Metrics
 
@@ -54,8 +54,8 @@ Progress: [=         ] 1/7 phases — v2.1 in progress
 - Timeline: 1 day (2026-02-24)
 
 **v2.1 In Progress:**
-- Plans completed: 3 (19-01, 20-01, 20-02)
-- Phases: 1/7 complete (19–25)
+- Plans completed: 4 (19-01, 20-01, 20-02, 21-01)
+- Phases: 2/7 complete (19–25)
 - Timeline: started 2026-02-24
 
 ## Accumulated Context
@@ -93,6 +93,8 @@ Key 17-02 decisions:
 - [Phase 20-01]: init body traversal uses direct iteration over init_node.body (not ast.walk) to preserve linear order for truncation logic
 - [Phase 20-02]: Method chunks use direct node.body iteration (not ast.walk) to keep nested ClassDef bodies opaque — only FunctionDef/AsyncFunctionDef at class body level produce method chunks
 - [Phase 20-02]: Decorator start_line included in method chunk (decorator_list[0].lineno) so full method signature with decorators is captured
+- [Phase 21-01]: abstract_method_signature must be collected alongside method_definition for TypeScript abstract method sub-chunking
+- [Phase 21-01]: _METHOD_NODE_TYPES defined at module level in ts_chunker.py to satisfy ruff N806 rule
 
 ### v2.1 Roadmap Notes
 
@@ -116,6 +118,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 20-02-PLAN.md (SUB-02 per-method chunk extraction)
+Stopped at: Completed 21-01-PLAN.md (SUB-03 TypeScript method sub-chunking)
 Resume file: None
-Next step: Phase 20 complete — proceed to Phase 21 (TypeScript method sub-chunking)
+Next step: Phase 21 complete — proceed to Phase 22 (Name filter)
