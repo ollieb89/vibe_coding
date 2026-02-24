@@ -124,13 +124,17 @@ def index_command(
     registry = SlugRegistry.build(source_roots)
     if len(registry) == 0:
         console.print("[dim]Graph registry: no component directories found.[/]")
-    # Only surface plausible real collisions (≤ 8 candidates); higher counts are structural noise.
-    real_dups = {s: p for s, p in registry.duplicates.items() if len(p) <= 8}
-    if real_dups:
-        summary = ", ".join(f"{s} ({len(p)})" for s, p in real_dups.items())
+    within_source_dups, cross_source_dups = registry.classify(source_roots)
+    if within_source_dups:
+        summary = ", ".join(f"{s} ({len(p)})" for s, p in within_source_dups.items())
         console.print(
-            f"[yellow]⚠️  {len(real_dups)} duplicate slug(s) detected: {summary}[/]\n"
-            "[dim]    Run `corpus graph --show-duplicates` to see all.[/]"
+            f"[yellow]⚠️  {len(within_source_dups)} within-source duplicate slug(s): {summary}[/]\n"
+            "[dim]    Run `corpus graph --show-duplicates` to list all candidates.[/]"
+        )
+    if cross_source_dups:
+        console.print(
+            f"[dim]  ℹ {len(cross_source_dups)} cross-source duplicate slug(s) suppressed"
+            " (same skill name in multiple sources — resolved by context)[/]"
         )
 
     # Index each source
@@ -328,10 +332,33 @@ def search_command(
 
 @app.command("graph")
 def graph_command(
-    slug: Annotated[str, typer.Argument(help="Component slug or path fragment to look up")],
+    slug: Annotated[str | None, typer.Argument(help="Component slug or path fragment to look up")] = None,
     depth: Annotated[int, typer.Option("--depth", "-d", help="Traversal depth")] = 1,
+    show_duplicates: Annotated[
+        bool,
+        typer.Option("--show-duplicates", help="List all duplicate slugs and their candidate paths"),
+    ] = False,
 ) -> None:
     """Show upstream and downstream relationships for a component."""
+    if show_duplicates:
+        config = load_config()
+        source_roots = [Path(s.path) for s in config.sources]
+        registry = SlugRegistry.build(source_roots)
+        dupes = registry.duplicates
+        if not dupes:
+            console.print("[green]No duplicate slugs found.[/]")
+            return
+        console.print(f"[bold]{len(dupes)} duplicate slug(s):[/]\n")
+        for dup_slug, paths in sorted(dupes.items()):
+            console.print(f"  [bold yellow]{dup_slug}[/] ({len(paths)} candidates)")
+            for p in paths:
+                console.print(f"    [dim]{p}[/]")
+        return
+
+    if slug is None:
+        console.print("[red]Missing argument 'SLUG'. Use --show-duplicates to list collisions.[/]")
+        raise typer.Exit(code=1)
+
     if depth != 1:
         console.print("[yellow]Note: --depth > 1 not yet implemented, showing depth=1.[/yellow]")
     graph_db = DATA_DIR / "graph.sqlite"

@@ -90,9 +90,10 @@ def test_index_command_builds_graph_sqlite(tmp_path: Path, source_dir: Path) -> 
 def _run_index_with_duplicates(
     tmp_path: Path,
     source_dir: Path,
-    duplicates: dict[str, list[Path]],
+    structural: dict[str, list[Path]],
+    cross_source: dict[str, list[Path]],
 ) -> str:
-    """Run `corpus index` with a mocked SlugRegistry that exposes *duplicates*.
+    """Run `corpus index` with a mocked SlugRegistry whose classify() returns the given split.
 
     Returns the CLI output string.
     """
@@ -115,8 +116,8 @@ def _run_index_with_duplicates(
     mock_index.index_source.return_value = mock_index_result
 
     fake_registry = MagicMock(spec=SlugRegistry)
-    fake_registry.__len__ = MagicMock(return_value=len(duplicates) + 1)
-    fake_registry.duplicates = duplicates
+    fake_registry.__len__ = MagicMock(return_value=len(structural) + len(cross_source) + 1)
+    fake_registry.classify.return_value = (structural, cross_source)
 
     with (
         patch("corpus_analyzer.cli.load_config", return_value=config),
@@ -137,25 +138,24 @@ def _run_index_with_duplicates(
     return result.output
 
 
-def test_high_cardinality_duplicates_are_suppressed(tmp_path: Path, source_dir: Path) -> None:
-    """Duplicate slugs with > 8 candidates must not appear in the warning output."""
-    big_dup: dict[str, list[Path]] = {
-        "references": [Path(f"/repo{i}/references/README.md") for i in range(30)],
-        "agents": [Path(f"/repo{i}/agents/README.md") for i in range(76)],
+def test_cross_source_duplicates_are_suppressed(tmp_path: Path, source_dir: Path) -> None:
+    """Cross-source duplicates (same skill in multiple sources) must not show a warning."""
+    cross: dict[str, list[Path]] = {
+        "git": [Path(f"/source{i}/git/SKILL.md") for i in range(4)],
+        "brainstorming": [Path(f"/source{i}/brainstorming/SKILL.md") for i in range(3)],
     }
-    output = _run_index_with_duplicates(tmp_path, source_dir, big_dup)
-    assert "⚠️" not in output, f"Expected no warning for high-cardinality duplicates, got:\n{output}"
+    output = _run_index_with_duplicates(tmp_path, source_dir, {}, cross)
+    assert "⚠️" not in output, f"Expected no warning for cross-source duplicates, got:\n{output}"
 
 
-def test_low_cardinality_duplicates_shown_as_summary(tmp_path: Path, source_dir: Path) -> None:
-    """2–3 real collisions must appear in a single summary line, not individual lines per slug."""
-    real_dups: dict[str, list[Path]] = {
-        "writing-skills": [Path(f"/repo{i}/writing-skills/SKILL.md") for i in range(3)],
-        "clerk-auth": [Path(f"/repo{i}/clerk-auth/SKILL.md") for i in range(2)],
+def test_within_source_duplicates_shown_as_summary(tmp_path: Path, source_dir: Path) -> None:
+    """Within-source duplicates must appear in a single summary warning line."""
+    within: dict[str, list[Path]] = {
+        "writing-skills": [Path(f"/repo/v{i}/writing-skills/SKILL.md") for i in range(3)],
+        "clerk-auth": [Path(f"/repo/v{i}/clerk-auth/SKILL.md") for i in range(2)],
     }
-    output = _run_index_with_duplicates(tmp_path, source_dir, real_dups)
-    assert "⚠️" in output, f"Expected a warning for real collisions, got:\n{output}"
-    # Summary should mention both slugs on a single line, not emit one line per slug
+    output = _run_index_with_duplicates(tmp_path, source_dir, within, {})
+    assert "⚠️" in output, f"Expected a warning for within-source collisions, got:\n{output}"
     warning_lines = [ln for ln in output.splitlines() if "⚠️" in ln]
     assert len(warning_lines) == 1, (
         f"Expected exactly one summary warning line, got {len(warning_lines)}:\n{output}"
@@ -164,15 +164,15 @@ def test_low_cardinality_duplicates_shown_as_summary(tmp_path: Path, source_dir:
     assert "clerk-auth" in output
 
 
-def test_mixed_cardinality_summary_excludes_high_count(tmp_path: Path, source_dir: Path) -> None:
-    """High-cardinality structural slugs must be excluded from the summary even when real collisions exist."""
-    mixed_dups: dict[str, list[Path]] = {
-        "references": [Path(f"/repo{i}/references/README.md") for i in range(30)],
-        "rag-engineer": [Path(f"/repo{i}/rag-engineer/SKILL.md") for i in range(2)],
+def test_mixed_within_and_cross_source(tmp_path: Path, source_dir: Path) -> None:
+    """Cross-source slugs must not appear in the warning; within-source ones must."""
+    cross: dict[str, list[Path]] = {
+        "git": [Path(f"/source{i}/git/SKILL.md") for i in range(4)],
     }
-    output = _run_index_with_duplicates(tmp_path, source_dir, mixed_dups)
-    assert "⚠️" in output, f"Expected warning for real collision, got:\n{output}"
-    assert "references" not in output, (
-        "High-cardinality slug 'references' must be excluded from warning"
-    )
+    within: dict[str, list[Path]] = {
+        "rag-engineer": [Path(f"/repo/v{i}/rag-engineer/SKILL.md") for i in range(2)],
+    }
+    output = _run_index_with_duplicates(tmp_path, source_dir, within, cross)
+    assert "⚠️" in output, f"Expected warning for within-source collision, got:\n{output}"
+    assert "git" not in output, "Cross-source slug 'git' must be excluded from warning"
     assert "rag-engineer" in output

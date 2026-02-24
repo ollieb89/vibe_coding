@@ -153,7 +153,7 @@ class SlugRegistry:
         ambiguous: dict[str, list[Path]] = {}
         for slug, paths in candidates.items():
             if len(paths) > 1:
-                logger.warning(
+                logger.debug(
                     "ambiguous slug %r: %d candidates %s",
                     slug,
                     len(paths),
@@ -198,6 +198,61 @@ class SlugRegistry:
                 return 0
 
         return max(candidates, key=common_prefix_parts)
+
+    def classify(
+        self, source_roots: list[Path]
+    ) -> tuple[dict[str, list[Path]], dict[str, list[Path]]]:
+        """Split duplicates into within-source collisions vs cross-source duplicates.
+
+        Within-source: multiple candidates for the same slug all fall under the
+        same configured source root.  This is unexpected — two directories with
+        the same name inside one source — and resolution may pick the wrong one.
+        These are surfaced as warnings.
+
+        Cross-source: candidates span two or more source roots (the same skill
+        name exists in several independently configured skill packs).  This is
+        expected and handled correctly by context-path proximity, so it is
+        suppressed.
+
+        Paths that match no configured source root are treated as within-source
+        (unknown origin — never silently suppressed).
+
+        When source roots are nested (e.g. ``/src`` and ``/src/components``),
+        each path is assigned to its *longest* matching root so that the most
+        specific root wins.
+
+        Args:
+            source_roots: The configured source root directories.
+
+        Returns:
+            A ``(within_source, cross_source)`` tuple of duplicate dicts.
+        """
+        # Longest roots first so nested roots match before their parents.
+        sorted_roots = sorted(source_roots, key=lambda r: len(r.parts), reverse=True)
+
+        def find_root(p: Path) -> Path | None:
+            for root in sorted_roots:
+                try:
+                    p.relative_to(root)
+                    return root
+                except ValueError:
+                    continue
+            return None
+
+        within_source: dict[str, list[Path]] = {}
+        cross_source: dict[str, list[Path]] = {}
+        for slug, paths in self._ambiguous.items():
+            roots_for_slug = {find_root(p) for p in paths}
+            has_orphan = None in roots_for_slug
+            real_roots = roots_for_slug - {None}
+            if not has_orphan and len(real_roots) > 1:
+                # Spans multiple known sources — expected, suppress.
+                cross_source[slug] = paths
+            else:
+                # All in one source (or orphaned) — unexpected collision.
+                within_source[slug] = paths
+
+        return within_source, cross_source
 
     def __len__(self) -> int:
         """Return number of known slugs."""
