@@ -1,159 +1,237 @@
 # Pitfalls Research
 
-**Domain:** Adding sort/filter/score controls to an existing hybrid search system (LanceDB + RRF + Typer CLI + FastMCP)
+**Domain:** Adding tree-sitter TypeScript/JavaScript AST chunking to a Python 3.12 local search tool
 **Researched:** 2026-02-24
-**Confidence:** HIGH (code inspected directly; RRF score behaviour confirmed via Azure AI Search official docs and LanceDB docs)
+**Confidence:** HIGH (official py-tree-sitter docs, GitHub issues, PyPI release notes, direct code inspection of existing chunker)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Treating RRF Score as an Absolute, Cross-Query Threshold
+### Pitfall 1: Grammar Package / Bindings Version Mismatch (ABI Incompatibility)
 
 **What goes wrong:**
-A developer sets `--min-score 0.02` expecting it to reliably filter noise across all queries. It filters nothing on query A (all results score 0.03–0.05) and filters everything on query B (all results score 0.008–0.015). The threshold carries no stable meaning across different queries or index states.
+`tree-sitter` (the Python bindings) and `tree-sitter-typescript` (the grammar package) are versioned independently. If they are not pinned to a compatible pair, the runtime raises one of:
+- `"Language's ABI is too new"` — grammar compiled against a newer tree-sitter core than the installed bindings
+- `"Incompatible language version: N. Compatibility range M through M"` — grammar ABI version outside the range the runtime accepts
+- `AttributeError: type object 'tree_sitter.Language' has no attribute 'build_library'` — bindings upgraded past 0.22.x but calling old API
+
+This breaks silently in a different way from a Python import error: the parser object is created, then the parse call fails or returns a corrupt tree at runtime.
 
 **Why it happens:**
-RRF score is computed as `Σ 1 / (k + rank_i)` — a rank-fusion formula, not a similarity measure. With LanceDB's default `k=60` and two search methods (vector + BM25), the theoretical maximum for any single document is approximately `1/61 + 1/61 ≈ 0.033`. The actual observed range depends on how many sub-query results come back, which varies by query term specificity, index size, and filter predicates.
-
-Concretely: at `--limit 10`, score distribution compresses into the top of the range. At `--limit 50`, it spreads. A threshold calibrated on one query at one limit will misfire at a different limit or on a different query. This is confirmed by Azure AI Search documentation: "The upper limit is bounded by the number of queries being fused, with each query contributing a maximum of approximately 1/k to the RRF score."
+`uv add tree-sitter` without a pinned version fetches the latest bindings. `uv add tree-sitter-typescript` fetches the latest grammar. These may have been released at different times with different ABI expectations. `tree-sitter-typescript` 0.23.x targets `tree-sitter` 0.23.x. `tree-sitter-typescript` 0.21.x targeted `tree-sitter` 0.21.x. Mixing them is not detected until runtime.
 
 **How to avoid:**
-- Document the score range in help text: `"Score is an RRF rank-fusion value (typically 0.005–0.033 with 2 sub-queries). Not a percentage. Not comparable across different queries or different --limit values."`
-- Default `--min-score` to `0.0` (no filtering). It is an expert knob.
-- Never recommend a threshold value in docs. Tell users to run the query without `--min-score`, observe the score column, then calibrate.
-- Apply `min_score` filtering as a Python list comprehension _after_ `.to_list()` returns — do not try to use it as a LanceDB `.where()` predicate (see Pitfall 4).
+Pin both packages to the same major.minor version in `pyproject.toml`:
+```toml
+[project]
+dependencies = [
+    "tree-sitter>=0.23.0,<0.24",
+    "tree-sitter-typescript>=0.23.0,<0.24",
+]
+```
+Write a smoke-test that runs at import time (or in the test suite) confirming the parser can successfully parse a two-line TypeScript snippet without error. This catches ABI mismatches on `uv sync`.
 
 **Warning signs:**
-- `--min-score 0.01` returns 0 results on some queries and all results on others
-- Tests for `min_score` written against hardcoded score values that were calibrated at one specific `--limit`
+- `uv run pytest` passes but `uv run corpus index` fails with an obscure C-level error or corrupt tree
+- Installing `tree-sitter-typescript` after bumping `tree-sitter` without re-checking compatibility
+- CI environment uses different package versions from dev because `uv.lock` was not committed
 
-**Phase to address:** Whichever phase ships `--min-score`. The score range caveat must appear in help text from the first commit.
+**Phase to address:** Phase 1 (dependency setup). The pinned versions and the smoke-test must be in the first commit, before any chunker code is written.
 
 ---
 
-### Pitfall 2: Exact-Set Test on `SearchResult` Fields Blocks Every New Field Addition
+### Pitfall 2: Calling the Removed `Language.build_library()` or `Parser.set_language()` APIs
 
 **What goes wrong:**
-Adding `sort_by: str` or `min_score: float` to `SearchResult` immediately fails the existing test at `tests/api/test_public.py:18`:
+Code copied from tutorials, Stack Overflow answers, or the tree-sitter README prior to October 2023 calls APIs that were removed in py-tree-sitter 0.22.x and 0.23.x:
 
 ```python
-assert field_names == {"path", "file_type", "construct_type", "summary", "score", "snippet"}
+# REMOVED in 0.22.x — raises AttributeError
+Language.build_library("build/my-languages.so", ["vendor/tree-sitter-typescript"])
+
+# REMOVED in 0.23.x — raises AttributeError
+parser = Parser()
+parser.set_language(Language(tsts.language_typescript(), "typescript"))
 ```
 
-This uses `==` (exact set match), not a superset check. Any new field on `SearchResult` causes a test failure even if all existing callers still work correctly. The test suite goes red before any feature is usable.
+The current (0.23.x+) API is:
+```python
+import tree_sitter_typescript as tsts
+from tree_sitter import Language, Parser
+
+TS_LANGUAGE = Language(tsts.language_typescript())
+TSX_LANGUAGE = Language(tsts.language_tsx())
+parser = Parser(TS_LANGUAGE)   # language passed to constructor, not set_language()
+```
 
 **Why it happens:**
-The test is a correct API contract test — it enforces the declared public surface. It is behaving as designed. The problem is that developers add a field without updating the test in the same commit, then are surprised when CI fails.
+The py-tree-sitter API changed significantly three times between 0.20 and 0.23. Most web tutorials and Stack Overflow answers predate these changes. The official README on the `master` branch shows the current API, but cached/indexed copies still show the old patterns.
 
 **How to avoid:**
-- When adding fields to `SearchResult`, update this test in the same commit. It is a required coupling, not an optional cleanup.
-- Make new fields optional with defaults: `sort_key: str = "relevance"` so existing positional-arg callers do not break at instantiation.
-- Never add a required (no-default) positional field to `SearchResult` — it would break all existing call sites that construct the dataclass directly.
-- The test at line 24 uses keyword arguments, so field order does not matter for construction. But the exact-set check at line 18 still requires updating.
+Always verify against the official `py-tree-sitter` README at the exact PyPI version being used. Write the constructor call as `Parser(language_object)` — do not call `set_language()`. Do not call `Language.build_library()` — language capsules come pre-built from the `tree-sitter-typescript` PyPI package.
 
 **Warning signs:**
-- A PR adds a field to `SearchResult` without touching `tests/api/test_public.py` — CI fails immediately.
+- `AttributeError: type object 'tree_sitter.Language' has no attribute 'build_library'`
+- `AttributeError: 'Parser' object has no attribute 'set_language'`
+- Code has a `vendor/` or `build/` directory for grammar `.so` files
 
-**Phase to address:** API parity phase (when `sort_by` / `min_score` are added to `search()`).
+**Phase to address:** Phase 1 (dependency setup). Document the correct constructor patterns before writing any production code.
 
 ---
 
-### Pitfall 3: API Surface Left Behind When CLI and MCP Are Implemented First
+### Pitfall 3: Using a Single Grammar Object for Both `.ts` and `.tsx` Files
 
 **What goes wrong:**
-The CLI grows `--sort` and `--min-score` flags. The MCP server grows `min_score`. Users calling `from corpus_analyzer.api.public import search` get none of these controls. The three surfaces diverge. This is explicitly a v1.4 failure mode — requirements state API and MCP parity are required.
+A developer loads one grammar and uses it for all four extensions (`.ts`, `.tsx`, `.js`, `.jsx`). JSX syntax (angle brackets used as element literals, JSX expressions, `<Component />`) is not valid TypeScript — it is only valid in TSX. Parsing a `.tsx` file with the TypeScript grammar produces an ERROR node at every JSX element. The chunker receives a "parsed" tree that is structurally invalid, extracts no named functions (because they are inside ERROR subtrees), and silently falls back to line-based chunking — which is exactly what the milestone is trying to replace.
+
+The reverse also fails: parsing a `.ts` file that uses generic type parameters (`Array<string>`) with the TSX grammar may misparse the `<` as the start of a JSX element.
 
 **Why it happens:**
-The gap already exists for `sort_by` in the current codebase. `api/public.py:search()` does not accept or pass `sort_by`, even though `engine.hybrid_search()` already supports it (added as part of v1.2/v1.3 engine work). It is easy to implement CLI + MCP and declare "done" without threading the same parameters through the Python API.
-
-Current gap (confirmed by code inspection):
-
+The JavaScript ecosystem blurs the line between TypeScript and TSX (many editors handle both with one language server). But tree-sitter-typescript ships two distinct grammar objects because the grammars are genuinely incompatible:
 ```python
-# api/public.py lines 103-109 — sort_by is absent
-raw = engine.hybrid_search(
-    query,
-    source=source,
-    file_type=file_type,
-    construct_type=construct_type,
-    limit=limit,
-    # sort_by silently defaults to "relevance"
-    # min_score not implemented at all
-)
+import tree_sitter_typescript as tsts
+tsts.language_typescript()   # for .ts and .js files
+tsts.language_tsx()          # for .tsx and .jsx files
 ```
 
 **How to avoid:**
-- Implement all three surfaces (CLI, API, MCP) in the same phase, not sequentially.
-- Add an integration test that calls `api.public.search(sort_by="path")` and verifies results are path-sorted. This test will catch the gap at CI time before it reaches users.
-- Treat the v1.4 requirements checklist literally: "Python `search()` API accepts `sort_by` and `min_score` parameters" is a pass/fail requirement, not a stretch goal.
+Dispatch on file extension in the chunker:
+```python
+_TS_EXTENSIONS = {".ts", ".js"}
+_TSX_EXTENSIONS = {".tsx", ".jsx"}
+
+def _get_ts_language(ext: str) -> Language:
+    if ext in _TSX_EXTENSIONS:
+        return TSX_LANGUAGE
+    return TS_LANGUAGE
+```
+Add tests that explicitly parse a `.tsx` file containing JSX and verify the tree has no ERROR nodes at the root level.
 
 **Warning signs:**
-- Phase plan says "CLI and MCP done, API to follow" — do not accept this as an acceptable split.
-- No test asserts that `api.public.search(sort_by=...)` changes result ordering.
+- All `.tsx` files fall through to line-based chunking despite having syntactically valid JSX
+- `root_node.has_error` is True for `.tsx` files when parsed with `TS_LANGUAGE`
+- Chunk type distribution shows `.tsx` files never producing `function_declaration` or `method_definition` chunk types
 
-**Phase to address:** Implement all three call sites atomically. Do not phase them separately.
+**Phase to address:** Phase 1 (chunker implementation). The extension dispatch table must be the first design decision.
 
 ---
 
-### Pitfall 4: `min_score` Implemented as LanceDB `.where()` Predicate (Runtime Error)
+### Pitfall 4: Missing Arrow Functions Because They Live Inside `lexical_declaration`
 
 **What goes wrong:**
-A developer writes:
-```python
-builder = builder.where(f"_relevance_score >= {min_score}")
+The chunker walks `root_node.children` looking for named node types: `function_declaration`, `class_declaration`, etc. It finds none in a TypeScript file that is entirely composed of:
+```typescript
+export const processItems = async (items: Item[]): Promise<void> => { ... };
+export const formatName = (first: string, last: string): string => `${first} ${last}`;
 ```
-This either fails silently (returns all results, ignoring the filter) or raises a LanceDB error at runtime. LanceDB `.where()` operates on stored schema columns only. `_relevance_score` is a computed column injected by `RRFReranker` after retrieval — it does not exist in the `ChunkRecord` schema and cannot be referenced in a filter predicate.
+These are `lexical_declaration` nodes, not `function_declaration` nodes. The function lives inside `variable_declarator > arrow_function`. The naïve chunker ignores these entirely and falls back to `chunk_lines()` — producing zero AST-aware chunks from a file that is 100% valid TypeScript functions.
 
 **Why it happens:**
-Developers familiar with SQL assume any field that appears in results can be used in a filter. LanceDB's query builder separates pre-retrieval filters (`.where()` on schema columns) from post-retrieval computations (reranker-injected fields like `_relevance_score`). The field name starts with `_` as a signal that it is synthetic, but this convention is not documented prominently.
+Python's `ast.parse()` gives you `ast.FunctionDef` for both `def foo():` and named assignments — but tree-sitter's TypeScript grammar is structurally faithful to the parse tree. `const foo = () => {}` is genuinely a `lexical_declaration` containing an `arrow_function`. The node type is NOT `function_declaration`.
 
 **How to avoid:**
-Apply `min_score` as a Python list comprehension after `.to_list()`, after the existing text-term filter:
-
+When building the list of top-level constructs to chunk, walk `lexical_declaration` nodes to check if their `variable_declarator` child has an `arrow_function` or `function_expression` value. If so, treat that `lexical_declaration` as a named function chunk. Useful node type check:
 ```python
-results = [dict(row) for row in builder.limit(limit).to_list()]
-
-# Existing text-term filter (do not change order)
-filtered = [r for r in results if any(term in str(r.get("text", "")).lower() for term in query_terms)]
-
-# New min_score filter (after text-term filter)
-if min_score > 0.0:
-    filtered = [r for r in filtered if float(r.get("_relevance_score", 0.0)) >= min_score]
+def _is_named_arrow_function(node: Node) -> bool:
+    """Return True if node is: const/let/var name = () => ..."""
+    if node.type != "lexical_declaration":
+        return False
+    for child in node.children:
+        if child.type == "variable_declarator":
+            value = child.child_by_field_name("value")
+            if value and value.type in ("arrow_function", "function_expression"):
+                return True
+    return False
 ```
 
-Order matters: apply `min_score` after the text-term filter so that the text-matching semantics of the existing behaviour are preserved.
-
 **Warning signs:**
-- Implementation uses `.where(f"_relevance_score >= {min_score}")` — will fail at runtime or be silently ignored.
-- `min_score` filter applied before the text-term filter — changes observable filtering semantics.
+- A `.ts` test file consisting entirely of arrow functions produces zero AST chunks
+- Chunk type distribution across the indexed agent library shows unexpectedly high line-based chunk ratios for `.ts` files
+- `chunk_typescript()` returns `chunk_lines()` fallback for modern TypeScript that uses no `function_declaration` syntax
 
-**Phase to address:** Engine modification phase (when `min_score` is added to `hybrid_search()`).
+**Phase to address:** Phase 1 (chunker implementation). Include arrow function detection in the initial chunker spec.
 
 ---
 
-### Pitfall 5: MCP Tool Signature Change Breaks Cached Schema in Claude Code
+### Pitfall 5: Off-By-One Line Numbers (tree-sitter is 0-indexed, the rest of the codebase is 1-indexed)
 
 **What goes wrong:**
-Adding `min_score: Optional[float] = None` to `corpus_search()` changes the FastMCP-generated JSON schema for the tool. Claude Code sessions that cached the old schema will show the old tool signature (no `min_score` parameter) until the MCP server is restarted and the session is refreshed. Users may not notice the new parameter is available.
-
-Additionally: a known FastMCP issue (GitHub issue #1015) shows that optional parameters with default values are sometimes parsed incorrectly at the MCP boundary — the default value gets replaced with `None` rather than the declared default. For `min_score: Optional[float] = None`, this is not a problem (None is already the intended default). But it is worth verifying with a live test after implementation.
+The existing `chunk_python()` function returns 1-indexed `start_line` and `end_line` values (matching the rest of the codebase, LanceDB schema, and chunk ID generation). The `chunk_typescript()` function uses `node.start_point[0]` and `node.end_point[0]` directly — but tree-sitter points are 0-indexed (row 0 = first line). The result: every chunk reports `start_line` that is one less than the actual line in the file. Chunk IDs are wrong; line-range display in search output is wrong.
 
 **Why it happens:**
-MCP tool schemas are derived at server startup from the decorated function signature. Adding a parameter requires a server restart to take effect. Claude Code and other MCP clients cache the tool schema for the lifetime of a session.
-
-The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045` on every parameter in `corpus_search()`. If a new parameter is added without the noqa comment, `uv run ruff check .` will fail CI because ruff UP045 flags `Optional[X]` as non-idiomatic (use `X | None` instead). But changing existing parameters to `X | None` is also a diff risk if it changes FastMCP's schema generation behaviour.
+`node.start_point` returns `(row, column)` where `row` is 0-indexed. The Python `ast` module uses `node.lineno` which is 1-indexed. Mixing the two conventions without an explicit `+ 1` offset is the natural mistake.
 
 **How to avoid:**
-- Follow the existing pattern exactly: `min_score: Optional[float] = None,  # noqa: UP045`
-- After implementing, restart Claude Code to pick up the updated schema.
-- Test the MCP tool with `min_score=None` (default path) and `min_score=0.01` (filtering path) to confirm no type errors at the tool boundary.
-- Do not change existing parameter annotations from `Optional[X]` to `X | None` in the same PR — it is an unnecessary diff risk.
+Always convert in one canonical place:
+```python
+start_line = node.start_point[0] + 1   # 0-indexed row → 1-indexed line
+end_line   = node.end_point[0] + 1     # inclusive 1-indexed
+```
+Add a unit test asserting that `chunk_typescript()` on a file where the first function starts on line 1 reports `start_line == 1`, not `start_line == 0`.
 
 **Warning signs:**
-- `uv run ruff check .` fails on the new parameter (missing `# noqa: UP045`).
-- MCP tool works in pytest but the live Claude Code tool still shows the old signature (restart required).
+- `start_line: 0` appears in any chunk dict — the rest of the pipeline treats line 0 as invalid
+- Line ranges in `corpus search` output are one line low for TS files but correct for Python files
+- Chunk ID hash differs between two otherwise identical runs because the line number is wrong
 
-**Phase to address:** MCP parity phase.
+**Phase to address:** Phase 1 (chunker implementation). Add the `+1` offset as an explicit named step in the test assertions, not as an implementation detail.
+
+---
+
+### Pitfall 6: `node.text` Returns `bytes`, Not `str` — and Is `None` Unless Source Was Passed as Bytes
+
+**What goes wrong:**
+`node.text` returns `bytes | None`. It is `None` if the parser was not given the source bytes directly (e.g., if a read callback was used). Calling `.decode("utf-8")` on `None` raises `AttributeError`. Passing `node.text` to a function expecting `str` silently constructs chunk text containing `b"..."` byte literals if the developer writes `str(node.text)` instead of `node.text.decode("utf-8")`.
+
+**Why it happens:**
+The existing `chunk_python()` function passes source as a string and then slices `lines[start_line - 1:end_line]`. The tree-sitter approach of using `source_bytes[node.start_byte:node.end_byte].decode("utf-8")` is a different pattern. Developers mixing the two approaches forget to decode.
+
+**How to avoid:**
+Pass source as `bytes` to the parser and use byte-range slicing consistently:
+```python
+source_bytes = path.read_bytes()
+tree = parser.parse(source_bytes)
+# ...
+chunk_text = source_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+```
+Use `errors="replace"` rather than `errors="strict"` so malformed bytes in student or generated code do not crash the indexer. Wrap the entire parse attempt in `try/except Exception` and fall back to `chunk_lines()`.
+
+**Warning signs:**
+- `AttributeError: 'NoneType' object has no attribute 'decode'` in chunker
+- Chunk text field contains Python bytes literal `b'...'` in the LanceDB store
+- Non-ASCII identifiers (e.g., emoji in variable names, Unicode in comments) cause `UnicodeDecodeError`
+
+**Phase to address:** Phase 1 (chunker implementation). Write a test with a file containing non-ASCII content as part of the first batch.
+
+---
+
+### Pitfall 7: `root_node.has_error` Is `True` But the Useful Nodes Are Still There
+
+**What goes wrong:**
+The developer checks `tree.root_node.has_error` and immediately falls back to `chunk_lines()` when it is `True`. However, tree-sitter's error recovery inserts ERROR nodes locally and continues parsing the rest of the file. A TypeScript file with one syntax error in one function still has valid parse trees for all other functions. Triggering a full fallback on any error discards correct AST structure for 95% of the file.
+
+A second mistake: `has_error` is `True` on files with recoverable errors (e.g., a missing semicolon) that tree-sitter handles gracefully without producing invalid chunk boundaries.
+
+**Why it happens:**
+Developers treat `has_error` as a boolean "parse succeeded/failed" flag. It is not — it means "at least one ERROR or MISSING node exists somewhere in the tree." The tree is still structurally meaningful outside those nodes.
+
+**How to avoid:**
+Only fall back to `chunk_lines()` when the root node itself is an ERROR node (catastrophic failure to parse), or when the tree yields zero named top-level constructs after applying the node-type filter. Do not fall back merely because `has_error` is `True`.
+```python
+if tree.root_node.type == "ERROR":
+    return chunk_lines(path)     # total parse failure
+# otherwise: walk children, collect named constructs
+# if the result list is empty, THEN fall back
+if not constructs:
+    return chunk_lines(path)
+```
+
+**Warning signs:**
+- Files with a single TypeScript error (e.g., `const x = ;`) cause the entire file to fall back to line-based chunking
+- `chunk_typescript()` never produces AST chunks on real-world code because many files have minor errors that set `has_error`
+
+**Phase to address:** Phase 1 (chunker implementation). Add a test where the source has a deliberate ERROR node mid-file and assert that other functions in the file are still chunked by AST.
 
 ---
 
@@ -161,11 +239,12 @@ The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Add `--min-score` only to CLI, skip API/MCP | Faster to ship | Three surfaces diverge; v1.4 requirements explicitly require parity | Never — all three surfaces must ship together |
-| Skip documenting RRF score range in `--min-score` help text | Saves one line | Users set `--min-score 0.5`, get 0 results, conclude the feature is broken | Never — caveat must be in help text from day one |
-| Apply `min_score` as LanceDB `.where()` predicate | Looks cleaner | Runtime error or silent no-op — `_relevance_score` is not a schema column | Never |
-| Apply `min_score` filter before text-term filter | Marginally simpler code | Changes observable filtering order, breaks existing text-matching semantics | Never |
-| Update `SearchResult` without updating the exact-set test | Faster initial implementation | CI immediately fails — net zero time saved | Never |
+| Unpin `tree-sitter` / `tree-sitter-typescript` versions | One less version decision upfront | ABI mismatch on next `uv sync` breaks CI silently | Never — pin both on day one |
+| Use `chunk_lines()` fallback for all TS/JS until "later" | Defers complexity | The milestone goal is AST chunking — line-based is the status quo being replaced | Never — fallback is for parse failures only |
+| Check only `function_declaration` node type, skip arrow functions | Simpler first pass | Misses 60–80% of modern TypeScript code that uses arrow functions | Acceptable in a first spike only, never in the shipped chunker |
+| Use `node.text` without `.decode()` | Saves one call | Silent bytes-literal corruption in LanceDB; non-ASCII crashes | Never |
+| Full file fallback on `has_error` | Simplest error handling | Most real-world TS files have minor errors; AST chunking degrades to useless | Never — use construct-level fallback only |
+| Skip test for `.tsx` JSX files | Fewer test cases to write | JSX silently falls through to line-based chunking | Never — JSX is a primary use case |
 
 ---
 
@@ -173,13 +252,12 @@ The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| LanceDB `_relevance_score` | Using in `.where()` predicate | Filter in Python after `.to_list()` — it is a computed reranker column, not a stored schema field |
-| LanceDB `_relevance_score` | Assuming 0–1 range like cosine similarity | Range is `0` to approximately `num_sub_queries / (k + 1)` ≈ `0.033` with default k=60 and 2 sub-queries |
-| LanceDB `_relevance_score` | Comparing scores across queries | Scores are relative to the current result set and vary with `--limit`; not absolute |
-| FastMCP `corpus_search` | Forgetting `# noqa: UP045` on `Optional[float]` | Copy the existing parameter pattern: `min_score: Optional[float] = None,  # noqa: UP045` |
-| `SearchResult` dataclass | Adding field without updating the exact-set test | Update `test_search_result_has_required_fields` in the same commit |
-| `api/public.search()` | Not threading `sort_by` and `min_score` to engine | Add both parameters to `search()` signature and pass them to `hybrid_search()` |
-| Text-term filter ordering | Applying `min_score` before text-term filter | Apply `min_score` after text-term filter to preserve existing text-matching semantics |
+| `chunk_file()` dispatch | Adding `tree-sitter` import at module level — slow cold start | Import `tree_sitter` lazily inside `chunk_typescript()` or initialise parser once at module level using `try/except ImportError` with a clear error message |
+| `chunk_file()` dispatch | Forgetting `.jsx` extension in the dispatch table | Map `{".ts", ".js", ".tsx", ".jsx"}` explicitly; `.jsx` must use `TSX_LANGUAGE`, not `TS_LANGUAGE` |
+| Indexer `indexer.py` | Not guarding against `ImportError` if `tree-sitter` is absent | Wrap import in `try/except ImportError`; if absent, log a warning and proceed with `chunk_lines()` fallback for all TS/JS |
+| LanceDB schema | Chunk type field stores raw node type strings from tree-sitter | Map grammar node types to the application's vocabulary (`function_declaration` → `"function"`, `class_declaration` → `"class"`) before storing |
+| Test fixture files | Writing `.ts` test fixtures that only use `function_declaration` | Include fixtures that use: arrow functions in `const`, `interface_declaration`, `type_alias_declaration`, `class` with methods, and mixed files with JSX |
+| `mypy --strict` | `node.text` typed as `bytes \| None` requires explicit None guard | Always assert or check `is not None` before `.decode()` — mypy will enforce this under `--strict` |
 
 ---
 
@@ -187,38 +265,26 @@ The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `min_score` filters all results after `limit` fetch | User gets 0 results with no explanation | Print hint when `min_score` discards all results: "No results above {min_score}. Try lowering." | Any time `min_score` is above the score range for the current query |
-| High `limit` + aggressive `min_score` wastes retrieval | Fetch 50 results, discard 48, return 2 | This is acceptable at current scale; document if over-fetching becomes needed at larger indexes | Not a concern until index has >10k chunks |
-| `search.status()` uses `to_pandas()` on full table | Slow for large indexes | Already present pre-v1.4; not introduced by this milestone | >10k chunks |
-
----
-
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| No score shown before `--min-score` lands | User cannot calibrate threshold without seeing scores | Score display must ship in the same phase as or before `--min-score`; CLI already partially shows score at line 366 |
-| `--min-score` returns 0 results silently | User thinks search is broken | Print: "No results above min-score {x}. Run without --min-score to see available scores." |
-| Score formatted with full float precision | `score: 0.016393442622950817` is unreadable | Format to 3–4 decimal places; CLI already uses `:.3f` at line 366 — verify this is applied consistently |
-| Score column header labelled "score" | Users expect 0–100 or 0–1; `0.033` max looks like "3% match" | Label as "relevance" or add range hint: `score (RRF, max ~0.033)` |
-| `--sort` flag not exposed in CLI help alongside score | Users discover sort by reading source, not `--help` | Ensure help text for `--sort` lists all valid values: `relevance\|construct\|confidence\|date\|path` |
+| Constructing `Parser` and `Language` per file | 20–50ms overhead per file on initial index | Construct the parser once at module level; reuse across all calls to `chunk_typescript()` | Noticeable at >50 files; at 1k TS files it adds ~30s to `corpus index` |
+| Parsing large generated files (e.g., bundled JS) | 2–5 second parse for a 20k-line minified file | Apply a character-count guard: skip AST parsing for files over ~50k chars; use `chunk_lines()` directly | Any minified bundle file in the index |
+| Walking entire tree recursively in Python | Slow for deeply nested files | Use `node.children` iteration at the top level only; do not implement a full recursive tree walk in Python — only descend into `lexical_declaration` children | Files with 100+ top-level nodes |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Score display:** `_relevance_score` non-zero in real results — verify field name matches LanceDB output exactly (typo returns silent `0.0` via `r.get("_relevance_score", 0.0)`)
-- [ ] **`--sort relevance` default:** Results return in RRF order (not sorted) when `sort_by="relevance"` — verify no accidental sort is applied on the "relevance" branch
-- [ ] **`--sort path`:** Results sorted ascending by `file_path` — add a test asserting ordering
-- [ ] **`--min-score` CLI:** Typer option added as `float`, default `0.0`, documented with RRF range caveat
-- [ ] **`--min-score` engine:** Applied as Python filter after `.to_list()` and after text-term filter — not as `.where()` predicate
-- [ ] **API parity:** `api/public.search()` signature includes `sort_by: str = "relevance"` and `min_score: float = 0.0`; both passed to `hybrid_search()`
-- [ ] **`SearchResult` test updated:** `test_search_result_has_required_fields` exact-set assertion updated if any new fields added to `SearchResult`
-- [ ] **MCP parity:** `corpus_search` tool accepts `min_score: Optional[float] = None`; `# noqa: UP045` present; MCP tests cover the parameter
-- [ ] **Empty result hint:** CLI prints informative message when `min_score` filters all results to zero
-- [ ] **Type annotations:** All new parameters annotated; `uv run mypy src/` exits 0
+- [ ] **`.jsx` extension dispatch:** `chunk_file()` routes `.jsx` to `chunk_typescript()` with `TSX_LANGUAGE` — not to `chunk_lines()` and not to `TS_LANGUAGE`
+- [ ] **Arrow function detection:** `chunk_typescript()` produces AST chunks for files where all functions are defined as `const foo = () => {}`
+- [ ] **1-indexed line numbers:** `start_line` in every chunk dict is `node.start_point[0] + 1`, not `node.start_point[0]`
+- [ ] **`has_error` handling:** A file with one syntax error mid-file still produces AST chunks for all other functions (no full-file fallback triggered)
+- [ ] **TSX JSX parse succeeds:** A `.tsx` file with `<Component />` syntax produces a tree with `root_node.has_error == False` (using `TSX_LANGUAGE`, not `TS_LANGUAGE`)
+- [ ] **Non-ASCII content:** Files with Unicode in identifiers or comments do not crash the chunker (use `errors="replace"` on decode)
+- [ ] **Grammar version pinned:** `pyproject.toml` pins `tree-sitter` and `tree-sitter-typescript` to the same major.minor; `uv.lock` is committed
+- [ ] **`ImportError` guard:** If `tree-sitter` is not installed, `chunk_file()` falls back to `chunk_lines()` for TS/JS rather than raising `ImportError` at import time
+- [ ] **Parser constructed once:** `TS_LANGUAGE`, `TSX_LANGUAGE`, and `Parser` instances are module-level constants, not created per call
+- [ ] **mypy clean:** `uv run mypy src/` exits 0 with all `node.text` accesses guarded
 - [ ] **Ruff clean:** `uv run ruff check .` exits 0
-- [ ] **Tests green:** 281 existing tests pass; new tests added for score display, `--min-score` filtering, API/MCP parity, and sort ordering
+- [ ] **Tests green:** All 293 existing tests pass; new tests added for TS/TSX/JS/JSX chunking at parity with `test_chunk_python` coverage
 
 ---
 
@@ -226,12 +292,13 @@ The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| `min_score` via `.where()` fails at runtime | LOW | Move filter to Python post-processing; no schema change needed |
-| `SearchResult` field addition breaks exact-set test | LOW | Update `test_search_result_has_required_fields` to include the new field |
-| API surface missing `sort_by` after CLI ships | LOW | Add parameter with backward-compatible default; no schema migration |
-| MCP schema cached by Claude Code after parameter addition | LOW | Restart Claude Code / MCP host |
-| Users file bugs because `--min-score 0.5` returns nothing | LOW | Add score range to help text; no code change for calibration itself |
-| `--min-score` filter applied before text-term filter | LOW | Swap filter order in engine; add regression test |
+| ABI version mismatch breaks CI | LOW | Pin both packages to the same minor in `pyproject.toml`; `uv sync` |
+| Old `set_language()` / `build_library()` API called | LOW | Replace with `Parser(Language(tsts.language_typescript()))` pattern |
+| `.tsx` silently line-chunked due to wrong grammar | LOW | Add `_TSX_EXTENSIONS` dispatch; re-index affected files |
+| Arrow functions produce no chunks | MEDIUM | Extend node-type walk to include `lexical_declaration` containing `arrow_function`; re-index all TS files |
+| Off-by-one line numbers in stored chunks | MEDIUM | Add `+ 1` correction; re-index all TS/JS files (chunk IDs regenerated from content hash, so existing chunks get replaced cleanly) |
+| Bytes not decoded (`node.text` corruption) | MEDIUM | Switch to `source_bytes[start_byte:end_byte].decode("utf-8", errors="replace")`; re-index |
+| Full-file fallback on `has_error` eliminates AST chunking | MEDIUM | Change fallback condition to zero-named-constructs; re-index |
 
 ---
 
@@ -239,24 +306,31 @@ The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| RRF score range / threshold semantics | Score display phase | Help text includes range caveat; `--min-score 0.0` returns all results; `--min-score 99.0` returns none with hint |
-| Exact-set test on `SearchResult` breaks | API parity phase | CI passes after updating `test_search_result_has_required_fields` |
-| API surface missing `sort_by` / `min_score` | API parity phase | Test calls `api.public.search(sort_by="path")` and verifies path ordering |
-| `min_score` via `.where()` predicate | Engine modification phase | Integration test with real LanceDB table verifies `min_score` parameter reduces result count without error |
-| MCP schema break / noqa pattern | MCP parity phase | `uv run ruff check .` exits 0; MCP test passes with `min_score` argument |
-| Empty result hint missing | CLI output phase | Manual test: `corpus search "query" --min-score 99` prints informative message |
-| `min_score` applied before text-term filter | Engine modification phase | Ordering verified by unit test; text-term filter semantics unchanged |
+| ABI version mismatch | Phase 1: dependency setup | Smoke test: `from tree_sitter import Parser` + parse a 2-line TS snippet without error |
+| Old API (`set_language`, `build_library`) | Phase 1: dependency setup | Code review: grep for `build_library` and `set_language` must return zero hits |
+| Wrong grammar for `.tsx` / `.jsx` | Phase 1: chunker implementation | Test: parse `.tsx` file with JSX; assert `root_node.has_error == False` |
+| Missing arrow function detection | Phase 1: chunker implementation | Test: file with only `const foo = () => {}` produces at least 1 AST chunk |
+| Off-by-one line numbers | Phase 1: chunker implementation | Test: first function at line 1 produces `start_line == 1` |
+| `node.text` bytes / None not decoded | Phase 1: chunker implementation | Test: file with non-ASCII identifier produces `str` chunk text without exception |
+| `has_error` full-file fallback | Phase 1: chunker implementation | Test: file with one mid-file syntax error still produces AST chunks for valid functions |
+| Parser constructed per file (perf) | Phase 2: integration + indexer wiring | Benchmark: indexing 200 TS files completes in under 10s |
+| Large generated file parse timeout | Phase 2: integration + indexer wiring | Test: 50k-char minified JS returns `chunk_lines()` result, not a multi-second parse |
+| `ImportError` not guarded in dispatch | Phase 2: integration + indexer wiring | Test: remove `tree-sitter` from env; `chunk_file()` still returns line chunks without exception |
 
 ---
 
 ## Sources
 
-- LanceDB RRF Reranker documentation: https://docs.lancedb.com/integrations/reranking/rrf
-- Azure AI Search Hybrid Scoring (RRF) — authoritative score range documentation: https://learn.microsoft.com/en-us/azure/search/hybrid-search-ranking
-- FastMCP optional parameter handling issue: https://github.com/jlowin/fastmcp/issues/1015
-- Direct code inspection: `src/corpus_analyzer/search/engine.py` (lines 30, 47–122), `src/corpus_analyzer/api/public.py` (lines 18, 79–120), `src/corpus_analyzer/mcp/server.py` (lines 43–108), `src/corpus_analyzer/cli.py` (lines 300–372)
-- Existing contract test: `tests/api/test_public.py:18` — exact-set assertion on `SearchResult` fields
+- py-tree-sitter official README (current `master`, 0.25.x API): https://github.com/tree-sitter/py-tree-sitter/blob/master/README.md
+- py-tree-sitter releases page (API change history): https://github.com/tree-sitter/py-tree-sitter/releases
+- tree-sitter-typescript PyPI (package structure, two language functions): https://pypi.org/project/tree-sitter-typescript/
+- tree-sitter-typescript GitHub (node-types.json, grammar): https://github.com/tree-sitter/tree-sitter-typescript
+- tree-sitter-typescript TypeScript node-types.json: https://github.com/tree-sitter/tree-sitter-typescript/blob/master/typescript/src/node-types.json
+- py-tree-sitter discussion on TypeScript/TSX parser setup: https://github.com/tree-sitter/py-tree-sitter/discussions/231
+- `Language.build_library` removal issue: https://github.com/tree-sitter/tree-sitter/issues/3499
+- Tree-sitter packaging fragmentation article: https://ayats.org/blog/tree-sitter-packaging
+- Direct code inspection: `src/corpus_analyzer/ingest/chunker.py` — existing `chunk_python()` and `chunk_file()` patterns
 
 ---
-*Pitfalls research for: v1.4 Search Precision — adding sort, min-score, and score display to existing LanceDB hybrid search*
+*Pitfalls research for: v1.5 TypeScript/JavaScript AST-aware chunking using tree-sitter*
 *Researched: 2026-02-24*
