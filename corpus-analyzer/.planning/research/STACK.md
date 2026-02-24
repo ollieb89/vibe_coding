@@ -1,175 +1,245 @@
 # Stack Research
 
-**Domain:** Code quality tooling — zero-error mypy + ruff baseline for existing Python codebase
+**Domain:** Search precision controls — relevance score display, sort flag, min-score filtering for LanceDB hybrid search CLI/API/MCP
 **Researched:** 2026-02-24
-**Confidence:** HIGH (all findings verified against installed packages, official docs, and live tool output)
+**Confidence:** HIGH (all findings verified against installed LanceDB 0.29.2 source code; no external sources required)
 
 ---
 
-## Context: v1.3 Linting Baseline
+## Context: v1.4 Search Precision
 
-This research covers only what is NEW or CHANGED for v1.3. The core application stack (LanceDB,
-FastMCP, Typer, Pydantic, SQLite graph store) is validated and unchanged. The goal is: `uv run ruff
-check .` and `uv run mypy src/` both pass with zero errors.
+This research covers ONLY what is new or changed for v1.4. The full application stack (LanceDB,
+FastMCP, Typer, Rich, Pydantic) is validated and unchanged. No new packages are required.
 
-**Current state (verified by running tools against the codebase):**
-- mypy: 42 errors across 9 files
-- ruff: 396 errors across src/ (270 auto-fixable, 126 manual)
-- ruff has a separate 93 E501 violations in src/ (15 in llm/, 78 elsewhere)
+**Active milestone requirements:**
+- Relevance score displayed in `corpus search` output
+- `--sort relevance|path` flag on `corpus search`
+- `--min-score <float>` flag to hard-filter low-relevance results
+- Python `search()` API accepts `sort_by` and `min_score` parameters
+- MCP `corpus_search` tool accepts `min_score` parameter
+
+---
+
+## Key Finding: _relevance_score is already populated
+
+The `_relevance_score` field IS present in hybrid search result dicts right now. No LanceDB API
+changes are needed to access it.
+
+**Trace through LanceDB 0.29.2 source (verified):**
+
+1. `CorpusSearch.hybrid_search()` calls `.rerank(reranker=RRFReranker())` — the reranker runs
+   during `LanceHybridQueryBuilder.to_arrow()`.
+
+2. `RRFReranker.rerank_hybrid()` appends `_relevance_score` as a `pa.float32()` column to the
+   Arrow table after computing RRF scores.
+
+3. `RRFReranker(return_score="relevance")` is the default. In this mode, `_keep_relevance_score()`
+   drops `_score` and `_distance` columns but **keeps `_relevance_score`**. The score column
+   survives to the output.
+
+4. `to_list()` calls `to_arrow().to_pylist()`. The `_relevance_score` key is present in every
+   result dict.
+
+5. `public.py` already reads it: `float(r.get("_relevance_score", 0.0))` — the Python API
+   already captures the real RRF score in `SearchResult.score`.
+
+6. `server.py` already reads it: `float(row.get("_relevance_score", 0.0))` — MCP already
+   captures and returns the score per result.
+
+7. `cli.py` line 366 already prints it: `f"[dim]score: {result.get('_relevance_score', 0.0):.3f}[/]"`
+
+**Conclusion:** Score display is already wired end-to-end. The CLI already shows scores. The API
+already populates `SearchResult.score`. The MCP already includes `score` in each result dict.
+
+---
+
+## RRF Score Characteristics (verified via calculation)
+
+```python
+# RRF score formula: sum(1 / (rank + K)) for each retrieval system
+# K = 60 (RRFReranker default)
+# Two retrieval systems: vector + BM25/FTS
+
+max_score = 1/(1+60) + 1/(1+60)  # = 0.0328  (rank 1 in both systems)
+typical_high = 1/(1+60) + 1/(5+60)  # ≈ 0.0316  (rank 1 vector, rank 5 FTS)
+only_vector = 1/(1+60)              # ≈ 0.0164  (appears in vector only)
+low_score = 1/(50+60)               # ≈ 0.0091  (rank 50 in one system)
+```
+
+**Practical range:** `[~0.009, ~0.033]`
+
+This has implications for `--min-score` UX: users will not intuitively understand scores of 0.015.
+The recommended approach is to display scores as-is (3 decimal places) and document the range, OR
+normalise to [0, 1] by dividing by the theoretical maximum (2/61 ≈ 0.0328). See "Score Display
+Options" below.
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies (existing — no version changes needed)
+### Core Technologies (no changes)
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| mypy | 1.19.1 (installed) | Static type checking | Already configured with `--strict`; current version; no upgrade needed |
-| ruff | 0.14.13 (installed) | Lint + format | Already configured; current version; no upgrade needed |
-| uv | latest | Package manager | Manages dev dependencies including mypy extras |
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| LanceDB | 0.29.2 | Vector storage + hybrid search + RRF scoring | Unchanged. `_relevance_score` already populated. |
+| Typer | 0.12+ | CLI option parsing | Add `--sort` simplification + `--min-score` option |
+| Rich | 13.7+ | Terminal formatting | Already printing score; format as needed |
+| FastMCP | 2.14.4+ | MCP server | Add `min_score` parameter to `corpus_search` tool |
 
-### Type Stubs — What is Needed
+### No New Libraries Required
 
-| Library | Stub Status | Action Required | Confidence |
-|---------|------------|-----------------|------------|
-| `sqlite-utils 3.39` | Has `py.typed` marker (confirmed in `.venv`) | None — mypy reads types natively | HIGH |
-| `python-frontmatter 1.1.0` | No `py.typed`, no stubs on PyPI | Add `# type: ignore[import-untyped]` to the import line, OR add mypy override | HIGH |
-| `lancedb 0.29.2` | Has `_lancedb.pyi` stub file (confirmed in `.venv`) | None — mypy resolves types natively | HIGH |
-| `fastmcp 3.0.2` | Has `py.typed` marker (confirmed in `.venv`) | None — mypy reads types natively | HIGH |
-| `ollama 0.6.1` | Has `py.typed` marker (confirmed in `.venv`) | None — mypy reads types natively | HIGH |
-| `typer 0.21.1` | Ships `py.typed` (well-typed library) | None | HIGH |
-| `pydantic 2.x` | Ships `py.typed` (fully typed) | None | HIGH |
+Zero new dependencies. All v1.4 changes are pure Python logic over existing infrastructure:
 
-**Summary:** Only `python-frontmatter` requires any stub action. No stub packages need to be
-installed. Do NOT install `types-*` stubs for libraries that already ship `py.typed` — doing so
-causes conflicts and duplicate type information.
+- **Score filtering** — a list comprehension `[r for r in results if score(r) >= min_score]`
+- **Sort by path** — `sorted(results, key=lambda r: r["file_path"])` — already done for other keys
+- **Sort by relevance** — already the default (RRFReranker sorts descending by `_relevance_score`)
+- **API parameters** — adding kwargs to existing function signatures
 
-### pyproject.toml Config Changes Required
+---
 
-#### 1. mypy: Per-module override for python-frontmatter
+## What Changes in Each Layer
 
-The `frontmatter` package does not ship type annotations. The one import in
-`extractors/markdown.py` triggers `[import-untyped]`. Use a mypy override rather than an inline
-`# type: ignore` to keep the source file clean:
+### Layer 1: `search/engine.py` — CorpusSearch.hybrid_search()
 
-```toml
-[[tool.mypy.overrides]]
-module = ["frontmatter"]
-ignore_missing_imports = true
+**Current state:**
+- `sort_by` accepts `"relevance" | "construct" | "confidence" | "date" | "path"` — already implemented
+- No `min_score` parameter
+
+**v1.4 changes needed:**
+- Add `min_score: float = 0.0` parameter
+- Apply score filter AFTER the text-term filter, BEFORE sort:
+  ```python
+  filtered = [r for r in filtered if float(r.get("_relevance_score", 0.0)) >= min_score]
+  ```
+- The `sort_by` values for v1.4 are `"relevance" | "path"` per the milestone spec. The existing
+  `"construct" | "confidence" | "date"` variants already work and should be KEPT — they are not
+  removed. The milestone spec uses `--sort relevance|path` as the user-facing options, but the
+  engine already supports more.
+
+**Score access pattern (verified):**
+```python
+score = float(r.get("_relevance_score", 0.0))
+```
+This is the correct key. It is a `pa.float32()` value that Python casts cleanly to `float`.
+
+### Layer 2: `api/public.py` — search()
+
+**Current state:**
+- `SearchResult.score` is already populated from `_relevance_score`
+- No `sort_by` or `min_score` parameter
+
+**v1.4 changes needed:**
+- Add `sort_by: str = "relevance"` and `min_score: float = 0.0` parameters
+- Pass both through to `engine.hybrid_search()`
+
+### Layer 3: `cli.py` — search_command()
+
+**Current state:**
+- `--sort` option already exists with `"relevance|construct|confidence|date|path"` help text
+- Score already displayed: `score: {result.get('_relevance_score', 0.0):.3f}`
+- No `--min-score` option
+
+**v1.4 changes needed:**
+- Add `--min-score` Typer option (type `float`, default `0.0`)
+- Pass `min_score` to `search.hybrid_search()`
+- The score display format is already correct
+
+### Layer 4: `mcp/server.py` — corpus_search()
+
+**Current state:**
+- `score: float(row.get("_relevance_score", 0.0))` is already in each result dict
+- No `min_score` parameter
+
+**v1.4 changes needed:**
+- Add `min_score: Optional[float] = None` parameter to the `@mcp.tool` function
+- Apply: `if min_score is not None: raw_results = [r for r in raw_results if float(r.get("_relevance_score", 0.0)) >= min_score]`
+
+---
+
+## Score Display Options
+
+Two valid approaches for displaying RRF scores to users:
+
+### Option A: Raw RRF score (recommended)
+
+Display as-is with 3 decimal places: `score: 0.019`
+
+**Why:** Honest representation. Advanced users can reason about the range. Consistent with what
+the API returns in `SearchResult.score`. No normalisation code to maintain.
+
+**Downside:** Range [0.009, 0.033] is not intuitive. Users see `--min-score 0.015` and have no
+mental model for what 0.015 means.
+
+### Option B: Normalised score (0.0 to 1.0)
+
+Divide raw score by theoretical maximum (2 / (1 + K) = 2/61 ≈ 0.0328):
+```python
+MAX_RRF_SCORE = 2.0 / (1 + 60)  # 0.032787
+normalised = score / MAX_RRF_SCORE
 ```
 
-This is the correct approach per mypy docs. The `module` key names the imported package
-(`frontmatter`), not the file containing the import.
+**Why:** Users understand `--min-score 0.5` as "half the maximum relevance". More natural for
+filtering.
 
-#### 2. mypy: Override for llm/ module (legacy untyped code)
+**Downside:** Requires a normalisation constant that changes if RRFReranker K is ever changed.
+Introduces a mismatch between raw `_relevance_score` and what users see.
 
-The `llm/` module has legacy code with missing type annotations (no-untyped-def, no-untyped-call).
-These require code fixes, not config. However, if any functions in `llm/chunked_processor.py` or
-`llm/rewriter.py` are internal helpers that cannot be cleanly typed (e.g., nested functions), use
-inline `# type: ignore[no-untyped-def]` on those specific lines rather than a blanket module
-override. Blanket overrides for entire modules hide real errors in new code.
+**Recommendation:** Use raw scores for v1.4 (Option A). It is simpler, honest, and avoids
+introducing a normalisation constant that could desync. Document the score range in help text:
+`--min-score: Filter results below this RRF relevance score (range ~0.009–0.033, default 0.0 keeps all)`
 
-#### 3. ruff: E501 handling for llm/ module
+---
 
-Ruff does NOT support per-file line-length settings. The only per-file mechanism is
-`per-file-ignores` in `[tool.ruff.lint]`, which suppresses specific rule codes for file
-patterns. The correct approach for `llm/` files with long prompt strings is:
+## LanceDB Native Sorting: Does Not Exist for Hybrid Search
 
-```toml
-[tool.ruff.lint.per-file-ignores]
-"src/corpus_analyzer/llm/*.py" = ["E501"]
-```
+**Finding (verified against LanceDB 0.29.2):**
 
-This ignores E501 (line-too-long) only for `llm/` files. All other rules still apply.
+`LanceHybridQueryBuilder` has NO `sort_by`, `order_by`, or equivalent method. The public methods
+are: `analyze_plan`, `bypass_vector_index`, `create`, `distance_range`, `distance_type`, `ef`,
+`explain_plan`, `limit`, `maximum_nprobes`, `metric`, `minimum_nprobes`, `nprobes`, `offset`,
+`phrase_query`, `refine_factor`, `rerank`, `select`, `text`, `to_arrow`, `to_batches`, `to_df`,
+`to_list`, `to_pandas`, `to_polars`, `to_pydantic`, `to_query_object`, `vector`, `where`,
+`with_row_id`.
 
-**Why not set `line-length = 120` in ruff?** There is no per-file line-length config in ruff
-(verified with official docs). A global increase to 120 would mask real style drift in new code.
-Suppressing E501 in `llm/` is more surgical and better reflects that these are legacy prompt
-strings, not production code style.
+The existing implementation of post-retrieval Python sorting in `engine.py` is therefore the
+CORRECT approach. There is no LanceDB-native alternative.
 
-**E501 violations in non-llm/ files (78 violations):** These are in `cli.py` (45),
-`classifiers/document_type.py` (11), `generators/advanced_rewriter.py` (9), and others. These
-must be manually fixed by breaking long lines — they cannot be ignored without degrading style
-enforcement on the active codebase.
+**RRFReranker already sorts descending by `_relevance_score` before returning results.** The
+`"relevance"` sort mode in `hybrid_search()` already works correctly — it is the default
+ordering from the reranker and requires no additional sorting step.
 
-#### 4. ruff: Exclude .windsurf/ and other non-project directories
+---
 
-If ruff is currently checking files outside `src/` (e.g., `.windsurf/skills/`), add an exclude:
+## LanceDB Native Score Filtering: Does Not Exist
 
-```toml
-[tool.ruff]
-exclude = [".windsurf", ".planning", "*.windsurf"]
-```
+`LanceHybridQueryBuilder` has no `where` predicate that can reference `_relevance_score`. The
+`where()` method filters on stored table columns (schema fields). `_relevance_score` is a
+computed column added by the reranker after retrieval — it is not a stored column and cannot be
+used in a pre-retrieval SQL predicate.
 
-The current `ruff check .` run surfaces violations in `.windsurf/skills/api-design-principles/`.
-These are not project code. Excluding them keeps CI output clean and focused on `src/`.
+**Conclusion:** `--min-score` filtering MUST be implemented as post-processing in Python. This is
+correct and sufficient — the result set is already limited by `limit` before the score filter
+applies, so the filter operates on at most `limit` rows (typically 10).
 
-### mypy Error Categories and Required Fixes
+---
 
-All 42 mypy errors require code changes (not config). Here is the breakdown with fix strategy:
+## Implementation Pattern: min_score Filter
 
-| Error Type | Count | Files | Fix |
-|-----------|-------|-------|-----|
-| `[union-attr]` — `db["table"]` returns `Table \| View` | 7 | `core/database.py` | Cast: `cast(Table, self.db["tablename"])` after importing `from sqlite_utils.db import Table` and `from typing import cast` |
-| `[no-any-return]` — returning `Any` from typed function | 6 | `core/database.py`, `llm/ollama_client.py` | Add explicit return type cast or assert |
-| `[type-arg]` — missing type params on `dict`/`list` | 6 | `core/database.py`, `extractors/markdown.py`, `analyzers/shape.py` | Change `dict` → `dict[str, Any]`, `list` → `list[str]` etc. |
-| `[no-untyped-def]` — missing annotations | 5 | `llm/chunked_processor.py`, `utils/ui.py`, `llm/rewriter.py` | Add full type annotations to affected functions |
-| `[no-untyped-call]` — calling untyped function | 8 | `llm/chunked_processor.py` | Fix by annotating `finalize_atom`, `chain_lines`, `get_chunk_text` |
-| `[import-untyped]` — frontmatter has no stubs | 1 | `extractors/markdown.py` | mypy override (see config above) |
-| `[abstract]` — instantiating abstract class | 1 | `extractors/__init__.py` | Fix BaseExtractor instantiation |
-| `[operator]` — bad tuple + str operation | 1 | `llm/rewriter.py` | Fix type mismatch |
-| `[attr-defined]` — OllamaClient has no .db | 1 | `llm/rewriter.py` | Fix incorrect attribute access |
-| `[var-annotated]` — untyped variable | 1 | `ingest/chunker.py` | Add type annotation |
-| `[arg-type]` — float() arg type mismatch | 2 | `core/database.py` | Cast or guard with `assert` |
-
-**The `[union-attr]` errors in database.py** are all caused by `sqlite_utils.Database.__getitem__`
-returning `Table | View`. The fix is to cast the result to `Table`:
+Apply at the innermost layer (engine) for consistency across CLI, API, and MCP:
 
 ```python
-from sqlite_utils.db import Table
-from typing import cast
-
-cast(Table, self.db["documents"]).update(doc_id, data, alter=True)
+# In CorpusSearch.hybrid_search(), after text-term filter, before sort:
+if min_score > 0.0:
+    filtered = [
+        r for r in filtered
+        if float(r.get("_relevance_score", 0.0)) >= min_score
+    ]
 ```
 
-Or use a helper property that casts once per table.
-
----
-
-## Installation Changes
-
-No new packages required. All needed type stubs either ship with existing packages or are handled
-via config. The only `pyproject.toml` dev dependency change is ensuring mypy version is current:
-
-```toml
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
-    "ruff>=0.4.0",
-    "mypy>=1.9.0",
-]
-```
-
-Current installed versions (mypy 1.19.1, ruff 0.14.13) are both current as of 2026-02-24. No
-version bumps needed.
-
-**Do NOT install:**
-- `types-python-frontmatter` — does not exist on PyPI (verified)
-- `types-sqlite-utils` — does not exist on PyPI; sqlite-utils ships `py.typed` natively
-- Any other `types-*` stub package for this project's dependencies — all other deps are typed
-
----
-
-## Alternatives Considered
-
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| mypy `[[overrides]]` for frontmatter | Inline `# type: ignore[import-untyped]` | Use inline if the import is in only one place and the override feels heavy; either is valid |
-| `per-file-ignores = ["E501"]` for llm/ | Rewrite all long prompt strings to wrap at 100 chars | Acceptable if you want strict consistency; but multi-line f-strings for LLM prompts are harder to read when force-wrapped |
-| Cast to `Table` explicitly | Per-method `# type: ignore[union-attr]` on each db call | Use inline ignores only if cast is impractical (e.g., dynamic table name); cast is cleaner |
-| Exclude `.windsurf/` via ruff config | Run `ruff check src/` instead of `ruff check .` | Running on `src/` only works but IDE tooling usually runs on `.`; config exclude is more robust |
+Applying it at the engine layer means:
+- CLI, API, and MCP all get filtering for free
+- MCP does not need a duplicate filter (though it can still apply one as a belt-and-suspenders)
+- Tests can verify filtering behaviour at the engine level
 
 ---
 
@@ -177,71 +247,46 @@ version bumps needed.
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `mypy --ignore-missing-imports` globally | Hides real import errors across entire codebase; defeats purpose of strict mode | `[[tool.mypy.overrides]]` per-module |
-| `disallow_untyped_defs = false` in mypy overrides for llm/ | Hides future type errors in new code added to llm/ | Fix the specific untyped functions individually |
-| Global `ignore = ["E501"]` in ruff | Turns off line-length checking for all new code | `per-file-ignores` scoped to `llm/` only |
-| `types-*` stub packages for typed libraries | Conflicts with `py.typed` in the library itself; mypy warns about duplicate stubs | Nothing — let mypy use the library's own types |
-| Upgrading mypy or ruff versions as part of this milestone | Risk of new errors being introduced; current versions already surface all 42 errors | Pin current versions; upgrade is a separate milestone |
+| New LanceDB API calls for sorting | `LanceHybridQueryBuilder` has no sort_by — verified | Post-processing Python sort (already implemented) |
+| Score normalisation to [0, 1] | Adds a fragile constant tied to K=60; confusing if K changes | Display raw RRF scores with range documentation |
+| `_relevance_score` as a stored LanceDB column | It is computed per-query by the reranker; storing it makes no sense | Read from query result dict |
+| Pandas for score filtering | overkill for ≤10 rows of post-processing | Plain list comprehension |
+| Third-party rerankers (ColBERT, cross-encoders) | Out of scope; adds Ollama/GPU dependency | RRFReranker is correct for this use case |
+| `--sort` values beyond relevance/path for v1.4 | Milestone spec only requires `relevance|path`; others already work | Keep existing sort_by values; don't break them |
 
 ---
 
-## Pyproject.toml Target State
+## Alternatives Considered
 
-Complete `[tool.mypy]` and `[tool.ruff]` sections after v1.3:
-
-```toml
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-src = ["src", "tests"]
-exclude = [".windsurf", ".planning"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-
-[tool.ruff.lint.per-file-ignores]
-"src/corpus_analyzer/llm/*.py" = ["E501"]
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
-warn_return_any = true
-warn_unused_ignores = true
-
-[[tool.mypy.overrides]]
-module = ["frontmatter"]
-ignore_missing_imports = true
-```
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Post-processing Python sort | LanceDB native sort_by | Native would be better for large result sets, but doesn't exist for hybrid search |
+| Raw RRF score display | Normalised 0–1 score | Use normalisation if UX testing shows users are confused by 0.019 scores |
+| Single min_score filter in engine | Duplicate filter in engine + MCP | Redundant. Engine layer is sufficient. MCP can add its own if it needs to override engine behaviour. |
+| `min_score: float = 0.0` default | `min_score: float | None = None` | `None` is fine too, but `0.0` avoids a None check and is semantically identical (0.0 keeps all results) |
 
 ---
 
 ## Version Compatibility
 
-| Package | Installed | Status | Notes |
-|---------|-----------|--------|-------|
-| mypy | 1.19.1 | Current | No upgrade needed |
-| ruff | 0.14.13 | Current | No upgrade needed |
-| sqlite-utils | 3.39 | Current, has `py.typed` | `[union-attr]` errors are code issues, not missing stubs |
-| python-frontmatter | 1.1.0 | Current, no stubs | Handle via mypy override |
-| lancedb | 0.29.2 | Has `_lancedb.pyi` | No stub action needed |
-| fastmcp | 3.0.2 | Has `py.typed` | No stub action needed |
-| ollama | 0.6.1 | Has `py.typed` | No stub action needed |
+| Package | Version | Verified Against | Notes |
+|---------|---------|-----------------|-------|
+| lancedb | 0.29.2 | Source code inspected | `_relevance_score` in results: YES. Native sort_by: NO. Score filter predicate: NO. |
+| RRFReranker | ships with lancedb | Source code inspected | Default K=60, return_score="relevance"; score range [0.009, 0.033] |
 
 ---
 
 ## Sources
 
-- Live tool output: `uv run mypy src/` — 42 errors in 9 files (HIGH, direct measurement)
-- Live tool output: `uv run ruff check src/` — 396 errors, 270 auto-fixable (HIGH, direct measurement)
-- Installed package inspection: `.venv/lib/python3.12/site-packages/` — confirmed `py.typed` presence in sqlite_utils, fastmcp, ollama; confirmed `_lancedb.pyi` in lancedb; confirmed absence in frontmatter (HIGH)
-- PyPI check: `types-python-frontmatter` — package does not exist (HIGH, verified via uv pip install --dry-run)
-- PyPI check: `types-sqlite-utils` — package does not exist; sqlite-utils ships own types (HIGH, verified)
-- https://github.com/simonw/sqlite-utils/issues/331 — py.typed added to sqlite-utils; resolves mypy import errors (HIGH)
-- https://docs.astral.sh/ruff/settings/#lint_per-file-ignores — per-file-ignores syntax; confirmed no per-file line-length setting exists (HIGH)
-- https://mypy.readthedocs.io/en/stable/config_file.html — `[[tool.mypy.overrides]]` TOML syntax confirmed (HIGH)
-- sqlite_utils source: `.venv/.../sqlite_utils/db.py:425` — `__getitem__` returns `Union["Table", "View"]`; confirms cast strategy (HIGH)
+- `LanceHybridQueryBuilder` source (lancedb 0.29.2 installed) — confirmed no sort_by, confirmed to_list() returns dicts with `_relevance_score` key (HIGH)
+- `RRFReranker.rerank_hybrid` source (lancedb 0.29.2 installed) — confirmed `_relevance_score` column appended as `pa.float32()`, kept in `return_score="relevance"` mode (HIGH)
+- `src/corpus_analyzer/search/engine.py` — confirmed `sort_by` already implemented for 5 sort modes; `_VALID_SORT_VALUES` frozenset (HIGH)
+- `src/corpus_analyzer/api/public.py` line 116 — confirmed `SearchResult.score = float(r.get("_relevance_score", 0.0))` (HIGH)
+- `src/corpus_analyzer/mcp/server.py` line 95 — confirmed `score: float(row.get("_relevance_score", 0.0))` in MCP result dicts (HIGH)
+- `src/corpus_analyzer/cli.py` line 366 — confirmed score display already present (HIGH)
+- Mathematical derivation: RRF score range [0.009, 0.033] with K=60 (HIGH)
 
 ---
 
-*Stack research for: Corpus v1.3 — zero-error mypy + ruff linting baseline*
+*Stack research for: Corpus v1.4 — Search Precision (score display, sort, min-score filtering)*
 *Researched: 2026-02-24*

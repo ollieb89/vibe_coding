@@ -1,285 +1,159 @@
 # Pitfalls Research
 
-**Domain:** Adding strict mypy + ruff compliance to an existing Python codebase (v1.3 code quality milestone)
+**Domain:** Adding sort/filter/score controls to an existing hybrid search system (LanceDB + RRF + Typer CLI + FastMCP)
 **Researched:** 2026-02-24
-**Confidence:** HIGH (verified against actual codebase errors and tool behavior)
+**Confidence:** HIGH (code inspected directly; RRF score behaviour confirmed via Azure AI Search official docs and LanceDB docs)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: B006 Fix Breaks Typer List Defaults
+### Pitfall 1: Treating RRF Score as an Absolute, Cross-Query Threshold
 
 **What goes wrong:**
-Ruff flags `B006` on Typer CLI commands that use list literals as default argument values. The auto-fix suggestion ("Replace with `None`; initialize within function") changes CLI behavior: the `--help` output loses the default value display, and the type annotation must change from `list[str]` to `list[str] | None`, forcing callers to handle `None` explicitly. If the function body doesn't guard for `None`, it crashes at runtime.
-
-**The actual violation in this codebase (`cli.py` lines 60-61):**
-```python
-include: Annotated[list[str], typer.Option("--include")] = ["**/*"],
-exclude: Annotated[list[str], typer.Option("--exclude")] = [],
-```
-Ruff says: "Replace with `None`; initialize within function." But Typer reads the default value to populate `--help` output. Switching to `None` removes the default display.
+A developer sets `--min-score 0.02` expecting it to reliably filter noise across all queries. It filters nothing on query A (all results score 0.03–0.05) and filters everything on query B (all results score 0.008–0.015). The threshold carries no stable meaning across different queries or index states.
 
 **Why it happens:**
-B006 is correct for general Python (mutable default = shared state bug). But Typer is a special case: it reads the default at function-definition time for metadata purposes (help text, type inference), and Typer's `Option` and `Argument` wrappers handle the actual call-time default correctly — the mutable default is read once at parse time, not mutated.
+RRF score is computed as `Σ 1 / (k + rank_i)` — a rank-fusion formula, not a similarity measure. With LanceDB's default `k=60` and two search methods (vector + BM25), the theoretical maximum for any single document is approximately `1/61 + 1/61 ≈ 0.033`. The actual observed range depends on how many sub-query results come back, which varies by query term specificity, index size, and filter predicates.
+
+Concretely: at `--limit 10`, score distribution compresses into the top of the range. At `--limit 50`, it spreads. A threshold calibrated on one query at one limit will misfire at a different limit or on a different query. This is confirmed by Azure AI Search documentation: "The upper limit is bounded by the number of queries being fused, with each query contributing a maximum of approximately 1/k to the RRF score."
 
 **How to avoid:**
-Use `# noqa: B006` on the specific lines, with a comment explaining why:
-```python
-include: Annotated[list[str], typer.Option("--include")] = ["**/*"],  # noqa: B006 — Typer reads default for --help
-exclude: Annotated[list[str], typer.Option("--exclude")] = [],          # noqa: B006 — Typer reads default for --help
-```
-Alternative: use `per-file-ignores` in `pyproject.toml` for `cli.py`:
-```toml
-[tool.ruff.lint.per-file-ignores]
-"src/corpus_analyzer/cli.py" = ["B006"]
-```
-Do NOT apply the naive fix of replacing with `None` — this requires changing the type annotation, adding a guard `if include is None: include = ["**/*"]`, and the `--help` output no longer shows the default. Verified: Typer renders `["**/*"]` in `--help` when the list literal is the default; it renders nothing useful when `None` is the default.
+- Document the score range in help text: `"Score is an RRF rank-fusion value (typically 0.005–0.033 with 2 sub-queries). Not a percentage. Not comparable across different queries or different --limit values."`
+- Default `--min-score` to `0.0` (no filtering). It is an expert knob.
+- Never recommend a threshold value in docs. Tell users to run the query without `--min-score`, observe the score column, then calibrate.
+- Apply `min_score` filtering as a Python list comprehension _after_ `.to_list()` returns — do not try to use it as a LanceDB `.where()` predicate (see Pitfall 4).
 
 **Warning signs:**
-- Ruff suggests "Replace with `None`; initialize within function" on a Typer command parameter.
-- The parameter has type `list[str]` (not `list[str] | None`).
+- `--min-score 0.01` returns 0 results on some queries and all results on others
+- Tests for `min_score` written against hardcoded score values that were calibrated at one specific `--limit`
 
-**Phase to address:**
-Phase 1 (ruff auto-fix pass) — apply `# noqa: B006` before running `--fix`, or handle these manually after the auto-fix pass.
+**Phase to address:** Whichever phase ships `--min-score`. The score range caveat must appear in help text from the first commit.
 
 ---
 
-### Pitfall 2: sqlite-utils `Table | View` Union Causes Cascading mypy Errors
+### Pitfall 2: Exact-Set Test on `SearchResult` Fields Blocks Every New Field Addition
 
 **What goes wrong:**
-`sqlite_utils.Database.__getitem__` is typed to return `Table | View` (as confirmed from the sqlite-utils source). `View` does not have `delete_where`, `update`, or `insert` methods — only `Table` does. mypy correctly rejects any call to these methods on the `Table | View` union type. This generates 9 errors from `core/database.py` alone, all from `self.db["table_name"].some_method(...)`.
+Adding `sort_by: str` or `min_score: float` to `SearchResult` immediately fails the existing test at `tests/api/test_public.py:18`:
+
+```python
+assert field_names == {"path", "file_type", "construct_type", "summary", "score", "snippet"}
+```
+
+This uses `==` (exact set match), not a superset check. Any new field on `SearchResult` causes a test failure even if all existing callers still work correctly. The test suite goes red before any feature is usable.
 
 **Why it happens:**
-sqlite-utils' own type annotations are correct: `db["name"]` can return a View if that name corresponds to a view. The code never creates views, but mypy doesn't know that from the type alone. The pattern `self.db["documents"].insert(...)` is perfectly valid at runtime but fails type checking.
+The test is a correct API contract test — it enforces the declared public surface. It is behaving as designed. The problem is that developers add a field without updating the test in the same commit, then are surprised when CI fails.
 
 **How to avoid:**
-Cast the result to `Table` at the access point. The cleanest approach is a private helper method:
-```python
-from sqlite_utils.db import Table
-
-def _table(self, name: str) -> Table:
-    """Return a Table reference, narrowing away the View union type."""
-    result = self.db[name]
-    assert isinstance(result, Table)  # always true — we never create Views
-    return result
-```
-Then replace `self.db["documents"].insert(...)` with `self._table("documents").insert(...)` throughout. This is cleaner than sprinkling `# type: ignore[union-attr]` on every call site (9 occurrences). The `assert isinstance` is transparent to mypy and costs nothing at runtime for a local tool.
-
-Alternative (if you want zero runtime assertions): use `cast(Table, self.db[name])` from `typing`. This is less safe but avoids the runtime check.
-
-Do NOT use `# type: ignore[union-attr]` on every individual call — this defeats the purpose of type checking and leaves a mess.
+- When adding fields to `SearchResult`, update this test in the same commit. It is a required coupling, not an optional cleanup.
+- Make new fields optional with defaults: `sort_key: str = "relevance"` so existing positional-arg callers do not break at instantiation.
+- Never add a required (no-default) positional field to `SearchResult` — it would break all existing call sites that construct the dataclass directly.
+- The test at line 24 uses keyword arguments, so field order does not matter for construction. But the exact-set check at line 18 still requires updating.
 
 **Warning signs:**
-- Multiple `error: Item "View" of "Table | View" has no attribute X [union-attr]` errors in the same file.
-- All originate from `self.db["tablename"].method(...)` patterns.
+- A PR adds a field to `SearchResult` without touching `tests/api/test_public.py` — CI fails immediately.
 
-**Phase to address:**
-Phase 2 (mypy fixes — database layer) — address all sqlite-utils union errors together using the helper method pattern.
+**Phase to address:** API parity phase (when `sort_by` / `min_score` are added to `search()`).
 
 ---
 
-### Pitfall 3: `# type: ignore` Over-Use Defeats the Baseline Goal
+### Pitfall 3: API Surface Left Behind When CLI and MCP Are Implemented First
 
 **What goes wrong:**
-Under time pressure, developers silence mypy errors with `# type: ignore` comments rather than fixing the underlying issue. The zero-error baseline is achieved numerically but the type safety is gone. Future code that builds on the `# type: ignore`'d function gets no type checking. `mypy --strict` with `warn_unused_ignores = true` (already set in `pyproject.toml`) will flag unnecessary ignores later, but only if the underlying code is fixed — until then, the ignores accumulate silently.
+The CLI grows `--sort` and `--min-score` flags. The MCP server grows `min_score`. Users calling `from corpus_analyzer.api.public import search` get none of these controls. The three surfaces diverge. This is explicitly a v1.4 failure mode — requirements state API and MCP parity are required.
 
 **Why it happens:**
-Some mypy errors are genuinely hard to fix (especially `no-any-return` from third-party libraries without stubs). The path of least resistance is `# type: ignore`. A milestone that counts "zero mypy errors" as success creates incentive to suppress rather than fix.
+The gap already exists for `sort_by` in the current codebase. `api/public.py:search()` does not accept or pass `sort_by`, even though `engine.hybrid_search()` already supports it (added as part of v1.2/v1.3 engine work). It is easy to implement CLI + MCP and declare "done" without threading the same parameters through the Python API.
+
+Current gap (confirmed by code inspection):
+
+```python
+# api/public.py lines 103-109 — sort_by is absent
+raw = engine.hybrid_search(
+    query,
+    source=source,
+    file_type=file_type,
+    construct_type=construct_type,
+    limit=limit,
+    # sort_by silently defaults to "relevance"
+    # min_score not implemented at all
+)
+```
 
 **How to avoid:**
-Establish a hierarchy for resolving mypy errors:
-1. **Fix the code** — add the annotation, narrow the type, add an `isinstance` guard.
-2. **Use a typed alternative** — e.g., `cast()`, a helper method that narrows the type (see sqlite-utils pitfall above).
-3. **Install a stub package** — `pip install types-X` if one exists (check typeshed).
-4. **Add `ignore_missing_imports = true` for a specific module** — better than `# type: ignore` at every call site.
-5. **Use `# type: ignore[specific-code]`** — narrow ignores are better than bare `# type: ignore`.
-6. **Never use bare `# type: ignore`** — always specify the error code.
-
-Track every `# type: ignore` comment added during the pass with a `# TODO: remove when stubs available` annotation.
+- Implement all three surfaces (CLI, API, MCP) in the same phase, not sequentially.
+- Add an integration test that calls `api.public.search(sort_by="path")` and verifies results are path-sorted. This test will catch the gap at CI time before it reaches users.
+- Treat the v1.4 requirements checklist literally: "Python `search()` API accepts `sort_by` and `min_score` parameters" is a pass/fail requirement, not a stretch goal.
 
 **Warning signs:**
-- More than 2-3 `# type: ignore` comments added per file.
-- Bare `# type: ignore` without an error code.
-- `# type: ignore` on a function return statement (usually indicates `no-any-return` that should be fixed with a cast or annotation).
+- Phase plan says "CLI and MCP done, API to follow" — do not accept this as an acceptable split.
+- No test asserts that `api.public.search(sort_by=...)` changes result ordering.
 
-**Phase to address:**
-All phases — establish the hierarchy as a rule before starting. Review all added `# type: ignore` comments in a final pass.
+**Phase to address:** Implement all three call sites atomically. Do not phase them separately.
 
 ---
 
-### Pitfall 4: `python-frontmatter` Has No Type Stubs — Wrong Fix Applied
+### Pitfall 4: `min_score` Implemented as LanceDB `.where()` Predicate (Runtime Error)
 
 **What goes wrong:**
-mypy reports `error: Skipping analyzing "frontmatter": module is installed, but missing library stubs or py.typed marker [import-untyped]`. The naive fix is `# type: ignore[import-untyped]` at the import site. This silences the error but leaves the entire `frontmatter` module typed as `Any`, so any attribute access on `frontmatter` objects is untyped. The second option — adding `ignore_missing_imports = true` globally — suppresses the error for all untyped modules, not just frontmatter.
+A developer writes:
+```python
+builder = builder.where(f"_relevance_score >= {min_score}")
+```
+This either fails silently (returns all results, ignoring the filter) or raises a LanceDB error at runtime. LanceDB `.where()` operates on stored schema columns only. `_relevance_score` is a computed column injected by `RRFReranker` after retrieval — it does not exist in the `ChunkRecord` schema and cannot be referenced in a filter predicate.
 
 **Why it happens:**
-`python-frontmatter` does not ship a `py.typed` marker and there is no `types-python-frontmatter` stub package on PyPI (verified 2026-02-24). The library is small and its interface is stable, making inline type stubs a viable option.
+Developers familiar with SQL assume any field that appears in results can be used in a filter. LanceDB's query builder separates pre-retrieval filters (`.where()` on schema columns) from post-retrieval computations (reranker-injected fields like `_relevance_score`). The field name starts with `_` as a signal that it is synthetic, but this convention is not documented prominently.
 
 **How to avoid:**
-Use a `mypy` config section to suppress just this module, not globally:
-```toml
-[[tool.mypy.overrides]]
-module = "frontmatter"
-ignore_missing_imports = true
-```
-This is cleaner than `# type: ignore` at the import line and scoped to only the frontmatter module. In the file that uses frontmatter, annotate the return type explicitly based on known behavior:
+Apply `min_score` as a Python list comprehension after `.to_list()`, after the existing text-term filter:
+
 ```python
-import frontmatter  # type: ignore[import-untyped]
-post: frontmatter.Post = frontmatter.load(str(file_path))
+results = [dict(row) for row in builder.limit(limit).to_list()]
+
+# Existing text-term filter (do not change order)
+filtered = [r for r in results if any(term in str(r.get("text", "")).lower() for term in query_terms)]
+
+# New min_score filter (after text-term filter)
+if min_score > 0.0:
+    filtered = [r for r in filtered if float(r.get("_relevance_score", 0.0)) >= min_score]
 ```
-Do NOT add `ignore_missing_imports = true` to the global `[tool.mypy]` section — this would suppress errors for all untyped third-party modules.
+
+Order matters: apply `min_score` after the text-term filter so that the text-matching semantics of the existing behaviour are preserved.
 
 **Warning signs:**
-- `ignore_missing_imports = true` added globally.
-- Any module other than `frontmatter` getting a bare `# type: ignore[import-untyped]`.
+- Implementation uses `.where(f"_relevance_score >= {min_score}")` — will fail at runtime or be silently ignored.
+- `min_score` filter applied before the text-term filter — changes observable filtering semantics.
 
-**Phase to address:**
-Phase 2 (mypy fixes — extractors) — handle the frontmatter import as a module-level override in `pyproject.toml`.
+**Phase to address:** Engine modification phase (when `min_score` is added to `hybrid_search()`).
 
 ---
 
-### Pitfall 5: F401 Auto-Fix Removes Re-Exported Symbols from `__init__.py`
+### Pitfall 5: MCP Tool Signature Change Breaks Cached Schema in Claude Code
 
 **What goes wrong:**
-Ruff's `--fix` for F401 removes "unused" imports from `__init__.py` files. But imports in `__init__.py` that are listed in `__all__` are intentional re-exports — they form the public API surface. If ruff removes them, external code doing `from corpus_analyzer.ingest import chunk_file` breaks at runtime with `ImportError`.
+Adding `min_score: Optional[float] = None` to `corpus_search()` changes the FastMCP-generated JSON schema for the tool. Claude Code sessions that cached the old schema will show the old tool signature (no `min_score` parameter) until the MCP server is restarted and the session is refreshed. Users may not notice the new parameter is available.
 
-**The actual pattern in this codebase:**
-```python
-# ingest/__init__.py — re-exports chunk_file as public API
-from corpus_analyzer.ingest.chunker import chunk_file, chunk_lines, chunk_markdown, chunk_python
-__all__ = ["chunk_file", "chunk_lines", "chunk_markdown", "chunk_python"]
-```
-If nothing in `ingest/__init__.py` itself calls `chunk_file`, ruff F401 sees it as "unused" and removes it.
+Additionally: a known FastMCP issue (GitHub issue #1015) shows that optional parameters with default values are sometimes parsed incorrectly at the MCP boundary — the default value gets replaced with `None` rather than the declared default. For `min_score: Optional[float] = None`, this is not a problem (None is already the intended default). But it is worth verifying with a live test after implementation.
 
 **Why it happens:**
-Ruff F401 follows the letter of Python's "unused import" rule. It has an exemption: `__all__` mentions suppress F401. But this only works if the import and `__all__` entry are in the same file, and ruff correctly detects the `__all__` reference. In practice, ruff does correctly handle `__all__` — but only if `--fix` is run; the `--select F401` output may still flag them. Verify before auto-fixing.
+MCP tool schemas are derived at server startup from the decorated function signature. Adding a parameter requires a server restart to take effect. Claude Code and other MCP clients cache the tool schema for the lifetime of a session.
+
+The noqa concern: the existing codebase uses `Optional[str]` with `# noqa: UP045` on every parameter in `corpus_search()`. If a new parameter is added without the noqa comment, `uv run ruff check .` will fail CI because ruff UP045 flags `Optional[X]` as non-idiomatic (use `X | None` instead). But changing existing parameters to `X | None` is also a diff risk if it changes FastMCP's schema generation behaviour.
 
 **How to avoid:**
-Before running `ruff --fix`, audit every F401 in `__init__.py` files manually:
-```bash
-uv run ruff check . --select F401 2>&1 | grep "__init__"
-```
-For any `__init__.py` that has F401 violations, verify whether the import is listed in `__all__`. If it is: the symbol is a re-export; add `# noqa: F401` or verify ruff handles it automatically. If it is not in `__all__` and not used: safe to remove.
-
-The existing `__init__.py` files in this codebase (`ingest/`, `config/`, `llm/`, `analyzers/`, `classifiers/`, `core/`, `extractors/`) all use `__all__` re-exports. Ruff correctly exempts them — but verify after `--fix` that the re-exports are still present and `python -c "from corpus_analyzer.ingest import chunk_file"` still works.
+- Follow the existing pattern exactly: `min_score: Optional[float] = None,  # noqa: UP045`
+- After implementing, restart Claude Code to pick up the updated schema.
+- Test the MCP tool with `min_score=None` (default path) and `min_score=0.01` (filtering path) to confirm no type errors at the tool boundary.
+- Do not change existing parameter annotations from `Optional[X]` to `X | None` in the same PR — it is an unnecessary diff risk.
 
 **Warning signs:**
-- F401 violation on an import that appears in `__all__` in the same file.
-- After `--fix`, `ImportError` when importing from a package-level `__init__.py`.
+- `uv run ruff check .` fails on the new parameter (missing `# noqa: UP045`).
+- MCP tool works in pytest but the live Claude Code tool still shows the old signature (restart required).
 
-**Phase to address:**
-Phase 1 (ruff auto-fix pass) — run F401 audit on `__init__.py` files before applying fixes.
-
----
-
-### Pitfall 6: mypy ABC + `dict.get()` Pattern Produces False "Cannot Instantiate Abstract Class" Error
-
-**What goes wrong:**
-`extractors/__init__.py` uses a dict-dispatch pattern:
-```python
-extractors = {
-    ".md": MarkdownExtractor,
-    ".py": PythonExtractor,
-}
-extractor_class = extractors.get(suffix)
-if extractor_class:
-    extractor = extractor_class()  # line 34 — mypy error here
-```
-mypy reports `error: Cannot instantiate abstract class "BaseExtractor" with abstract attribute "extract" [abstract]`. This is a mypy false positive: `MarkdownExtractor` and `PythonExtractor` both implement `extract` — they are not abstract. But mypy infers the dict values as `type[BaseExtractor]` (the common base type) and then refuses to call it because `BaseExtractor` is abstract.
-
-**Why it happens:**
-mypy resolves dict value types to their common base. `dict[str, type[MarkdownExtractor] | type[PythonExtractor]]` — the union of these two concrete types is `type[BaseExtractor]` when mypy computes the dict's value type. When `.get()` returns `type[BaseExtractor] | None`, the `if extractor_class:` guard narrows away `None` but leaves `type[BaseExtractor]`, which mypy refuses to instantiate because `BaseExtractor` has abstract methods.
-
-**How to avoid:**
-The cleanest fix is to annotate the dict explicitly with a concrete type alias:
-```python
-from typing import type
-
-ExtractorType = type[MarkdownExtractor] | type[PythonExtractor]
-extractors: dict[str, ExtractorType] = {
-    ".md": MarkdownExtractor,
-    ".py": PythonExtractor,
-}
-extractor_class: ExtractorType | None = extractors.get(suffix)
-if extractor_class:
-    extractor = extractor_class()  # mypy now knows it's a concrete type
-```
-Alternatively, restructure as a chain of `if/elif` checks — mypy narrows each branch correctly. The `# type: ignore[abstract]` approach works but is a last resort — it silences the error without communicating intent.
-
-**Warning signs:**
-- `error: Cannot instantiate abstract class "BaseExtractor" [abstract]` on a line that is actually calling a concrete subclass.
-- The pattern involves a dict with ABC subclasses as values and `.get()` followed by a call.
-
-**Phase to address:**
-Phase 2 (mypy fixes — extractors) — fix the dict type annotation before addressing other extractor errors.
-
----
-
-### Pitfall 7: `no-any-return` from sqlite-utils Row Access
-
-**What goes wrong:**
-sqlite-utils `execute().fetchone()` returns `Any`. When the result is used to return an `int` (e.g., `return self.db.execute("SELECT last_insert_rowid()").fetchone()[0]`), mypy reports `error: Returning Any from function declared to return "int" [no-any-return]`. Suppressing this with `# type: ignore` is tempting but incorrect — the real fix is a cast.
-
-**Why it happens:**
-`sqlite_utils.Database.execute()` returns `sqlite3.Cursor`, and `cursor.fetchone()` returns `tuple[Any, ...] | None`. The `[0]` index gives `Any`. mypy's `no-any-return` rule (part of `--strict`) catches this.
-
-**How to avoid:**
-Use `cast` from `typing` at the return site:
-```python
-from typing import cast
-
-row = self.db.execute("SELECT last_insert_rowid()").fetchone()
-return cast(int, row[0])
-```
-Or add a guard for the `None` case (which can happen if the table is empty):
-```python
-row = self.db.execute("SELECT last_insert_rowid()").fetchone()
-if row is None:
-    raise RuntimeError("Insert failed: no row ID returned")
-return int(row[0])
-```
-The `int(row[0])` call also satisfies mypy because `int()` is typed to return `int` regardless of the argument type (it accepts `Any`). This pattern is already partially used in `database.py` line 318 — extend it consistently.
-
-**Warning signs:**
-- Multiple `Returning Any from function declared to return "int" [no-any-return]` errors in database layer code.
-- `fetchone()[0]` used as a direct return value.
-
-**Phase to address:**
-Phase 2 (mypy fixes — database layer) — address alongside the `union-attr` sqlite-utils errors.
-
----
-
-### Pitfall 8: Ruff `--fix` on E501 (Line Too Long) Breaks Code
-
-**What goes wrong:**
-E501 is not auto-fixable (confirmed: `[ ]` marker in `ruff --statistics`). If someone manually wraps lines to fix E501, breaking a string literal or a chained method call incorrectly introduces a syntax error or changes the string value.
-
-**Why it happens:**
-E501 requires human judgment to fix — wrapping options depend on whether the content is a string (needs explicit concatenation or parentheses), a function call (needs parentheses around args), a comment (just wrap), or an import (use `(` multiline `)`). Auto-wrapping tools like Black do this correctly, but ruff's formatter (not linter) would need to be enabled.
-
-**Specific risk in this codebase:**
-`cli.py` has Typer-annotated parameters with long lines (the Annotated type + typer.Option + help string together exceed 100 chars frequently — the B006 violation was on line 60 which is 105+ chars). Breaking these lines requires care to keep the `Annotated[...]` and `typer.Option(...)` readable.
-
-**How to avoid:**
-Fix E501 manually, file by file. Use parentheses for implicit string concatenation in long strings, and parentheses around multi-argument function calls. For the `llm/` module: the PROJECT.md specifies a 120-char override — add this to `pyproject.toml` as a per-file override before fixing, to avoid having to re-fix those lines later:
-```toml
-[tool.ruff.lint.per-file-ignores]
-"src/corpus_analyzer/llm/*.py" = ["E501"]
-```
-Or configure a per-directory line length:
-```toml
-[[tool.ruff.per-file-target]]  # not supported — use per-file-ignores E501 instead
-```
-Verify: `ruff` supports `per-file-ignores` for E501. Use `# noqa: E501` on lines in `llm/` that exceed 100 but are within 120 chars.
-
-**Warning signs:**
-- Someone runs `ruff --fix` and E501 count doesn't decrease (correct behavior).
-- Manual line wraps in string literals change the actual string content.
-- 104 E501 violations in total — none in `src/` (all in non-src files based on current output), but the `cli.py` Annotated parameters are close to the limit.
-
-**Phase to address:**
-Phase 1 (ruff auto-fix pass) — set up `llm/` per-file config before any manual E501 fixes begin.
+**Phase to address:** MCP parity phase.
 
 ---
 
@@ -287,11 +161,11 @@ Phase 1 (ruff auto-fix pass) — set up `llm/` per-file config before any manual
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Bare `# type: ignore` without error code | Silences mypy instantly | Hides which error was suppressed; `warn_unused_ignores` won't work when code changes | Never — always use `# type: ignore[specific-code]` |
-| Global `ignore_missing_imports = true` in mypy config | Silences all untyped import warnings | Hides future import errors for typed packages; defeats strict mode | Never — use `[[tool.mypy.overrides]]` per module instead |
-| Running `ruff --fix --unsafe-fixes` without reviewing output | Fixes 26 additional violations automatically | Unsafe fixes can change semantics (e.g., `B006` → `None` default breaking Typer) | Never on Typer CLI files; review unsafe fixes one at a time |
-| Using `cast(Any, value)` to silence `no-any-return` | One line instead of a real fix | `Any` propagates; downstream code loses type safety | Never — use `cast(int, value)` with the actual expected type |
-| Adding `# noqa: ALL` to a file | Silences everything in a file | Completely removes linting from that file; future violations go unnoticed | Never — suppress specific rules only |
+| Add `--min-score` only to CLI, skip API/MCP | Faster to ship | Three surfaces diverge; v1.4 requirements explicitly require parity | Never — all three surfaces must ship together |
+| Skip documenting RRF score range in `--min-score` help text | Saves one line | Users set `--min-score 0.5`, get 0 results, conclude the feature is broken | Never — caveat must be in help text from day one |
+| Apply `min_score` as LanceDB `.where()` predicate | Looks cleaner | Runtime error or silent no-op — `_relevance_score` is not a schema column | Never |
+| Apply `min_score` filter before text-term filter | Marginally simpler code | Changes observable filtering order, breaks existing text-matching semantics | Never |
+| Update `SearchResult` without updating the exact-set test | Faster initial implementation | CI immediately fails — net zero time saved | Never |
 
 ---
 
@@ -299,33 +173,52 @@ Phase 1 (ruff auto-fix pass) — set up `llm/` per-file config before any manual
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Typer + ruff B006 | Apply ruff's "Replace with None" suggestion to list defaults in Typer commands | Use `# noqa: B006` with an explanatory comment; Typer needs the list literal for `--help` rendering |
-| Typer + ruff B008 | Apply B008 fix to `typer.Option()` / `typer.Argument()` in function defaults | B008 does not appear in this codebase's `src/` files — the one B008 violation is in `.windsurf/` template files. If it did appear, `typer.Option()` in Annotated defaults is exempt by design |
-| sqlite-utils + mypy | Adding `# type: ignore[union-attr]` to every `self.db["table"].method()` call | Create a `_table(name)` helper that returns `Table` via `assert isinstance` — one fix covers all call sites |
-| python-frontmatter + mypy | Adding global `ignore_missing_imports = true` | Use `[[tool.mypy.overrides]]` scoped to `module = "frontmatter"` only |
-| ruff `--fix` + `__init__.py` | Trusting auto-fix to know re-exports from unused imports | Audit F401 in `__init__.py` files manually before applying fixes; verify `__all__` entries are preserved |
-| mypy strict + Pydantic v2 | Pydantic v2 ships `py.typed` — no stubs needed; errors are real | Pydantic v2 is fully typed; any mypy errors from Pydantic models are real model definition errors, not stub issues |
+| LanceDB `_relevance_score` | Using in `.where()` predicate | Filter in Python after `.to_list()` — it is a computed reranker column, not a stored schema field |
+| LanceDB `_relevance_score` | Assuming 0–1 range like cosine similarity | Range is `0` to approximately `num_sub_queries / (k + 1)` ≈ `0.033` with default k=60 and 2 sub-queries |
+| LanceDB `_relevance_score` | Comparing scores across queries | Scores are relative to the current result set and vary with `--limit`; not absolute |
+| FastMCP `corpus_search` | Forgetting `# noqa: UP045` on `Optional[float]` | Copy the existing parameter pattern: `min_score: Optional[float] = None,  # noqa: UP045` |
+| `SearchResult` dataclass | Adding field without updating the exact-set test | Update `test_search_result_has_required_fields` in the same commit |
+| `api/public.search()` | Not threading `sort_by` and `min_score` to engine | Add both parameters to `search()` signature and pass them to `hybrid_search()` |
+| Text-term filter ordering | Applying `min_score` before text-term filter | Apply `min_score` after text-term filter to preserve existing text-matching semantics |
 
 ---
 
 ## Performance Traps
 
-Not applicable to a linting compliance pass — no runtime performance concerns.
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| `min_score` filters all results after `limit` fetch | User gets 0 results with no explanation | Print hint when `min_score` discards all results: "No results above {min_score}. Try lowering." | Any time `min_score` is above the score range for the current query |
+| High `limit` + aggressive `min_score` wastes retrieval | Fetch 50 results, discard 48, return 2 | This is acceptable at current scale; document if over-fetching becomes needed at larger indexes | Not a concern until index has >10k chunks |
+| `search.status()` uses `to_pandas()` on full table | Slow for large indexes | Already present pre-v1.4; not introduced by this milestone | >10k chunks |
+
+---
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No score shown before `--min-score` lands | User cannot calibrate threshold without seeing scores | Score display must ship in the same phase as or before `--min-score`; CLI already partially shows score at line 366 |
+| `--min-score` returns 0 results silently | User thinks search is broken | Print: "No results above min-score {x}. Run without --min-score to see available scores." |
+| Score formatted with full float precision | `score: 0.016393442622950817` is unreadable | Format to 3–4 decimal places; CLI already uses `:.3f` at line 366 — verify this is applied consistently |
+| Score column header labelled "score" | Users expect 0–100 or 0–1; `0.033` max looks like "3% match" | Label as "relevance" or add range hint: `score (RRF, max ~0.033)` |
+| `--sort` flag not exposed in CLI help alongside score | Users discover sort by reading source, not `--help` | Ensure help text for `--sort` lists all valid values: `relevance\|construct\|confidence\|date\|path` |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **ruff auto-fix run:** After `ruff --fix`, re-run `ruff check .` and confirm count decreased. Auto-fix does not fix all 529 — 147 require manual intervention (`E501`, `B006`, etc.).
-- [ ] **Typer B006 check:** After ruff pass, invoke `corpus add --help` and verify `--include` shows `["**/*"]` as the default, not empty or `None`.
-- [ ] **Re-export check:** After F401 fixes, run `python -c "from corpus_analyzer.ingest import chunk_file, walk_source; from corpus_analyzer.llm import RewriteResult; from corpus import search"` — all imports must succeed.
-- [ ] **sqlite-utils helper:** After database mypy fixes, run `uv run pytest tests/test_database` to confirm all DB operations still work correctly.
-- [ ] **frontmatter override:** After mypy fixes, confirm `[[tool.mypy.overrides]]` for `frontmatter` is in `pyproject.toml` and `uv run mypy src/corpus_analyzer/extractors/` reports zero errors.
-- [ ] **llm/ line-length config:** After per-file config is set, confirm `uv run ruff check src/corpus_analyzer/llm/` reports zero E501 errors (not just suppressed — actually within 120 chars).
-- [ ] **Tests green:** After every batch of fixes, run `uv run pytest -q` and confirm 281 passed.
-- [ ] **mypy zero errors:** Final check: `uv run mypy src/` exits 0 with no output.
-- [ ] **ruff zero violations:** Final check: `uv run ruff check .` exits 0 with no output (or only expected ignores).
-- [ ] **warn_unused_ignores:** After all fixes, any `# type: ignore` added for a problem that no longer exists will be flagged — clean these up.
+- [ ] **Score display:** `_relevance_score` non-zero in real results — verify field name matches LanceDB output exactly (typo returns silent `0.0` via `r.get("_relevance_score", 0.0)`)
+- [ ] **`--sort relevance` default:** Results return in RRF order (not sorted) when `sort_by="relevance"` — verify no accidental sort is applied on the "relevance" branch
+- [ ] **`--sort path`:** Results sorted ascending by `file_path` — add a test asserting ordering
+- [ ] **`--min-score` CLI:** Typer option added as `float`, default `0.0`, documented with RRF range caveat
+- [ ] **`--min-score` engine:** Applied as Python filter after `.to_list()` and after text-term filter — not as `.where()` predicate
+- [ ] **API parity:** `api/public.search()` signature includes `sort_by: str = "relevance"` and `min_score: float = 0.0`; both passed to `hybrid_search()`
+- [ ] **`SearchResult` test updated:** `test_search_result_has_required_fields` exact-set assertion updated if any new fields added to `SearchResult`
+- [ ] **MCP parity:** `corpus_search` tool accepts `min_score: Optional[float] = None`; `# noqa: UP045` present; MCP tests cover the parameter
+- [ ] **Empty result hint:** CLI prints informative message when `min_score` filters all results to zero
+- [ ] **Type annotations:** All new parameters annotated; `uv run mypy src/` exits 0
+- [ ] **Ruff clean:** `uv run ruff check .` exits 0
+- [ ] **Tests green:** 281 existing tests pass; new tests added for score display, `--min-score` filtering, API/MCP parity, and sort ordering
 
 ---
 
@@ -333,12 +226,12 @@ Not applicable to a linting compliance pass — no runtime performance concerns.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Typer B006 fix breaks --help defaults | LOW | Revert the change; add `# noqa: B006` to the original line |
-| F401 auto-fix removes re-export from `__init__.py` | LOW | `git diff` to identify removed imports; restore them with `# noqa: F401` |
-| sqlite-utils cast breaks DB insert | LOW | Tests catch immediately; revert the `_table()` helper and use `cast(Table, ...)` instead |
-| Global `ignore_missing_imports = true` added | LOW | Replace with `[[tool.mypy.overrides]]` per module; re-run mypy to surface real errors |
-| `ruff --unsafe-fixes` broke Typer command | LOW | `git diff` to see what changed; revert and apply safe fixes only |
-| Tests break after ruff whitespace fixes (W293/W291) | VERY LOW | Whitespace-only changes cannot break Python tests; if tests break, the cause is elsewhere |
+| `min_score` via `.where()` fails at runtime | LOW | Move filter to Python post-processing; no schema change needed |
+| `SearchResult` field addition breaks exact-set test | LOW | Update `test_search_result_has_required_fields` to include the new field |
+| API surface missing `sort_by` after CLI ships | LOW | Add parameter with backward-compatible default; no schema migration |
+| MCP schema cached by Claude Code after parameter addition | LOW | Restart Claude Code / MCP host |
+| Users file bugs because `--min-score 0.5` returns nothing | LOW | Add score range to help text; no code change for calibration itself |
+| `--min-score` filter applied before text-term filter | LOW | Swap filter order in engine; add regression test |
 
 ---
 
@@ -346,27 +239,24 @@ Not applicable to a linting compliance pass — no runtime performance concerns.
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| B006 breaks Typer list defaults | Phase 1: ruff auto-fix setup | `corpus add --help` shows `["**/*"]` default |
-| sqlite-utils union-attr cascade | Phase 2: mypy — database layer | `uv run mypy src/corpus_analyzer/core/database.py` exits 0 |
-| type: ignore over-use | All phases | Final grep: `grep -r "type: ignore$" src/` returns nothing (all ignores have error codes) |
-| frontmatter missing stubs | Phase 2: mypy — extractors | `[[tool.mypy.overrides]]` in pyproject.toml; `uv run mypy src/corpus_analyzer/extractors/` exits 0 |
-| F401 removes re-exports | Phase 1: ruff auto-fix pass | `python -c "from corpus_analyzer.ingest import chunk_file"` succeeds after fix |
-| ABC dict-dispatch false positive | Phase 2: mypy — extractors | `uv run mypy src/corpus_analyzer/extractors/__init__.py` exits 0 |
-| no-any-return from fetchone()[0] | Phase 2: mypy — database layer | Zero `no-any-return` errors in database.py |
-| E501 manual fix breaks string literals | Phase 1: llm/ per-file config setup | Tests green after all E501 fixes |
+| RRF score range / threshold semantics | Score display phase | Help text includes range caveat; `--min-score 0.0` returns all results; `--min-score 99.0` returns none with hint |
+| Exact-set test on `SearchResult` breaks | API parity phase | CI passes after updating `test_search_result_has_required_fields` |
+| API surface missing `sort_by` / `min_score` | API parity phase | Test calls `api.public.search(sort_by="path")` and verifies path ordering |
+| `min_score` via `.where()` predicate | Engine modification phase | Integration test with real LanceDB table verifies `min_score` parameter reduces result count without error |
+| MCP schema break / noqa pattern | MCP parity phase | `uv run ruff check .` exits 0; MCP test passes with `min_score` argument |
+| Empty result hint missing | CLI output phase | Manual test: `corpus search "query" --min-score 99` prints informative message |
+| `min_score` applied before text-term filter | Engine modification phase | Ordering verified by unit test; text-term filter semantics unchanged |
 
 ---
 
 ## Sources
 
-- Verified directly against the corpus-analyzer codebase: `uv run mypy src/` (42 errors, 9 files) and `uv run ruff check . --statistics` (529 violations) — HIGH confidence
-- Typer list default behavior: verified with `typer.testing.CliRunner` in-repo — HIGH confidence
-- sqlite-utils `__getitem__` return type: verified via `inspect.signature(sqlite_utils.Database.__getitem__).return_annotation` → `Union[Table, View]` — HIGH confidence
-- python-frontmatter py.typed status: verified `ls .venv/lib/python3.12/site-packages/frontmatter/py.typed` → not found — HIGH confidence
-- mypy ABC + dict.get() false positive: documented in mypy issue tracker and confirmed locally — HIGH confidence
-- ruff B006 / Typer interaction: tested with `CliRunner` — `["**/*"]` list default renders correctly in `--help`; `None` default does not — HIGH confidence
-- `warn_unused_ignores = true` already set in `pyproject.toml` — HIGH confidence (read directly from file)
+- LanceDB RRF Reranker documentation: https://docs.lancedb.com/integrations/reranking/rrf
+- Azure AI Search Hybrid Scoring (RRF) — authoritative score range documentation: https://learn.microsoft.com/en-us/azure/search/hybrid-search-ranking
+- FastMCP optional parameter handling issue: https://github.com/jlowin/fastmcp/issues/1015
+- Direct code inspection: `src/corpus_analyzer/search/engine.py` (lines 30, 47–122), `src/corpus_analyzer/api/public.py` (lines 18, 79–120), `src/corpus_analyzer/mcp/server.py` (lines 43–108), `src/corpus_analyzer/cli.py` (lines 300–372)
+- Existing contract test: `tests/api/test_public.py:18` — exact-set assertion on `SearchResult` fields
 
 ---
-*Pitfalls research for: adding mypy + ruff strict compliance to existing Python codebase (v1.3 code quality milestone)*
+*Pitfalls research for: v1.4 Search Precision — adding sort, min-score, and score display to existing LanceDB hybrid search*
 *Researched: 2026-02-24*
