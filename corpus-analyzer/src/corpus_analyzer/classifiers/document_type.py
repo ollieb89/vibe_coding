@@ -72,19 +72,35 @@ def extract_document_features(doc: Document, content: str | None = None) -> Docu
         features.full_text = " ".join(text_parts)
 
     # Structural analysis
-    features.has_numbered_sections = bool(re.search(r'\b(?:step\s+\d+|\d+\.|\d+\))', features.full_text, re.IGNORECASE))
-    features.has_toc = bool(re.search(r'table\s+of\s+contents?|contents?:', features.full_text, re.IGNORECASE))
+    features.has_numbered_sections = bool(
+        re.search(r'\b(?:step\s+\d+|\d+\.|\d+\))', features.full_text, re.IGNORECASE)
+    )
+    features.has_toc = bool(
+        re.search(r'table\s+of\s+contents?|contents?:', features.full_text, re.IGNORECASE)
+    )
 
     # Content indicators
-    features.step_indicators = len(re.findall(r'\b(?:step|first|then|next|finally)\b', features.full_text, re.IGNORECASE))
-    features.code_examples = len(re.findall(r'```[\w]*\n|example|code\s+snippet', features.full_text, re.IGNORECASE))
-    features.api_patterns = len(re.findall(r'\b(?:api|endpoint|function|method|parameter)\b', features.full_text, re.IGNORECASE))
-    features.diagram_references = len(re.findall(r'\b(?:diagram|chart|graph|figure)\b', features.full_text, re.IGNORECASE))
+    features.step_indicators = len(
+        re.findall(r'\b(?:step|first|then|next|finally)\b', features.full_text, re.IGNORECASE)
+    )
+    features.code_examples = len(
+        re.findall(r'```[\w]*\n|example|code\s+snippet', features.full_text, re.IGNORECASE)
+    )
+    features.api_patterns = len(
+        re.findall(
+            r'\b(?:api|endpoint|function|method|parameter)\b', features.full_text, re.IGNORECASE
+        )
+    )
+    features.diagram_references = len(
+        re.findall(r'\b(?:diagram|chart|graph|figure)\b', features.full_text, re.IGNORECASE)
+    )
 
     return features
 
 
-def compute_tfidf_similarity(text: str, category_patterns: dict[DocumentCategory, list[str]]) -> dict[DocumentCategory, float]:
+def compute_tfidf_similarity(
+    text: str, category_patterns: dict[DocumentCategory, list[str]]
+) -> dict[DocumentCategory, float]:
     """Compute TF-IDF similarity between text and category patterns."""
     # Simple TF-IDF implementation
     similarities = {}
@@ -113,7 +129,10 @@ def compute_tfidf_similarity(text: str, category_patterns: dict[DocumentCategory
         for token in set(tokens) & set(category_tokens):
             tf = token_counts[token] / total_tokens
             # Simple IDF approximation
-            idf = math.log(len(category_patterns) / sum(1 for p in category_patterns.values() if token in ' '.join(p)))
+            idf = math.log(
+                len(category_patterns)
+                / sum(1 for p in category_patterns.values() if token in ' '.join(p))
+            )
             similarity += tf * idf
 
         similarities[category] = similarity
@@ -122,7 +141,9 @@ def compute_tfidf_similarity(text: str, category_patterns: dict[DocumentCategory
 
 
 # Enhanced classification rules with weights and feature requirements
-CLASSIFICATION_RULES: list[tuple[DocumentCategory, float, list[str], list[str], dict[str, float]]] = [
+CLASSIFICATION_RULES: list[
+    tuple[DocumentCategory, float, list[str], list[str], dict[str, float]]
+] = [
     # Persona documents
     (
         DocumentCategory.PERSONA,
@@ -207,7 +228,9 @@ def classify_document(doc: Document, content: str | None = None) -> Classificati
     # Enhanced scoring with features
     scores: dict[DocumentCategory, tuple[float, list[str], dict[str, float]]] = {}
 
-    for category, base_confidence, heading_patterns, content_patterns, feature_weights in CLASSIFICATION_RULES:
+    for category, base_confidence, heading_patterns, content_patterns, feature_weights in (
+        CLASSIFICATION_RULES
+    ):
         matched = []
         feature_scores: dict[str, float] = {}
         score = 0.0
@@ -231,7 +254,9 @@ def classify_document(doc: Document, content: str | None = None) -> Classificati
                 feature_value = 1.0 if feature_value else 0.0
             elif isinstance(feature_value, int) and feature_value > 0:
                 # Normalize by typical max values
-                if feature_name in ["step_indicators", "code_examples", "api_patterns", "diagram_references"]:
+                if feature_name in [
+                    "step_indicators", "code_examples", "api_patterns", "diagram_references"
+                ]:
                     feature_value = min(feature_value / 10.0, 1.0)
                 elif feature_name in ["heading_count", "code_block_count", "link_count"]:
                     feature_value = min(feature_value / 20.0, 1.0)
