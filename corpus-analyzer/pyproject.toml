@@ -42,9 +42,14 @@ packages = ["src/corpus_analyzer", "src/corpus"]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = [".windsurf", ".planning", "test_debug.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/corpus_analyzer/llm/*.py" = ["E501"]
+"src/corpus_analyzer/cli.py" = ["B006"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,3 +60,7 @@ python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["frontmatter"]
+ignore_missing_imports = true
