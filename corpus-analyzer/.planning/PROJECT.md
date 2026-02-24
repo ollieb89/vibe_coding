@@ -10,16 +10,7 @@ v1.1 adds configurable extension allowlists per source (no more config files pol
 
 v1.2 adds a relationship graph layer: `corpus index` now extracts `## Related Skills` / `## Related Files` links from indexed Markdown and persists them as a directed graph, queryable via `corpus graph <slug>`.
 
-v1.3 achieves a clean linting baseline across the entire codebase: zero mypy errors and zero ruff violations. Per-file line-length override (120 chars) for the legacy `llm/` module.
-
-## Current Milestone: v1.3 Code Quality
-
-**Goal:** Achieve a clean, zero-error linting baseline across the entire codebase.
-
-**Target features:**
-- Zero `ruff check` violations (382 auto-fixed + 147 manual)
-- Zero `mypy --strict` errors across all 9 affected files
-- Per-file ruff config: `llm/` module gets 120-char line limit
+v1.3 achieves a clean linting baseline across the entire codebase: zero mypy errors (`uv run mypy src/` exits 0 across 53 files) and zero ruff violations (`uv run ruff check .` exits 0). Per-file line-length override (120 chars) suppresses E501 in `llm/*.py`; B006 suppressed for Typer list defaults in `cli.py`.
 
 ## Core Value
 
@@ -47,12 +38,17 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ `classification_source` + `classification_confidence` persisted in LanceDB; schema v3 in-place migration — v1.1
 - ✓ Relationship graph: `corpus index` extracts + persists `## Related Skills` / `## Related Files` edges; `corpus graph <slug>` queries upstream/downstream neighbours; closest-prefix ambiguity resolution; `--show-duplicates` (GRAPH-01–GRAPH-05) — v1.2
 - ✓ Dead `use_llm_classification` parameter removed from `index_source()` and `SourceConfig` (CLEAN-01) — v1.2
+- ✓ `pyproject.toml` surgical ruff/mypy config: `extend-exclude`, `per-file-ignores`, `[[tool.mypy.overrides]]` (CONF-01–CONF-04, RUFF-01, RUFF-02) — v1.3
+- ✓ `ruff --fix` sweep eliminated ~370 auto-fixable violations across 37 files (RUFF-01, RUFF-02) — v1.3
+- ✓ Manual E741/E402/B017/B023/B904/E501 fixes across leaf modules, database hub, and cli.py (RUFF-03–RUFF-07) — v1.3
+- ✓ `cast(Table, ...)` pattern at all sqlite-utils call sites; parameterised generics; float() guards (MYPY-01) — v1.3
+- ✓ `Atom` promoted to module level; nested functions fully annotated in `chunked_processor.py` (MYPY-02) — v1.3
+- ✓ `DEFAULT_SYSTEM_PROMPT` trailing comma bug fixed (was `tuple[str]`, now `str`) (MYPY-05) — v1.3
+- ✓ `uv run ruff check .` → 0 violations; `uv run mypy src/` → 0 errors; 281 tests green (VALID-01–VALID-03) — v1.3
 
 ### Active
 
-- [ ] `uv run ruff check .` passes with zero errors (auto-fix + manual)
-- [ ] `uv run mypy src/` passes with zero errors (all 9 files clean)
-- [ ] `llm/` per-file line limit set to 120 chars in pyproject.toml
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -65,14 +61,14 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.2 shipped 2026-02-24. v1.1 shipped 2026-02-23. All v1 requirements complete.**
+**v1.3 shipped 2026-02-24. All v1.3 requirements complete. Codebase is now ruff-clean and mypy-clean.**
 
-- ~7,300 lines Python source (graph module ~300 lines over v1.1 baseline)
+- ~7,513 lines Python source across 53 files
 - Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text); graph layer uses SQLite (`graph.sqlite`)
-- 281 tests passing (pytest; 1 deleted test for removed field)
+- 281 tests passing (pytest)
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
-- Pre-existing mypy (42 errors) and ruff (529 errors) across unrelated files — noted for v2 cleanup
+- Zero mypy errors, zero ruff violations — clean linting baseline established
 
 Known limitations heading into v2 planning:
 - Search returns file-level results; chunk-level line ranges would improve precision
@@ -112,6 +108,11 @@ Known limitations heading into v2 planning:
 | SQLite for graph store (not LanceDB) | Graph edges are relational; SQLite is simpler and avoids LanceDB schema overhead | ✓ Good — separate `graph.sqlite` keeps concerns cleanly separated |
 | Closest-prefix ambiguity resolution for slugs | Context-aware: picks the candidate closest in filesystem path to the referencing file | ✓ Good — handles multi-repo agent libraries without false matches |
 | Hardcode `use_llm=False` at call site (not remove arg) | `classify_file` defaults to `use_llm=True`; removing kwarg would silently switch to LLM classification | ✓ Good — preserved rule-based classification behaviour |
+| `extend-exclude` over `exclude` in ruff config | Preserves ruff defaults (`.venv`, `.git`) while adding `.windsurf/`, `.planning/` | ✓ Good — no accidental exclusion of user dirs |
+| `cast(Table, ...)` per call site (not `# type: ignore`) | Explicit and refactor-safe; grep-able pattern | ✓ Good — all 8 sqlite-utils call sites annotated cleanly |
+| `DEFAULT_SYSTEM_PROMPT` trailing comma removed (not cast away) | Was a real `tuple[str]` runtime bug — `+=` on a tuple would raise `TypeError` at runtime | ✓ Good — genuine bug fixed, not suppressed |
+| `Atom` promoted to module level (not type: ignore on nested) | Nested dataclasses prevent typed annotations on helper closures | ✓ Good — cleaner module structure, zero mypy errors |
+| `OllamaClient.db: CorpusDatabase \| None = None` added | `advanced_rewriter.py` uses `client.db`; TYPE_CHECKING guard avoids circular import | ✓ Good — optional field, no runtime impact if unused |
 
 ---
-*Last updated: 2026-02-24 after v1.3 milestone started*
+*Last updated: 2026-02-24 after v1.3 milestone*
