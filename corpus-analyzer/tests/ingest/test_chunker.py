@@ -148,7 +148,7 @@ def second_func():
         assert "def second_func():" in chunks[2]["text"]
 
     def test_nested_not_separate(self, tmp_path: Path) -> None:
-        """Nested functions inside classes are NOT separate chunks."""
+        """Nested functions inside class methods do NOT get their own top-level chunks."""
         py_file = tmp_path / "test.py"
         py_file.write_text("""class Outer:
     def method(self):
@@ -158,9 +158,12 @@ def second_func():
 """)
         chunks = chunk_python(py_file)
 
-        # Only one chunk for the class
-        assert len(chunks) == 1
+        # Class produces header + method chunks (not just 1 anymore since SUB-02)
+        # but nested() inside method() is NOT a separate chunk
+        chunk_names = [c.get("chunk_name", "") for c in chunks]
         assert "class Outer:" in chunks[0]["text"]
+        assert "nested" not in chunk_names  # nested function is not a top-level chunk
+        assert "Outer.method" in chunk_names  # method IS a sub-chunk
 
     def test_async_functions(self, tmp_path: Path) -> None:
         """chunk_python includes async functions as top-level chunks."""

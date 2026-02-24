@@ -252,13 +252,35 @@ def _chunk_class(node: ast.ClassDef, lines: list[str]) -> list[dict[str, Any]]:
             header_end_line = first_method.lineno - 1
 
     chunk_text = "\n".join(lines[start_line - 1 : header_end_line]).rstrip()
-    return [{
+    result: list[dict[str, Any]] = [{
         "text": chunk_text,
         "start_line": start_line,
         "end_line": header_end_line,
         "chunk_name": node.name,
         "chunk_text": chunk_text,
     }]
+
+    # Append one chunk per method (FunctionDef / AsyncFunctionDef) in class body.
+    # Only iterate node.body directly — nested ClassDef bodies are opaque.
+    for method in node.body:
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        # Include decorator line(s) if present
+        method_start = method.decorator_list[0].lineno if method.decorator_list else method.lineno
+        method_end = method.end_lineno
+
+        method_text = "\n".join(lines[method_start - 1 : method_end]).rstrip()
+
+        result.append({
+            "text": method_text,
+            "start_line": method_start,
+            "end_line": method_end,
+            "chunk_name": f"{node.name}.{method.name}",
+            "chunk_text": method_text,
+        })
+
+    return result
 
 
 def chunk_python(path: Path) -> list[dict[str, Any]]:
