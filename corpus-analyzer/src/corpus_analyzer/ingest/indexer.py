@@ -29,6 +29,7 @@ from corpus_analyzer.store.schema import (
     ChunkRecord,
     ensure_schema_v2,
     ensure_schema_v3,
+    ensure_schema_v4,
     make_chunk_id,
 )
 
@@ -146,9 +147,10 @@ class CorpusIndex:
             # Table doesn't exist - create it
             table = db.create_table(table_name, schema=ChunkRecord)
 
-        # Ensure Phase 2 nullable columns exist regardless of table creation path.
+        # Ensure Phase 2/6/17 nullable/empty-string columns exist regardless of table creation path.
         ensure_schema_v2(table)
         ensure_schema_v3(table)
+        ensure_schema_v4(table)
         _migrate_agent_config_to_agent(table)
 
         return cls(table, embedder, data_dir)
@@ -451,6 +453,8 @@ class CorpusIndex:
                     "classification_source": classify_result.source,
                     "classification_confidence": classify_result.confidence,
                     "summary": summary_text or None,
+                    "chunk_name": chunk.get("chunk_name", ""),
+                    "chunk_text": chunk.get("chunk_text", ""),
                 }
                 new_chunk_dicts.append(chunk_dict)
                 chunks_written += 1

@@ -86,6 +86,8 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
             "text": content,
             "start_line": 1,
             "end_line": len(lines),
+            "chunk_name": "",
+            "chunk_text": content,
         }]
 
     # Split into heading sections
@@ -118,6 +120,7 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
 
         word_count = len(section_text.split())
 
+        heading_line = lines[start_idx]
         if word_count > max_words:
             # Sub-split large sections using chunk_lines approach
             section_chunks = _subsplit_section(
@@ -129,6 +132,8 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
                 "text": section_text,
                 "start_line": start_idx + 1,  # 1-indexed
                 "end_line": actual_end_line + 1,  # Convert to 1-indexed
+                "chunk_name": heading_line,
+                "chunk_text": section_text,
             })
 
     # Handle content before first heading (preamble)
@@ -136,10 +141,13 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
         preamble_lines = lines[0:heading_indices[0]]
         preamble_text = "\n".join(preamble_lines).strip()
         if preamble_text and chunks:
+            merged_text = preamble_text + "\n\n" + chunks[0]["text"]
             chunks.insert(0, {
-                "text": preamble_text + "\n\n" + chunks[0]["text"],
+                "text": merged_text,
                 "start_line": 1,
                 "end_line": chunks[0]["end_line"],
+                "chunk_name": chunks[0].get("chunk_name", ""),
+                "chunk_text": merged_text,
             })
             # Remove the original first chunk since merged into preamble
             chunks.pop(1)
@@ -244,6 +252,8 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
                 "text": chunk_text,
                 "start_line": start_line,
                 "end_line": actual_end_line,
+                "chunk_name": node.name,
+                "chunk_text": chunk_text,
             })
 
     return chunks
@@ -269,6 +279,8 @@ def _enforce_char_limit(
             continue
 
         # Split oversized chunk into smaller pieces
+        parent_chunk_name = chunk.get("chunk_name", "")
+        parent_chunk_text = chunk.get("chunk_text", "")
         lines = text.split("\n")
         current_lines: list[str] = []
         current_start = chunk["start_line"]
@@ -283,17 +295,21 @@ def _enforce_char_limit(
                         "text": "\n".join(current_lines),
                         "start_line": current_start,
                         "end_line": current_line_num - 1,
+                        "chunk_name": parent_chunk_name,
+                        "chunk_text": parent_chunk_text,
                     })
                     current_lines = []
                     current_start = current_line_num
 
                 # Split the long line into chunks
                 for i in range(0, len(line), max_chars):
-                    chunk_text = line[i:i + max_chars]
+                    sub_text = line[i:i + max_chars]
                     result.append({
-                        "text": chunk_text,
+                        "text": sub_text,
                         "start_line": current_line_num,
                         "end_line": current_line_num,
+                        "chunk_name": parent_chunk_name,
+                        "chunk_text": parent_chunk_text,
                     })
                 current_start = current_line_num + 1
             else:
@@ -305,6 +321,8 @@ def _enforce_char_limit(
                         "text": "\n".join(current_lines),
                         "start_line": current_start,
                         "end_line": current_line_num - 1,
+                        "chunk_name": parent_chunk_name,
+                        "chunk_text": parent_chunk_text,
                     })
                     # Start new chunk
                     current_lines = [line]
@@ -319,6 +337,8 @@ def _enforce_char_limit(
                 "text": "\n".join(current_lines),
                 "start_line": current_start,
                 "end_line": chunk["end_line"],
+                "chunk_name": parent_chunk_name,
+                "chunk_text": parent_chunk_text,
             })
 
     return result

@@ -102,6 +102,8 @@ class TestCorpusIndexOpen:
             "content_hash": "abc",
             "embedding_model": "model-a",
             "indexed_at": "2024-01-01T00:00:00Z",
+            "chunk_name": "",
+            "chunk_text": "",
         }])
 
         # Try to open with different model
@@ -704,6 +706,8 @@ def test_open_migrates_agent_config_to_agent(tmp_path: Path) -> None:
         "embedding_model": "nomic-embed-text",
         "indexed_at": "2024-01-01T00:00:00",
         "construct_type": "agent_config",
+        "chunk_name": "",
+        "chunk_text": "",
     }])
 
     # Re-open triggers migration

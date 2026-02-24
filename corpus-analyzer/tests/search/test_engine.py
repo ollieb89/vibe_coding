@@ -47,6 +47,8 @@ def seeded_table(tmp_path: Path):
             "indexed_at": now,
             "construct_type": "skill",
             "summary": "Hybrid search skill summary.",
+            "chunk_name": "",
+            "chunk_text": "",
         },
         {
             "chunk_id": "c2",
@@ -62,6 +64,8 @@ def seeded_table(tmp_path: Path):
             "indexed_at": now,
             "construct_type": "workflow",
             "summary": None,
+            "chunk_name": "",
+            "chunk_text": "",
         },
         {
             "chunk_id": "c3",
@@ -77,6 +81,8 @@ def seeded_table(tmp_path: Path):
             "indexed_at": now,
             "construct_type": "code",
             "summary": "Code summary.",
+            "chunk_name": "",
+            "chunk_text": "",
         },
         {
             "chunk_id": "c4",
@@ -92,6 +98,8 @@ def seeded_table(tmp_path: Path):
             "indexed_at": now,
             "construct_type": None,
             "summary": None,
+            "chunk_name": "",
+            "chunk_text": "",
         },
     ]
     table.add(rows)
@@ -237,6 +245,8 @@ def sortable_table(tmp_path: Path):
             "construct_type": "skill",
             "classification_confidence": 0.6,
             "summary": None,
+            "chunk_name": "",
+            "chunk_text": "",
         },
         {
             "chunk_id": "r2",
@@ -252,6 +262,8 @@ def sortable_table(tmp_path: Path):
             "construct_type": "agent",
             "classification_confidence": 0.9,
             "summary": None,
+            "chunk_name": "",
+            "chunk_text": "",
         },
         {
             "chunk_id": "r3",
@@ -267,6 +279,8 @@ def sortable_table(tmp_path: Path):
             "construct_type": "rule",
             "classification_confidence": 0.7,
             "summary": None,
+            "chunk_name": "",
+            "chunk_text": "",
         },
     ]
     table.add(rows)
@@ -345,6 +359,8 @@ class TestHybridSearchSort:
                 "construct_type": "agent",
                 "classification_confidence": 0.3,
                 "summary": None,
+                "chunk_name": "",
+                "chunk_text": "",
             },
             {
                 "chunk_id": "t2",
@@ -360,6 +376,8 @@ class TestHybridSearchSort:
                 "construct_type": "agent",
                 "classification_confidence": 0.9,
                 "summary": None,
+                "chunk_name": "",
+                "chunk_text": "",
             },
         ]
         table.add(rows)

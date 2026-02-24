@@ -157,6 +157,7 @@ def chunk_typescript(path: Path) -> list[dict[str, Any]]:
                             "start_line": start_line,
                             "end_line": end_line,
                             "chunk_name": "default",
+                            "chunk_text": chunk_text,
                         })
                 # Re-export or other export without declaration — skip
                 continue
@@ -198,6 +199,7 @@ def chunk_typescript(path: Path) -> list[dict[str, Any]]:
                 "start_line": start_line,
                 "end_line": end_line,
                 "chunk_name": chunk_name,
+                "chunk_text": chunk_text,
             })
 
     if not chunks:
