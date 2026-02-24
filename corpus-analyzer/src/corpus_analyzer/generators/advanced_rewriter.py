@@ -40,7 +40,9 @@ class AdvancedRewriter:
             template_path = self.templates_dir / f"{category.value}.md"
 
         if not template_path.exists():
-            raise FileNotFoundError(f"Template not found for category: {category} at {template_path}")
+            raise FileNotFoundError(
+                f"Template not found for category: {category} at {template_path}"
+            )
 
         return template_path.read_text(encoding="utf-8")
 
@@ -75,7 +77,11 @@ class AdvancedRewriter:
             if optimized:
                 # Try to find a gold standard doc for the same category and first domain tag
                 tag = doc.domain_tags[0] if doc.domain_tags else None
-                gold_docs = list(self.client.db.get_gold_standard_documents(category=doc.category, tag=tag)) if hasattr(self.client, 'db') else []
+                gold_docs = (
+                    list(self.client.db.get_gold_standard_documents(category=doc.category, tag=tag))
+                    if hasattr(self.client, "db")
+                    else []
+                )
 
                 # If no db on client, we might need a different way to get gold docs
                 # For now, let's assume AdvancedRewriter might need the db
@@ -84,17 +90,22 @@ class AdvancedRewriter:
                     for g_doc in gold_docs[:2]: # Use up to 2 examples
                         exemplary_patterns += f"## Pattern from: {g_doc.path.name}\n"
                         # Extract first 3k chars as pattern
-                        exemplary_patterns += g_doc.path.read_text(encoding='utf-8', errors='replace')[:3000]
+                        exemplary_patterns += g_doc.path.read_text(
+                            encoding="utf-8", errors="replace"
+                        )[:3000]
                         exemplary_patterns += "\n---\n"
 
             # 3. Construct Prompt
             # We want to inject the template and the source content.
             system_prompt = (
-                "You are an expert technical writer specializing in creating strict, structured documentation agent instructions. "
-                "Your task is to rewrite the provided source content into the exact structure defined by the Template.\n"
+                "You are an expert technical writer specializing in creating strict, structured "
+                "documentation agent instructions. "
+                "Your task is to rewrite the provided source content into the exact structure "
+                "defined by the Template.\n"
                 "\n"
                 "Constraints:\n"
-                "1. STRICTLY follow the Template structure. Do not add sections not in the template.\n"
+                "1. STRICTLY follow the Template structure. "
+                "Do not add sections not in the template.\n"
                 "2. Preserve all code blocks exactly as they appear in the source.\n"
                 "3. If information for a required section is missing, mark it as [MISSING INFO].\n"
                 "4. Identify the source file path in the output metadata.\n"
@@ -104,9 +115,10 @@ class AdvancedRewriter:
             if optimized:
                 system_prompt += (
                     "\nOPTIMIZATION MODE ENABLED:\n"
-                    "In addition to following the Template, analyze the # Exemplary Patterns provided. "
-                    "Extract the best technical writing styles, structure nuances, and clarity patterns "
-                    "from the Exemplary Patterns and apply them to the rewritten content. "
+                    "In addition to following the Template, "
+                    "analyze the # Exemplary Patterns provided. "
+                    "Extract the best technical writing styles, structure nuances, and clarity "
+                    "patterns from the Exemplary Patterns and apply them to the rewritten content. "
                     "The goal is to produce the 'best' possible version of this document."
                 )
 
@@ -139,7 +151,8 @@ Please rewrite the Source Content to match the Template.
 *   **Template Used**: {doc.category.value}.v1.md
 
 ## Mock Content
-(This content is a placeholder. In a real run, the LLM would generate text here based on the template.)
+(This content is a placeholder. In a real run, the LLM would generate text here based on the
+template.)
 """
             elif not self.client.is_available():
                 # Factor in availability check

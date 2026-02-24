@@ -204,7 +204,10 @@ class CorpusDatabase:
             "SELECT * FROM documents WHERE id = ?", [doc_id]
         ).fetchone()
         if row:
-            cols = [desc[0] for desc in self.db.execute("SELECT * FROM documents LIMIT 0").description]
+            cols = [
+                desc[0]
+                for desc in self.db.execute("SELECT * FROM documents LIMIT 0").description
+            ]
             return self._row_to_document(dict(zip(cols, row, strict=False)))
         return None
 
@@ -315,10 +318,22 @@ class CorpusDatabase:
             symbols=[PythonSymbol(**s) for s in json.loads(row.get("symbols") or "[]")],
             is_cli=bool(row.get("is_cli", 0)),
             category=DocumentCategory(row.get("category", "unknown")),
-            category_confidence=float(row.get("category_confidence") if row.get("category_confidence") is not None else 0.0),
+            category_confidence=float(
+                row.get("category_confidence")
+                if row.get("category_confidence") is not None
+                else 0.0
+            ),
             domain_tags=[DomainTag(t) for t in json.loads(row.get("domain_tags") or "[]")],
-            quality_score=float(row.get("quality_score") if row.get("quality_score") is not None else 0.0),
-            is_gold_standard=bool(row.get("is_gold_standard") if row.get("is_gold_standard") is not None else 0),
+            quality_score=float(
+                row.get("quality_score")
+                if row.get("quality_score") is not None
+                else 0.0
+            ),
+            is_gold_standard=bool(
+                row.get("is_gold_standard")
+                if row.get("is_gold_standard") is not None
+                else 0
+            ),
             content_hash=row.get("content_hash") or "",
             last_modified=float(row.get("last_modified") or 0.0),
         )

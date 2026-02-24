@@ -64,7 +64,11 @@ def generate_from_analysis(db: CorpusDatabase, output_dir: Path) -> list[Path]:
 
         # Generate markdown template
         template_path = output_dir / f"{category_name}.md"
-        template_path.write_text(_generate_template_md(report.category, report.recommended_sections, report.common_section_order))
+        template_path.write_text(
+            _generate_template_md(
+                report.category, report.recommended_sections, report.common_section_order
+            )
+        )
         templates.append(template_path)
 
         # Generate lint rules
