@@ -43,11 +43,13 @@ def chunk_lines(path: Path, window: int = 20, overlap: int = 5) -> list[dict[str
         chunk_lines_subset = lines[start:end]
         chunk_text = "".join(chunk_lines_subset).rstrip("\n")
 
-        chunks.append({
-            "text": chunk_text,
-            "start_line": start + 1,  # 1-indexed
-            "end_line": end,  # 1-indexed, inclusive
-        })
+        chunks.append(
+            {
+                "text": chunk_text,
+                "start_line": start + 1,  # 1-indexed
+                "end_line": end,  # 1-indexed, inclusive
+            }
+        )
 
         if end >= total_lines:
             break
@@ -82,13 +84,15 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
 
     # If no headings, return single chunk
     if not heading_indices:
-        return [{
-            "text": content,
-            "start_line": 1,
-            "end_line": len(lines),
-            "chunk_name": "",
-            "chunk_text": content,
-        }]
+        return [
+            {
+                "text": content,
+                "start_line": 1,
+                "end_line": len(lines),
+                "chunk_name": "",
+                "chunk_text": content,
+            }
+        ]
 
     # Split into heading sections
     chunks = []
@@ -123,32 +127,35 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
         heading_line = lines[start_idx]
         if word_count > max_words:
             # Sub-split large sections using chunk_lines approach
-            section_chunks = _subsplit_section(
-                section_lines, start_idx + 1, window=20, overlap=5
-            )
+            section_chunks = _subsplit_section(section_lines, start_idx + 1, window=20, overlap=5)
             chunks.extend(section_chunks)
         else:
-            chunks.append({
-                "text": section_text,
-                "start_line": start_idx + 1,  # 1-indexed
-                "end_line": actual_end_line + 1,  # Convert to 1-indexed
-                "chunk_name": heading_line,
-                "chunk_text": section_text,
-            })
+            chunks.append(
+                {
+                    "text": section_text,
+                    "start_line": start_idx + 1,  # 1-indexed
+                    "end_line": actual_end_line + 1,  # Convert to 1-indexed
+                    "chunk_name": heading_line,
+                    "chunk_text": section_text,
+                }
+            )
 
     # Handle content before first heading (preamble)
     if heading_indices[0] > 0:
-        preamble_lines = lines[0:heading_indices[0]]
+        preamble_lines = lines[0 : heading_indices[0]]
         preamble_text = "\n".join(preamble_lines).strip()
         if preamble_text and chunks:
             merged_text = preamble_text + "\n\n" + chunks[0]["text"]
-            chunks.insert(0, {
-                "text": merged_text,
-                "start_line": 1,
-                "end_line": chunks[0]["end_line"],
-                "chunk_name": chunks[0].get("chunk_name", ""),
-                "chunk_text": merged_text,
-            })
+            chunks.insert(
+                0,
+                {
+                    "text": merged_text,
+                    "start_line": 1,
+                    "end_line": chunks[0]["end_line"],
+                    "chunk_name": chunks[0].get("chunk_name", ""),
+                    "chunk_text": merged_text,
+                },
+            )
             # Remove the original first chunk since merged into preamble
             chunks.pop(1)
 
@@ -180,11 +187,13 @@ def _subsplit_section(
         chunk_text = "\n".join(chunk_lines_subset).strip()
 
         if chunk_text:
-            chunks.append({
-                "text": chunk_text,
-                "start_line": start_line_offset + start,
-                "end_line": start_line_offset + end - 1,
-            })
+            chunks.append(
+                {
+                    "text": chunk_text,
+                    "start_line": start_line_offset + start,
+                    "end_line": start_line_offset + end - 1,
+                }
+            )
 
         if end >= total_lines:
             break
@@ -211,10 +220,7 @@ def _chunk_class(node: ast.ClassDef, lines: list[str]) -> list[dict[str, Any]]:
     start_line = node.decorator_list[0].lineno if node.decorator_list else node.lineno
 
     # Find method nodes in class body (FunctionDef or AsyncFunctionDef)
-    method_nodes = [
-        n for n in node.body
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
+    method_nodes = [n for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
     if not method_nodes:
         # No methods: header covers entire class
@@ -252,13 +258,15 @@ def _chunk_class(node: ast.ClassDef, lines: list[str]) -> list[dict[str, Any]]:
             header_end_line = first_method.lineno - 1
 
     chunk_text = "\n".join(lines[start_line - 1 : header_end_line]).rstrip()
-    result: list[dict[str, Any]] = [{
-        "text": chunk_text,
-        "start_line": start_line,
-        "end_line": header_end_line,
-        "chunk_name": node.name,
-        "chunk_text": chunk_text,
-    }]
+    result: list[dict[str, Any]] = [
+        {
+            "text": chunk_text,
+            "start_line": start_line,
+            "end_line": header_end_line,
+            "chunk_name": node.name,
+            "chunk_text": chunk_text,
+        }
+    ]
 
     # Append one chunk per method (FunctionDef / AsyncFunctionDef) in class body.
     # Only iterate node.body directly — nested ClassDef bodies are opaque.
@@ -272,13 +280,15 @@ def _chunk_class(node: ast.ClassDef, lines: list[str]) -> list[dict[str, Any]]:
 
         method_text = "\n".join(lines[method_start - 1 : method_end]).rstrip()
 
-        result.append({
-            "text": method_text,
-            "start_line": method_start,
-            "end_line": method_end,
-            "chunk_name": f"{node.name}.{method.name}",
-            "chunk_text": method_text,
-        })
+        result.append(
+            {
+                "text": method_text,
+                "start_line": method_start,
+                "end_line": method_end,
+                "chunk_name": f"{node.name}.{method.name}",
+                "chunk_text": method_text,
+            }
+        )
 
     return result
 
@@ -325,14 +335,10 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
         start_line = node.lineno
 
         # Determine end line (one line before next node starts)
-        end_line = (
-            top_level_nodes[i + 1].lineno - 1
-            if i + 1 < len(top_level_nodes)
-            else len(lines)
-        )
+        end_line = top_level_nodes[i + 1].lineno - 1 if i + 1 < len(top_level_nodes) else len(lines)
 
         # Extract the chunk text
-        chunk_lines_subset = lines[start_line - 1:end_line]
+        chunk_lines_subset = lines[start_line - 1 : end_line]
         chunk_text = "\n".join(chunk_lines_subset).rstrip()
 
         # For Python, stop at last non-blank line before next definition
@@ -342,13 +348,15 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
             actual_end_line -= 1
 
         if chunk_text:
-            chunks.append({
-                "text": chunk_text,
-                "start_line": start_line,
-                "end_line": actual_end_line,
-                "chunk_name": node.name,
-                "chunk_text": chunk_text,
-            })
+            chunks.append(
+                {
+                    "text": chunk_text,
+                    "start_line": start_line,
+                    "end_line": actual_end_line,
+                    "chunk_name": node.name,
+                    "chunk_text": chunk_text,
+                }
+            )
 
     return chunks
 
@@ -385,39 +393,45 @@ def _enforce_char_limit(
             if len(line) > max_chars:
                 # Flush current buffer first
                 if current_lines:
-                    result.append({
-                        "text": "\n".join(current_lines),
-                        "start_line": current_start,
-                        "end_line": current_line_num - 1,
-                        "chunk_name": parent_chunk_name,
-                        "chunk_text": parent_chunk_text,
-                    })
+                    result.append(
+                        {
+                            "text": "\n".join(current_lines),
+                            "start_line": current_start,
+                            "end_line": current_line_num - 1,
+                            "chunk_name": parent_chunk_name,
+                            "chunk_text": parent_chunk_text,
+                        }
+                    )
                     current_lines = []
                     current_start = current_line_num
 
                 # Split the long line into chunks
                 for i in range(0, len(line), max_chars):
-                    sub_text = line[i:i + max_chars]
-                    result.append({
-                        "text": sub_text,
-                        "start_line": current_line_num,
-                        "end_line": current_line_num,
-                        "chunk_name": parent_chunk_name,
-                        "chunk_text": parent_chunk_text,
-                    })
+                    sub_text = line[i : i + max_chars]
+                    result.append(
+                        {
+                            "text": sub_text,
+                            "start_line": current_line_num,
+                            "end_line": current_line_num,
+                            "chunk_name": parent_chunk_name,
+                            "chunk_text": parent_chunk_text,
+                        }
+                    )
                 current_start = current_line_num + 1
             else:
                 # Check if adding this line would exceed limit
                 test_text = "\n".join(current_lines + [line])
                 if len(test_text) > max_chars and current_lines:
                     # Finalize current chunk
-                    result.append({
-                        "text": "\n".join(current_lines),
-                        "start_line": current_start,
-                        "end_line": current_line_num - 1,
-                        "chunk_name": parent_chunk_name,
-                        "chunk_text": parent_chunk_text,
-                    })
+                    result.append(
+                        {
+                            "text": "\n".join(current_lines),
+                            "start_line": current_start,
+                            "end_line": current_line_num - 1,
+                            "chunk_name": parent_chunk_name,
+                            "chunk_text": parent_chunk_text,
+                        }
+                    )
                     # Start new chunk
                     current_lines = [line]
                     current_start = current_line_num
@@ -427,13 +441,15 @@ def _enforce_char_limit(
 
         # Add remaining lines
         if current_lines:
-            result.append({
-                "text": "\n".join(current_lines),
-                "start_line": current_start,
-                "end_line": chunk["end_line"],
-                "chunk_name": parent_chunk_name,
-                "chunk_text": parent_chunk_text,
-            })
+            result.append(
+                {
+                    "text": "\n".join(current_lines),
+                    "start_line": current_start,
+                    "end_line": chunk["end_line"],
+                    "chunk_name": parent_chunk_name,
+                    "chunk_text": parent_chunk_text,
+                }
+            )
 
     return result
 
@@ -454,10 +470,34 @@ def chunk_file(path: Path) -> list[dict[str, Any]]:
     ext = path.suffix.lower()
 
     # Skip known binary file types
-    binary_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2',
-                         '.ttf', '.otf', '.eot', '.svg', '.pdf', '.zip', '.tar',
-                         '.gz', '.bz2', '.7z', '.exe', '.dll', '.so', '.dylib',
-                         '.bin', '.dat', '.db', '.sqlite', '.sqlite3'}
+    binary_extensions = {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".otf",
+        ".eot",
+        ".svg",
+        ".pdf",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".7z",
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".bin",
+        ".dat",
+        ".db",
+        ".sqlite",
+        ".sqlite3",
+    }
     if ext in binary_extensions:
         return []
 
@@ -468,6 +508,7 @@ def chunk_file(path: Path) -> list[dict[str, Any]]:
             chunks = chunk_python(path)
         elif ext in (".ts", ".tsx", ".js", ".jsx"):
             from corpus_analyzer.ingest.ts_chunker import chunk_typescript
+
             chunks = chunk_typescript(path)
         elif ext in (".json", ".yaml", ".yml", ".txt", ".toml"):
             chunks = chunk_lines(path)

@@ -194,9 +194,9 @@ class Second:
         chunks = chunk_python(py_file)
 
         assert chunks[0]["start_line"] == 2  # def first()
-        assert chunks[0]["end_line"] == 5   # includes blank/comments before next def
+        assert chunks[0]["end_line"] == 5  # includes blank/comments before next def
         assert chunks[1]["start_line"] == 6  # class Second
-        assert chunks[1]["end_line"] == 7   # ends at pass
+        assert chunks[1]["end_line"] == 7  # ends at pass
 
     def test_no_top_level_fallback(self, tmp_path: Path) -> None:
         """File with no top-level defs falls back to chunk_lines."""
@@ -305,9 +305,7 @@ class TestChunkTypeScript:
     def test_generator_extraction(self, tmp_path: Path) -> None:
         """Generator function yields chunk with correct chunk_name."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            "function* gen(): Generator<number, void, void> {\n  yield 1;\n}\n"
-        )
+        ts_file.write_text("function* gen(): Generator<number, void, void> {\n  yield 1;\n}\n")
 
         chunks = chunk_typescript(ts_file)
 
@@ -701,11 +699,7 @@ class TestChunkPythonSubChunking:
     def test_class_with_no_methods_header_only(self, tmp_path: Path) -> None:
         """Class with no methods (enum-style) produces exactly one chunk named ClassName."""
         py_file = tmp_path / "test.py"
-        py_file.write_text(
-            'class Status:\n'
-            '    ACTIVE = "active"\n'
-            '    INACTIVE = "inactive"\n'
-        )
+        py_file.write_text('class Status:\n    ACTIVE = "active"\n    INACTIVE = "inactive"\n')
 
         chunks = chunk_python(py_file)
 
@@ -715,12 +709,7 @@ class TestChunkPythonSubChunking:
     def test_class_decorators_in_header(self, tmp_path: Path) -> None:
         """Class decorator appears in the header chunk text."""
         py_file = tmp_path / "test.py"
-        py_file.write_text(
-            "@dataclass\n"
-            "class Point:\n"
-            "    x: float\n"
-            "    y: float\n"
-        )
+        py_file.write_text("@dataclass\nclass Point:\n    x: float\n    y: float\n")
 
         chunks = chunk_python(py_file)
 
@@ -730,11 +719,7 @@ class TestChunkPythonSubChunking:
     def test_class_level_attributes_in_header(self, tmp_path: Path) -> None:
         """Class-level attribute defined outside __init__ appears in header chunk."""
         py_file = tmp_path / "test.py"
-        py_file.write_text(
-            "class Cfg:\n"
-            '    KEY = "value"\n'
-            "    def method(self): pass\n"
-        )
+        py_file.write_text('class Cfg:\n    KEY = "value"\n    def method(self): pass\n')
 
         chunks = chunk_python(py_file)
 
@@ -745,11 +730,7 @@ class TestChunkPythonSubChunking:
         """Top-level function alongside a class is still a single chunk with its own name."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            "def top_func():\n"
-            "    pass\n"
-            "\n"
-            "class MyClass:\n"
-            "    def method(self): pass\n"
+            "def top_func():\n    pass\n\nclass MyClass:\n    def method(self): pass\n"
         )
 
         chunks = chunk_python(py_file)
@@ -779,9 +760,7 @@ class TestChunkPythonMethodChunks:
         """A class with two methods produces method chunks named ClassName.method_name."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            "class MyClass:\n"
-            "    def method_a(self): pass\n"
-            "    def method_b(self): pass\n"
+            "class MyClass:\n    def method_a(self): pass\n    def method_b(self): pass\n"
         )
 
         chunks = chunk_python(py_file)
@@ -793,9 +772,7 @@ class TestChunkPythonMethodChunks:
         """__init__ produces a MyClass.__init__ method chunk."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            "class MyClass:\n"
-            "    def __init__(self, x: int) -> None:\n"
-            "        self.x = x\n"
+            "class MyClass:\n    def __init__(self, x: int) -> None:\n        self.x = x\n"
         )
 
         chunks = chunk_python(py_file)
@@ -834,10 +811,10 @@ class TestChunkPythonMethodChunks:
         """@classmethod decorated method produces a ClassName.method_name chunk."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            'class MyClass:\n'
-            '    @classmethod\n'
+            "class MyClass:\n"
+            "    @classmethod\n"
             '    def create(cls) -> "MyClass":\n'
-            '        return cls()\n'
+            "        return cls()\n"
         )
 
         chunks = chunk_python(py_file)
@@ -848,10 +825,7 @@ class TestChunkPythonMethodChunks:
         """@staticmethod decorated method produces a ClassName.method_name chunk."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            "class MyClass:\n"
-            "    @staticmethod\n"
-            "    def helper() -> int:\n"
-            "        return 42\n"
+            "class MyClass:\n    @staticmethod\n    def helper() -> int:\n        return 42\n"
         )
 
         chunks = chunk_python(py_file)
@@ -861,11 +835,7 @@ class TestChunkPythonMethodChunks:
     def test_async_method_chunked(self, tmp_path: Path) -> None:
         """async def method produces a chunk with dot-notation name."""
         py_file = tmp_path / "test.py"
-        py_file.write_text(
-            "class MyClass:\n"
-            "    async def fetch(self) -> None:\n"
-            "        pass\n"
-        )
+        py_file.write_text("class MyClass:\n    async def fetch(self) -> None:\n        pass\n")
 
         chunks = chunk_python(py_file)
 
@@ -874,17 +844,11 @@ class TestChunkPythonMethodChunks:
     def test_method_chunk_text_contains_def_line(self, tmp_path: Path) -> None:
         """Method chunk text contains the def line of the method."""
         py_file = tmp_path / "test.py"
-        py_file.write_text(
-            "class MyClass:\n"
-            "    def my_method(self) -> None:\n"
-            "        pass\n"
-        )
+        py_file.write_text("class MyClass:\n    def my_method(self) -> None:\n        pass\n")
 
         chunks = chunk_python(py_file)
 
-        method_chunk = next(
-            (c for c in chunks if c["chunk_name"] == "MyClass.my_method"), None
-        )
+        method_chunk = next((c for c in chunks if c["chunk_name"] == "MyClass.my_method"), None)
         assert method_chunk is not None
         assert "def my_method" in method_chunk["text"]
 
@@ -892,17 +856,11 @@ class TestChunkPythonMethodChunks:
         """Method chunk start_line is the def line, end_line is the last body line."""
         py_file = tmp_path / "test.py"
         # class on line 1, def on line 2, pass on line 3
-        py_file.write_text(
-            "class MyClass:\n"
-            "    def method(self) -> None:\n"
-            "        pass\n"
-        )
+        py_file.write_text("class MyClass:\n    def method(self) -> None:\n        pass\n")
 
         chunks = chunk_python(py_file)
 
-        method_chunk = next(
-            (c for c in chunks if c["chunk_name"] == "MyClass.method"), None
-        )
+        method_chunk = next((c for c in chunks if c["chunk_name"] == "MyClass.method"), None)
         assert method_chunk is not None
         assert method_chunk["start_line"] == 2
         assert method_chunk["end_line"] == 3
@@ -920,11 +878,7 @@ class TestChunkPythonMethodChunks:
         """Two classes in one file both produce per-method sub-chunks."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            "class Alpha:\n"
-            "    def run(self): pass\n"
-            "\n"
-            "class Beta:\n"
-            "    def go(self): pass\n"
+            "class Alpha:\n    def run(self): pass\n\nclass Beta:\n    def go(self): pass\n"
         )
 
         chunks = chunk_python(py_file)
@@ -951,9 +905,7 @@ class TestChunkPythonMethodChunks:
         """Class with 2 methods produces header + 2 method chunks (>= 3 total for class)."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
-            "class MyClass:\n"
-            "    def method_a(self): pass\n"
-            "    def method_b(self): pass\n"
+            "class MyClass:\n    def method_a(self): pass\n    def method_b(self): pass\n"
         )
 
         chunks = chunk_python(py_file)
@@ -964,11 +916,7 @@ class TestChunkPythonMethodChunks:
     def test_deterministic_output(self, tmp_path: Path) -> None:
         """Calling chunk_python() twice on the same file produces identical results."""
         py_file = tmp_path / "test.py"
-        py_file.write_text(
-            "class MyClass:\n"
-            "    def alpha(self): pass\n"
-            "    def beta(self): pass\n"
-        )
+        py_file.write_text("class MyClass:\n    def alpha(self): pass\n    def beta(self): pass\n")
 
         result1 = chunk_python(py_file)
         result2 = chunk_python(py_file)
