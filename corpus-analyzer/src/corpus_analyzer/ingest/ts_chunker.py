@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from tree_sitter import Parser
-from tree_sitter_language_pack import get_parser
+if TYPE_CHECKING:
+    from tree_sitter import Parser
 
 _DIALECT: dict[str, str] = {
     ".ts": "typescript",
@@ -43,6 +43,8 @@ def _get_cached_parser(dialect: str) -> Parser:
     Returns:
         Configured tree_sitter.Parser instance (loaded once per dialect per process).
     """
+    from tree_sitter_language_pack import get_parser  # lazy: allows ImportError catch at call site
+
     return get_parser(dialect)  # type: ignore[arg-type]
 
 
@@ -113,9 +115,16 @@ def chunk_typescript(path: Path) -> list[dict[str, Any]]:
     if not source.strip():
         return []
 
+    # IDX-08: size guard — minified/generated files bypass AST parse
+    if len(source) > 50_000:
+        return chunk_lines(path)
+
+    # IDX-09: ImportError branch — tree-sitter not installed; separate from has_error fallback
     try:
         parser = _get_cached_parser(dialect)
         tree = parser.parse(source.encode("utf-8"))
+    except ImportError:
+        return chunk_lines(path)
     except Exception:
         return chunk_lines(path)
 
