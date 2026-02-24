@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v2.1 Result Quality (Phases 19–25) — defining requirements
+**Current focus:** v2.1 Result Quality (Phases 19–25) — roadmap defined, ready for Phase 19
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 19 (MCP Chunk Response)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-24 — Milestone v2.1 started
+Status: Not started
+Last activity: 2026-02-24 — v2.1 roadmap created
 
-Progress: v2.1 not started — requirements defining
+Progress: [          ] 0/7 phases — v2.1 not started
 
 ## Performance Metrics
 
@@ -53,6 +53,11 @@ Progress: v2.1 not started — requirements defining
 - Phases: 2 (17, 18)
 - Timeline: 1 day (2026-02-24)
 
+**v2.1 In Progress:**
+- Plans completed: 0
+- Phases: 0/7 complete (19–25)
+- Timeline: started 2026-02-24
+
 ## Accumulated Context
 
 ### Decisions
@@ -80,6 +85,16 @@ Key 17-02 decisions:
 - Test fixtures that directly insert LanceDB rows auto-fixed with chunk_name="" and chunk_text="" defaults
 - ensure_schema_v2 → ensure_schema_v3 → ensure_schema_v4 call order preserved in CorpusIndex.open()
 
+### v2.1 Roadmap Notes
+
+- Phase 19 (CHUNK-03): MCP `corpus_search` already has all v4 fields in LanceDB — this is a thin addition to the MCP response schema
+- Phase 20–21 (SUB-01–03): Sub-chunking changes the output of `py_chunker.py` and `ts_chunker.py`; will cause re-indexing behaviour changes; all tests for monolithic class chunks will need updating
+- Phase 22 (NAME-01–03): `--name` with no positional query requires making the query argument Optional in the CLI command signature
+- Phase 23 (NORM-01): Normalisation inside the search engine means all existing score-range tests (e.g. FILT-01 threshold tests) must be updated to expect 0–1 values
+- Phase 23 (SORT-01): MCP sort_by uses the existing `_API_SORT_MAP` translation — minimal wiring required
+- Phase 24 (JSON-01): Rich must be fully suppressed when `--output json`; use `print()` not `Console.print()`
+- Phase 25 (GRAPH-01): `corpus_graph` MCP tool is a thin wrapper around existing `GraphStore.search_paths()` and `get_neighbours()` — no new storage
+
 ### Pending Todos
 
 None.
@@ -92,6 +107,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 18-02-PLAN.md (format_result GREEN implementation + cli.py render loop; 31091ac)
+Stopped at: v2.1 roadmap created
 Resume file: None
-Next step: Phase 19 (next v2 phase)
+Next step: Phase 19 — `/gsd:plan-phase 19`
