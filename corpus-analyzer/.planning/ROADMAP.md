@@ -94,7 +94,14 @@ Plans:
   3. `llm/chunked_processor.py` has zero mypy errors — nested function types annotated, `Atom` promoted to module level
   4. All remaining single-file mypy errors are resolved (`utils/ui.py`, `extractors/`, `llm/ollama_client.py`, `llm/rewriter.py`, `ingest/chunker.py`, `analyzers/shape.py`)
   5. The `llm/rewriter.py` line 406 operator bug is investigated and fixed (not cast away)
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — Fix all 47 ruff violations in cli.py (45 E501, B023, B904)
+- [ ] 11-02-PLAN.md — Fix all 17 mypy errors in core/database.py (cast(Table,...), bare generics, float(None))
+- [ ] 11-03-PLAN.md — Fix all 12 mypy errors in llm/chunked_processor.py (Atom promotion, nested function annotations)
+- [ ] 11-04-PLAN.md — Fix mypy errors in utils/ui.py, extractors/, ollama_client.py, ingest/chunker.py, analyzers/shape.py
+- [ ] 11-05-PLAN.md — Fix all 7 mypy errors in llm/rewriter.py (DEFAULT_SYSTEM_PROMPT bug, annotations); full mypy clean gate
 
 ### Phase 12: Validation Gate
 **Goal**: The codebase has a confirmed zero-error linting baseline — ruff clean, mypy clean, tests green
