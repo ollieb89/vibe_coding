@@ -45,7 +45,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 **Milestone Goal:** Achieve a clean, zero-error linting baseline — `uv run ruff check .` and `uv run mypy src/` both exit zero, all 281 tests green.
 
-- [ ] **Phase 9: Config and Auto-Fix** — pyproject.toml surgical additions + ruff auto-fix eliminating ~282 violations (2 plans)
+- [x] **Phase 9: Config and Auto-Fix** — pyproject.toml surgical additions + ruff auto-fix eliminating ~282 violations (2 plans) (completed 2026-02-24)
 - [ ] **Phase 10: Manual Ruff — Leaf to Hub** — Fix all remaining ruff violations in leaf modules through the core database hub
 - [ ] **Phase 11: Manual Ruff — CLI + Mypy** — Fix CLI and legacy rewriter ruff violations; fix all 42 mypy errors across 9 files
 - [ ] **Phase 12: Validation Gate** — Confirm zero ruff violations, zero mypy errors, all tests green
@@ -113,7 +113,7 @@ Plans:
 | 6. Frontmatter Classification | v1.1 | 2/2 | Complete | 2026-02-23 |
 | 7. Graph Layer | v1.2 | —/— | Complete | 2026-02-24 |
 | 8. Cleanup | v1.2 | 1/1 | Complete | 2026-02-24 |
-| 9. Config and Auto-Fix | v1.3 | 0/2 | Not started | - |
+| 9. Config and Auto-Fix | 2/2 | Complete   | 2026-02-24 | - |
 | 10. Manual Ruff — Leaf to Hub | v1.3 | 0/TBD | Not started | - |
 | 11. Manual Ruff — CLI + Mypy | v1.3 | 0/TBD | Not started | - |
 | 12. Validation Gate | v1.3 | 0/TBD | Not started | - |

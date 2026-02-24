@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 9 of 12 (Config and Auto-Fix)
-Plan: 1 of 2 in current phase
+Plan: 2 of 2 in current phase
 Status: In progress
-Last activity: 2026-02-24 — Phase 9 Plan 1 complete (pyproject.toml config stanzas)
+Last activity: 2026-02-24 — Phase 9 Plan 2 complete (ruff auto-fix, 370 violations eliminated)
 
 Progress: [█░░░░░░░░░] 10% (v1.3)
 
@@ -44,6 +44,7 @@ Progress: [█░░░░░░░░░] 10% (v1.3)
 Recent decisions affecting current work:
 
 - [09-01]: extend-exclude (not exclude) preserves ruff defaults; full relative paths required in per-file-ignores; frontmatter override uses import name not PyPI name
+- [09-02]: Two-pass ruff fix strategy required (--fix then --unsafe-fixes); ruff skips F401 in __init__.py even with unsafe-fixes — manual removal needed
 - [v1.3 planning]: Fix ordering is strict — ruff auto-fix before manual, pyproject.toml config before E501 wrapping, leaf modules before hub, ruff clean before mypy
 - [v1.3 planning]: B006 Typer list defaults must use `# noqa: B006`, not naive `None` replacement (breaks `--help`)
 - [v1.3 planning]: sqlite-utils union-attr — use `cast(Table, ...)` per call site, not `# type: ignore`
@@ -61,5 +62,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 09-01-PLAN.md (ruff/mypy config stanzas)
+Stopped at: Completed 09-02-PLAN.md (ruff auto-fix pass)
 Resume file: None

@@ -16,8 +16,8 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 
 ### Ruff Auto-Fix
 
-- [ ] **RUFF-01**: `ruff check --fix` applied, eliminating all auto-fixable violations (W293/W291/I001/F401/UP045/F541/W605)
-- [ ] **RUFF-02**: All `__init__.py` F401 re-exports verified safe after auto-fix (smoke-test imports pass)
+- [x] **RUFF-01**: `ruff check --fix` applied, eliminating all auto-fixable violations (W293/W291/I001/F401/UP045/F541/W605)
+- [x] **RUFF-02**: All `__init__.py` F401 re-exports verified safe after auto-fix (smoke-test imports pass)
 
 ### Ruff Manual
 
@@ -63,8 +63,8 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 | CONF-02 | Phase 9 | Complete |
 | CONF-03 | Phase 9 | Complete |
 | CONF-04 | Phase 9 | Complete |
-| RUFF-01 | Phase 9 | Pending |
-| RUFF-02 | Phase 9 | Pending |
+| RUFF-01 | Phase 9 | Complete |
+| RUFF-02 | Phase 9 | Complete |
 | RUFF-03 | Phase 10 | Pending |
 | RUFF-04 | Phase 10 | Pending |
 | RUFF-05 | Phase 10 | Pending |
