@@ -1,162 +1,413 @@
 # Feature Research
 
-**Domain:** TypeScript/JavaScript AST-aware chunking for local semantic search indexing
+**Domain:** Intelligent Search — v3 features for local semantic search CLI (corpus-analyzer)
 **Researched:** 2026-02-24
-**Confidence:** HIGH (existing Python chunker audited directly; tree-sitter TypeScript node types verified against official node-types.json; chunking patterns verified against LanceDB RAG blog, supermemory code-chunk library, and cAST academic paper)
+**Confidence:** MEDIUM-HIGH (MMR and cross-encoder patterns verified via multiple official sources; graph-centrality ranking verified via academic and production sources; LanceDB-specific MMR confirmed via LangChain integration docs; offline cross-encoder via sentence-transformers sbert.net docs)
 
 ---
 
-## Context: Existing Python Chunker as the Parity Target
+## Scope of This Document
 
-The Python AST chunker (`chunk_python` in `ingest/chunker.py`) sets the design contract
-that the TypeScript chunker must match:
+This document covers **only v3 NEW features**. The following are already built and are NOT re-researched here:
 
-| Property | Python chunker behaviour |
-|----------|--------------------------|
-| Granularity | Top-level `FunctionDef`, `AsyncFunctionDef`, `ClassDef` only — nested defs are NOT separate chunks |
-| Output fields | `{"text": str, "start_line": int, "end_line": int}` — no extra fields |
-| Fallback | `chunk_lines(path)` when parse fails OR no top-level defs found |
-| Character limit | `_enforce_char_limit(chunks, max_chars=4000)` applied by `chunk_file()` dispatcher |
-| Dispatch point | `chunk_file()` in `chunker.py` routes `.py` → `chunk_python` |
-
-The new `chunk_typescript` function must produce the same dict shape (`text`, `start_line`,
-`end_line`) and be wired into `chunk_file()` for `.ts`, `.tsx`, `.js`, `.jsx`.
+- Hybrid BM25+vector+RRF search (LanceDB)
+- `--source`, `--construct`, `--name`, `--min-score`, `--sort-by`, `--output json` filters
+- `corpus graph <slug>` upstream/downstream neighbors
+- MCP `corpus_search` and `corpus_graph` tools
+- Chunk-level results with `start_line`/`end_line`/`chunk_name`/`chunk_text` (v2, in progress)
 
 ---
 
-## Established TypeScript/JavaScript AST Node Types
+## Feature Clusters
 
-The tree-sitter-typescript grammar (v0.23.2) defines these node type strings, verified
-against the official `node-types.json` file:
+The v3 features group into four clusters. Each cluster is addressed separately below.
 
-| Node Type String | What It Represents |
-|------------------|-------------------|
-| `function_declaration` | `function foo() {}` |
-| `generator_function_declaration` | `function* gen() {}` |
-| `arrow_function` | `const fn = () => {}` (top-level only if assigned to a `lexical_declaration`) |
-| `class_declaration` | `class Foo {}` |
-| `method_definition` | Methods inside a class body (child of `class_declaration`) |
-| `interface_declaration` | `interface Foo {}` (TypeScript only) |
-| `type_alias_declaration` | `type Foo = ...` (TypeScript only) |
-| `enum_declaration` | `enum Color {}` (TypeScript only) |
-| `lexical_declaration` | `const`/`let` declarations — wraps arrow functions and exported constants |
-| `export_statement` | `export function foo()` / `export default class` / `export const` — wrapper around a declaration |
-| `abstract_class_declaration` | `abstract class Foo {}` (TypeScript only) |
-| `ambient_declaration` | `declare module ...` / `declare const ...` (TypeScript `.d.ts` ambient) |
-
-The TSX grammar adds JSX-specific nodes but does not change which declaration nodes
-are relevant for chunking. The TypeScript grammar handles `.ts`/`.tsx` and the JavaScript
-grammar (via `tree_sitter_languages` or `tree-sitter-javascript`) handles `.js`/`.jsx`.
+### Cluster A — Result Diversity (MMR + Sub-chunk Merging)
+### Cluster B — Graph-Enriched Results (Graph Expansion + Centrality Scoring + Blast Radius)
+### Cluster C — Multi-Query Composition (AND Intersection + Negative Filter)
+### Cluster D — Quality-of-Life Display (Cross-Source Labeling + Contiguous Merging + --within-graph)
 
 ---
 
-## Feature Landscape
+## Cluster A: Result Diversity
 
-### Table Stakes (Users Expect These)
+### How MMR Works in Practice
 
-Missing any of these makes the chunker incomplete relative to the Python AST chunker,
-which is the baseline users already have for Python files.
+MMR (Maximal Marginal Relevance) is a post-retrieval reranking algorithm. The standard flow is:
+
+1. Retrieve a larger candidate set from the vector store (e.g., `fetch_k=50`)
+2. Score every candidate against the query (relevance score already available from vector search)
+3. Greedily select the next result by maximizing: `λ * relevance(doc) - (1-λ) * max_similarity(doc, already_selected)`
+4. Repeat until `k` results are selected
+
+The `λ` parameter is the diversity lever: `λ=1.0` is pure relevance (identical to standard search), `λ=0.0` is maximum diversity (ignores relevance). Practical values: `λ=0.5` for exploratory queries (agent library discovery), `λ=0.7–0.8` for precision queries where users know the construct name.
+
+**User-visible behavior:** Without MMR, a query like `"authentication token validation"` may return 5 chunks from the same `auth_validator.py` file (consecutive method chunks, very high cosine similarity to each other). With MMR (`λ=0.5`), those 5 slots are replaced by 1 chunk from `auth_validator.py` plus chunks from `token_store.py`, `session_middleware.py`, `oauth_handler.ts`, and `role_guard.ts`. The user sees the full architectural spread in one query.
+
+**LanceDB implementation path:** LanceDB's LangChain integration exposes `max_marginal_relevance_search(query, k, fetch_k, lambda_mult)`. The underlying mechanism — embedding all candidates and computing inter-candidate cosine similarity — can be implemented in pure Python using numpy without LangChain. The existing `CorpusSearch` class can implement MMR as a post-processing step on the raw candidate list returned by `table.search(...).limit(fetch_k).to_list()`.
+
+**Confidence:** HIGH (LangChain-LanceDB integration docs confirm `max_marginal_relevance_search` exists; MMR algorithm is well-established academic literature; implementation in numpy is trivial)
+
+### Contiguous Sub-Chunk Merging
+
+When v2 sub-chunking ships (`ClassName.method_name` chunks), a `corpus search` query often returns several consecutive method chunks from the same class. These are displayed as separate results with identical file paths but adjacent line ranges (`42-67`, `68-91`, `92-114`). The display is noisy and the user must mentally reassemble the class.
+
+**Merge rule:** After scoring and ordering, if two results satisfy all three conditions — (1) same `file_path`, (2) same class prefix (for method chunks), and (3) `end_line[i] + 1 >= start_line[i+1]` — merge them into a single display entry with the combined line range. The merged entry's score is the maximum of the individual scores.
+
+**User-visible behavior:** Three rows `auth_validator.py:42-67`, `auth_validator.py:68-91`, `auth_validator.py:92-114` collapse into one row `auth_validator.py:42-114`. One result slot is consumed instead of three, freeing space for results from other files.
+
+**Dependency:** Requires v2 `start_line`/`end_line` in LanceDB schema (CHUNK-01, in progress Phase 17).
+
+---
+
+## Feature Landscape — Cluster A
+
+### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Function declaration extraction | Functions are the primary semantic unit in any codebase; line-based chunks split functions arbitrarily, causing truncation and duplication | LOW | Node types: `function_declaration`, `generator_function_declaration`. Use `node.start_point[0]` + `node.end_point[0]` for line ranges (0-indexed → convert to 1-indexed) |
-| Class declaration extraction | Classes are atomic units; splitting a class across two line-window chunks destroys its meaning for search | LOW | Node type: `class_declaration`, `abstract_class_declaration`. Entire class (including methods) as one chunk — mirrors Python chunker which does NOT sub-chunk methods |
-| Interface declaration extraction (TypeScript) | Interfaces are type contracts and are frequently searched by name; missing them degrades search quality for TS-heavy repos | LOW | Node type: `interface_declaration`. TypeScript-only; JS parser will not encounter these |
-| Type alias extraction (TypeScript) | `type Foo = ...` declarations are often the thing users search for in TypeScript codebases (e.g., "find the RequestPayload type") | LOW | Node type: `type_alias_declaration`. Often short; rarely needs char-limit splitting |
-| Top-level constant extraction | `export const BASE_URL = ...` and similar top-level constants are searched directly; mixing them into line-window chunks reduces precision | MEDIUM | Node type: `lexical_declaration`. Scope: top-level only. Distinguish from local variable declarations — only extract from root program body |
-| Silent fallback on parse failure | tree-sitter parse failure (e.g., JSX in a `.js` file, syntax error, encoding issue) must not crash indexing; graceful degradation to `chunk_lines()` | LOW | Mirrors Python chunker: `try/except` around `parser.parse()`; return `chunk_lines(path)` on error |
-| Silent fallback when no top-level constructs found | Some TS/JS files are pure type-only imports or re-exports with no extractable constructs; must not return empty | LOW | If extracted chunk list is empty after traversal, return `chunk_lines(path)` — mirrors Python chunker |
-| `.ts`, `.tsx`, `.js`, `.jsx` dispatch | All four extensions must route to the new chunker in `chunk_file()`; currently all four fall through to `chunk_lines()` | LOW | One elif branch in `chunk_file()` replacing the existing `chunk_lines` fallback for these extensions |
-| Test suite at full parity with Python chunker | The Python chunker has 5 test classes covering: top-level extraction, nested-not-separate, async variants, line ranges, and no-defs fallback. The TS chunker must have equivalent coverage | MEDIUM | New test file `tests/ingest/test_chunker_typescript.py`; use `tmp_path` fixtures with inline source; test each node type separately |
+| Same-file chunk deduplication | Returning 5 chunks from one file when asking a broad query is the top UX complaint in semantic search tools | MEDIUM | Can be implemented as a simpler variant of MMR: post-filter to max 1–2 chunks per file path. Lower complexity than full MMR. `--diversity none/file/mmr` flag |
+| Contiguous sub-chunk merging | v2 creates `ClassName.method_name` sub-chunks; adjacent methods from same class appear as separate results — confusing for the user | LOW | Sort by `(file_path, start_line)` after retrieval; merge if adjacent and same class prefix. Display layer only, no schema change |
 
-### Differentiators (Competitive Advantage)
-
-These go beyond the minimum parity contract and improve search quality meaningfully.
+### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Export-unwrapping for exported declarations | `export function foo()` wraps a `function_declaration` inside an `export_statement` node. Extracting the inner declaration (not the export wrapper) preserves the function text cleanly, including the `export` keyword in the chunk text | LOW | Walk `export_statement` children: if child is a declaration node, treat the declaration as the chunk boundary but include the full `export_statement` text. Avoids double-counting |
-| `chunk_name` field in returned dict | Adding the extracted construct name (e.g., `"UserService"`, `"fetchData"`) to the chunk dict enables future `--construct` filtering and name-based search without re-parsing | LOW | Python chunker does NOT return a name field — this would be a forward extension. Pass as optional key; `chunk_file()` and indexer do not need to use it yet but schema migration is simpler if added now |
-| Enum declaration extraction (TypeScript) | `enum Color { Red, Green, Blue }` is a lookup table searched by name; it is a distinct semantic unit that line-based chunking splits badly | LOW | Node type: `enum_declaration`. Short by nature; rarely hits char limit |
-| Separate TypeScript vs JavaScript grammar dispatch | TypeScript files need the `typescript`/`tsx` grammar; JavaScript files need the `javascript` grammar. Using the TypeScript grammar on `.js` files works but is heavier than needed | LOW | Dispatch by extension within `chunk_typescript()`: `.ts`/`.tsx` → `tree_sitter_languages.get_language("typescript")` or `"tsx"`; `.js`/`.jsx` → `"javascript"` |
+| Full MMR with `--diversity` flag and lambda control | Guarantees architectural spread — query returns results from different files/constructs even when one file dominates relevance scores | MEDIUM | Fetch `fetch_k=50` candidates from LanceDB; run Python MMR loop using stored embeddings (or re-embed candidates via cosine similarity). Default `λ=0.5`. Expose `--diversity 0.0-1.0` flag |
+| Per-file chunk count cap as a simpler fallback | `--max-per-file N` limits results per `file_path` without MMR computation overhead. Zero extra dependencies. | LOW | Post-filter on sorted result list. Useful when user just wants breadth without tuning λ |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Method-level chunking (extracting class methods as separate chunks) | Finer granularity seems better for search precision | Methods are meaningless without their class context. A method chunk for `getUser()` that lacks the class name `UserService` is unsearchable. The Python chunker deliberately does NOT sub-chunk methods for this reason. The existing `chunk_python` tests explicitly assert "nested not separate". | Extract the entire class as one chunk. If the class is too large, `_enforce_char_limit` will split it at character boundaries — this is acceptable because it keeps the class header in the first sub-chunk |
-| Import statement chunking | Import blocks contain useful dependency information | Import blocks have near-zero standalone search value — searching for `import { useState } from 'react'` is not a use case. They inflate chunk count and add noise to BM25. The `code-chunk` library offers imports as an entity type but notes they are used as context rather than as searchable entities. | Leave imports in the chunk text of whatever follows them (they appear before the first construct), or include them in the file-level preamble if a preamble chunk is desired |
-| JSDoc/comment extraction as separate chunks | Documentation comments are valuable | Comment chunks have no executable context; they embed poorly because they are natural language without code signals. JSDoc belongs in the chunk text of the function it documents (it precedes the function declaration in the AST and is included naturally by using `node.start_point` as the chunk boundary). | Include preceding JSDoc in chunk text by starting the chunk text at the comment line above the declaration, not at the `function` keyword |
-| `ambient_declaration` and `.d.ts` file chunking | Type declaration files are part of the codebase | `.d.ts` files are generated artefacts in most projects (e.g., `dist/`, `node_modules/`). Including them doubles chunk count for generated types. The extension allowlist in `corpus.toml` already handles exclusion at the scanner level. | Rely on scanner-level exclusion via `source.extensions` and `source.exclude` paths in `corpus.toml`; do not special-case in the chunker |
-| Storing `chunk_name` in `ChunkRecord` LanceDB schema | Enables name-based filtering | Adds a schema migration (`ensure_schema_v4()`) and a new nullable column in LanceDB. The `ChunkRecord` schema warning states "Changing them requires dropping and rebuilding the entire table." Schema changes require careful migration discipline. This is a v2 candidate. | Add `chunk_name` to the `dict` returned by `chunk_typescript()` but have `index_source()` ignore the extra key for now. When the schema migration is ready, the key is already there. |
-| Real-time AST re-parse on search | Provide line-context highlighting at query time | Significant latency increase on every search call. The chunker runs at index time; the indexer already stores `start_line`/`end_line`. Search-time re-parsing would require storing raw source or re-reading files. | Store `start_line`/`end_line` at index time (already done); use them to display line ranges in search results when chunk-level result display ships (v2 candidate per PROJECT.md) |
+| Always-on MMR (no flag, no opt-out) | Diversity seems universally better | For `--name` and `--construct` filtered queries, the user is looking for all occurrences of a specific construct — deduplication works against them. MMR should be opt-in or have a sensible default that is overridable. | Default to `--max-per-file 3` (simple, fast); expose `--diversity` as an explicit flag for full MMR |
+| MMR using re-embedded candidates at query time | More accurate inter-candidate similarity | Requires storing raw embeddings in a queryable format and running O(k*fetch_k) dot products. Adds 50–200ms latency. LanceDB does not expose stored vectors directly in `to_list()` output by default. | Implement MMR using the existing RRF score as the relevance proxy and cosine sim of retrieved chunk text via `sentence-transformers` encode — only if embeddings are already available in memory |
+
+---
+
+## Cluster B: Graph-Enriched Results
+
+### How Graph Expansion Works in Practice
+
+Graph-expanded search augments top search hits with their immediate neighbors from the dependency graph. The UX pattern (seen in Sourcegraph, GraphRAG local search, and LSP-based tools) is:
+
+1. Run vector/hybrid search to get top-k primary results
+2. For each primary result, query the graph store for immediate neighbors (indegree and outdegree)
+3. Present neighbors as a separate labeled section: `[Depends On]` or `[Imported By]`
+4. Neighbors are not ranked against primary results — they appear as contextual annotations
+
+The user sees:
+```
+auth_validator.py:42-67 [skill] score:0.024
+  Depends On: token_store.py, crypto_utils.py
+  Imported By: session_middleware.py, api_gateway.py
+```
+
+This surfaces files that are architecturally related but may have low lexical/semantic similarity to the query — they are related by structure, not by content.
+
+**`--expand-graph` as an opt-in flag** is the correct UX: graph expansion adds 1–3 SQLite queries per result. For 10 results that is 10–30 queries on `graph.sqlite`, each sub-millisecond. Total overhead is under 5ms. The flag keeps default output clean for users who do not use the graph layer.
+
+### Recursive Graph Walk / Blast Radius
+
+The `corpus graph --depth N` feature expands the existing `corpus graph <slug>` from immediate neighbors to N-hop traversal. This is the "blast radius" pattern: "if I change `token_store.py`, what else might break?"
+
+**BFS traversal is the standard approach** (not DFS): level-by-level expansion naturally gives users the proximity of impact. Tools like `axon impact SYMBOL` implement this with configurable depth.
+
+**Hub node detection:** High-indegree nodes (files imported by many others) are architectural hubs. Labeling them with `[hub: 12 inbound]` warns users they are looking at a widely-shared dependency. The indegree count is already computable from `graph.sqlite` `relationships` table.
+
+**User-visible behavior at depth 2:**
+```
+corpus graph auth_validator --depth 2
+
+auth_validator.py
+  → (level 1) token_store.py [hub: 8 inbound]
+  → (level 1) crypto_utils.py
+  → (level 2) base64_encoder.py
+  → (level 2) key_rotation.py
+  ← (level 1) session_middleware.py
+  ← (level 1) api_gateway.py
+  ← (level 2) route_handler.py
+```
+
+### Graph Centrality as a Ranking Signal
+
+Centrality scoring gives high-indegree files a score multiplier in hybrid search. The rationale: if 15 other files import `agent_registry.py`, it is likely a foundational file — when a user queries "agent registration", the foundational file should rank higher than a leaf file with similar text.
+
+**Implementation:** At `corpus index` time, compute indegree per node from `graph.sqlite`. Store the count in LanceDB as a `centrality` float column (normalized 0–1 against max indegree in the graph). At search time, multiply the RRF score by `(1 + centrality_weight * centrality)` where `centrality_weight` is a tunable constant (suggested default: 0.2).
+
+**Dependency:** Requires `corpus index` to populate centrality scores and LanceDB schema v5 to store the `centrality` column.
+
+### `--within-graph <slug>`
+
+Soft-scoping a search to files in the same graph component as a reference file. Results inside the component get a +20% score boost; results outside are not excluded. This answers: "find authentication patterns, but weight things in the same subsystem as `auth_validator.py` higher."
+
+---
+
+## Feature Landscape — Cluster B
+
+### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| `--expand-graph` flag on `corpus search` | Users who have indexed with the graph layer expect to be able to see relationships alongside search hits | MEDIUM | 1–3 SQLite queries per result against existing `graph.sqlite`; `GraphStore.search_paths(fragment)` already exists; output as indented annotation below each result row |
+| `corpus graph --depth N` recursive walk | `corpus graph <slug>` already ships; depth-1 only is incomplete for architectural analysis | MEDIUM | BFS loop on `relationships` table; stop at depth N; deduplicate visited nodes; label hub nodes (indegree > threshold) |
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Centrality score boost in hybrid search | Foundational files surface higher for broad queries; reduces need to manually navigate the graph | HIGH | Requires: indegree computation at index time, LanceDB schema v5 migration for `centrality` column, score multiplier in `CorpusSearch`; not trivial but the value is high for multi-repo agent libraries |
+| `--within-graph <slug>` soft scope | Keeps search focused on an architectural subsystem without hard filtering | MEDIUM | Requires: graph component membership query (BFS from slug, collect all reachable nodes), then post-search score boosting for results whose path is in the component set |
+| Hub node labeling in graph walk output | Warns users they are touching a widely-shared dependency | LOW | Indegree count is one aggregation query on `relationships`; display as `[hub: N inbound]` annotation |
+
+### Anti-Features
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Always-including graph neighbors in every search result | Richer results by default | Adds SQLite round-trips for every result on every search. For users who do not use the graph layer at all, these are wasted queries returning empty results. Clutters output with empty `Depends On: (none)` lines. | Opt-in `--expand-graph` flag; skip neighbor queries entirely when flag absent |
+| Hard filtering to graph-reachable files only | "Only show results from files in the same component" seems focused | Excludes genuinely relevant files that happen not to be linked in the graph. Graph coverage is never 100%. A skill file might be relevant but not have `## Related Skills` links. | Soft boost (`--within-graph` +20%) rather than hard filter |
+| PageRank / betweenness centrality | More sophisticated than indegree | PageRank and betweenness require iterative computation across the whole graph. For agent libraries with hundreds of files (not millions), indegree is sufficient and O(n) to compute. PageRank adds a dependency and complexity without measurable quality gain at this scale. | Indegree centrality only; revisit if graph grows beyond ~10K nodes |
+
+---
+
+## Cluster C: Multi-Query Composition
+
+### How Multi-Query AND Intersection Works
+
+Standard vector databases do not natively support AND-intersection of semantic spaces. The implementation pattern for multi-query composition is:
+
+1. Execute each query independently: `results_A = search("auth")`, `results_B = search("saml")`
+2. Intersect by `chunk_id` or `file_path`: keep only results that appear in ALL query result sets
+3. Score the intersection: sum or average the individual RRF scores, re-rank
+
+For two queries with `top_k=50` each, the intersection might be 3–15 chunks. Re-rank by combined score and return top-k final results.
+
+**User-visible behavior:**
+```bash
+corpus search --query "authentication" --query "saml" --limit 5
+```
+Returns only chunks that are semantically relevant to BOTH authentication AND SAML. Prevents noisy results for one term drowning out the intersection.
+
+**Dependency:** Requires two independent search calls inside `CorpusSearch.search()`. No schema changes needed. The existing `--source`, `--construct`, `--min-score` filters apply after intersection.
+
+**Milvus and other production vector DBs** support this via `hybrid_search()` with multiple `AnnSearchRequest` objects — but this is a higher-level API that LanceDB does not expose directly. The Python-level intersection is functionally equivalent and fully compatible with LanceDB's `table.search()`.
+
+### `--exclude-path <glob>`
+
+Negative path filter: `--exclude-path "*/tests/*"` removes results whose `file_path` matches the glob pattern. This is a post-search structural filter, not a semantic operation.
+
+**User-visible behavior:** Prevents test files from dominating results when the user wants production code examples. Complements `--source` (which filters by named source config) for users who do not have a separate source config for tests.
+
+---
+
+## Feature Landscape — Cluster C
+
+### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| `--exclude-path <glob>` | Users frequently want to exclude test directories, generated files, or `node_modules` from search results | LOW | `fnmatch.fnmatch(result.file_path, pattern)` post-filter; multiple `--exclude-path` flags use OR logic (exclude if any pattern matches) |
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Multiple `--query` AND intersection | Enables compound intent queries that single-query search cannot express: "find authentication AND token AND refresh" | MEDIUM | Two or more `table.search().limit(fetch_k)` calls; set intersection on `chunk_id`; combined RRF score; result count can be zero (user-facing hint: "no results matched all N queries simultaneously") |
+
+### Anti-Features
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| OR union of multiple `--query` flags | "More results from more queries" seems useful | OR union doubles result count and re-introduces the same problem as a single broad query. The value of multi-query is precisely the intersection — more focused results. | If the user wants broader results, a single combined query ("authentication saml token") already captures OR semantics via the vector space |
+| `--query` flag with boolean operators in the string (`--query "auth AND saml"`) | Familiar SQL-style syntax | Parsing boolean operators from a query string is fragile and conflicts with natural language queries. "auth AND saml" as a natural language query to the embedding model is valid — the model processes "AND" as a conjunction word, not a boolean operator. | Separate `--query` flags for each term. CLI-level boolean is clear and unambiguous. |
+
+---
+
+## Cluster D: Quality-of-Life Display
+
+### Cross-Source Labeling
+
+When a user has multiple sources configured (e.g., `personal-skills`, `work-agents`, `oss-prompts`), every result should display which source it came from. This is the primary navigation signal for multi-source setups.
+
+**CLI format:**
+```
+[personal-skills] auth/validator.py:42-67 [skill] score:0.024
+  def validate_token(token: str) -> bool:
+```
+
+**MCP format:** Add `"source": "personal-skills"` field to each result object in `corpus_search` response. Already tracked in LanceDB schema (`source_name` column exists per `corpus.toml` source config).
+
+**Dependency:** `source_name` is already stored in LanceDB per chunk (indexed at `index_source()` time with the `SourceConfig.name`). This is a display-layer change only.
+
+**Confidence:** HIGH — `source_name` column existence confirmed by reading `PROJECT.md` architecture section (SourceConfig with `.name`).
+
+---
+
+## Feature Landscape — Cluster D
+
+### Table Stakes
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Source name prefix on CLI results | Users with 2+ source configs cannot tell which library a result came from without the prefix | LOW | Read `source_name` from the LanceDB result dict; prepend `[source_name]` to the CLI output line. No schema change. |
+| `source` field in MCP `corpus_search` response | MCP callers (LLMs) need to cite provenance; "this skill comes from personal-skills library" is essential context for an agent making decisions | LOW | Add `source` key to the `SearchResult` dataclass and MCP response dict. `source_name` already in LanceDB row. |
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| `--within-graph <slug>` soft scope (also listed in Cluster B) | Cross-cutting: both a graph feature and a result quality feature | MEDIUM | See Cluster B for full details |
+
+### Anti-Features
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Source-specific score normalization (normalize within each source separately) | Prevents one source from dominating if it has more documents | Source-level normalization makes cross-source comparison meaningless. A score of 0.8 from `personal-skills` would be incomparable to a score of 0.8 from `work-agents`. | Per-query min-max normalization (v2 NORM-01 already planned) is global and keeps scores comparable across sources. The `--source` filter already provides source isolation when needed. |
+
+---
+
+## Optional Two-Stage Re-ranking (`--rerank`)
+
+### How Cross-Encoder Re-ranking Works
+
+Cross-encoder re-ranking is a standard two-stage pipeline in production search systems:
+
+**Stage 1 (existing):** Fast bi-encoder retrieval via LanceDB hybrid search — returns top-50 candidates in <100ms.
+
+**Stage 2 (new, `--rerank`):** A cross-encoder processes each `(query, chunk_text)` pair jointly through a transformer, producing a relevance score with full cross-attention. Candidates are re-sorted by this score. The cross-encoder's deeper semantic reasoning corrects ranking errors from the bi-encoder (which compresses query and document to fixed vectors independently).
+
+**User-visible behavior:** The `--rerank` flag is absent by default. When used:
+```bash
+corpus search "validate JWT token with RSA key" --rerank --limit 5
+```
+The tool retrieves top-50 from LanceDB, passes all 50 `(query, chunk)` pairs to the cross-encoder, re-ranks, and returns the top-5. Latency increases by 200–500ms (TinyBERT-based cross-encoder on CPU for 20 docs), or 50ms for `cross-encoder/ms-marco-MiniLM-L-6-v2` on a modern CPU.
+
+**Recommended model for offline use:** `cross-encoder/ms-marco-MiniLM-L-6-v2` from sentence-transformers. This model:
+- Ships as a pre-trained Hugging Face model downloadable once, used offline
+- Processes 20 candidates in ~50ms on CPU (MiniLM-L6 architecture)
+- Is designed specifically for passage reranking (MS MARCO training data)
+- Integrates via `sentence-transformers`: `CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2").predict(pairs)`
+- Returns logits (not 0–1); apply sigmoid for score display
+
+**Latency budget:** 50ms for re-ranking 20 candidates is acceptable for a CLI tool. The v2 MCP `corpus_search` response already adds chunk text to the payload, which is what the cross-encoder needs — no extra file reads required.
+
+**Confidence:** HIGH (sentence-transformers docs confirm model, API, and CPU latency; MS MARCO model confirmed on sbert.net official docs)
+
+### Table Stakes (if `--rerank` ships at all)
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Optional, off by default | Adds 50–500ms latency — must be opt-in | LOW | CLI flag only; zero impact on users who don't use it |
+| Works offline after one-time model download | Project constraint: offline/Ollama-first | LOW | sentence-transformers caches model to `~/.cache/huggingface/`. One-time 70MB download for MiniLM-L6. |
+| Candidate set: top-50 from stage-1 | Diminishing returns above 50 candidates on CPU; corpus is local so top-50 covers well | LOW | `fetch_k=50` in stage-1 search; pass all 50 to cross-encoder; return top-k |
+
+### Differentiators (for `--rerank`)
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| `--rerank` flag with `cross-encoder/ms-marco-MiniLM-L-6-v2` | 20–35% accuracy improvement for complex natural language queries vs pure bi-encoder | MEDIUM | Requires `sentence-transformers` as a new optional dependency; add to `pyproject.toml` extras; lazy import so non-rerank users have zero overhead |
+| LLM-based re-ranking via Ollama as alternative | Uses the already-configured Ollama instance; no new model download | HIGH | Ollama re-ranking adds 1–5 seconds latency (LLM inference per candidate). Only viable if candidate set is very small (top-5). NOT recommended as primary path. |
+
+### Anti-Features (for `--rerank`)
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Always-on re-ranking | Better results always | Adds 200–500ms to every search. For `--name`-filtered queries the user already knows the construct; bi-encoder ranking is sufficient and precise. Re-ranking adds cost without benefit when the user is not doing natural language retrieval. | Off by default; `--rerank` flag for when the user cares about ranking quality over latency |
+| Re-ranking with a large cross-encoder (BERT-base or larger) | Better accuracy than MiniLM | On CPU, BERT-base takes 1.5+ seconds for 20 candidates. Unacceptable CLI latency. | MiniLM-L6 achieves 95%+ of BERT-base accuracy on MS MARCO with 10x faster inference |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[chunk_typescript() function]
-    └──requires──> [tree-sitter + tree-sitter-languages installed]
-    └──requires──> [chunk_lines() fallback exists]  ← already done
-    └──requires──> [_enforce_char_limit() applied]  ← already done in chunk_file()
+[MMR diversity -- Cluster A]
+    └──requires──> [v2 chunk-level results: start_line, end_line in LanceDB (CHUNK-01)]
+    └──requires──> [candidate embeddings accessible for cosine sim, OR use RRF score as proxy]
 
-[chunk_file() dispatch updated]
-    └──requires──> [chunk_typescript() implemented]
-    └──replaces──> [chunk_lines() for .ts/.tsx/.js/.jsx]
+[Contiguous sub-chunk merging -- Cluster A]
+    └──requires──> [v2 sub-chunking: ClassName.method_name chunks (SUB-01, SUB-02, SUB-03)]
+    └──requires──> [v2 start_line/end_line in search results (CHUNK-02)]
+    └──independent of──> [MMR]
 
-[Test suite]
-    └──requires──> [chunk_typescript() implemented]
-    └──mirrors──> [TestChunkPython test structure]
+[--expand-graph -- Cluster B]
+    └──requires──> [graph.sqlite with relationships table (v1.2, already shipped)]
+    └──requires──> [GraphStore.search_paths() (v1.2, already shipped)]
+    └──enhances──> [corpus search result display]
 
-[Export-unwrapping]
-    └──requires──> [chunk_typescript() top-level extraction working]
-    └──enhances──> [function_declaration extraction]
+[corpus graph --depth N -- Cluster B]
+    └──requires──> [GraphStore existing (v1.2)]
+    └──extends──> [corpus graph <slug> (v1.2)]
+    └──independent of──> [--expand-graph]
 
-[chunk_name field in dict]
-    └──requires──> [chunk_typescript() returning node name]
-    └──independent of──> [LanceDB schema — ignored by indexer until schema migration ships]
+[Centrality scoring -- Cluster B]
+    └──requires──> [graph.sqlite with indegree data (v1.2 relationships table)]
+    └──requires──> [LanceDB schema v5: centrality column in chunk records]
+    └──requires──> [corpus index computes and stores centrality at index time]
+    └──enhances──> [hybrid search scoring]
 
-[Separate TS vs JS grammar dispatch]
-    └──requires──> [chunk_typescript() implemented]
-    └──is part of──> [chunk_typescript() internal logic]
+[--within-graph -- Cluster B]
+    └──requires──> [GraphStore BFS traversal (can reuse --depth N logic)]
+    └──requires──> [search results have file_path for set membership check]
+    └──independent of──> [centrality scoring]
+
+[Multi-query --query --query -- Cluster C]
+    └──requires──> [CorpusSearch.search() callable multiple times independently]
+    └──requires──> [chunk_id or file_path+start_line as intersection key in results]
+    └──independent of──> [graph features, MMR]
+
+[--exclude-path -- Cluster C]
+    └──requires──> [file_path in search result (already present)]
+    └──independent of──> [everything else]
+
+[Cross-source labeling -- Cluster D]
+    └──requires──> [source_name stored in LanceDB chunk records (already present)]
+    └──enhances──> [CLI result display, MCP corpus_search response]
+    └──independent of──> [all other v3 features]
+
+[--rerank -- optional]
+    └──requires──> [chunk_text in search results (v2 CHUNK-03 MCP, or CHUNK-02 CLI)]
+    └──requires──> [sentence-transformers installed (new optional dependency)]
+    └──independent of──> [MMR, graph, multi-query]
+    └──conflicts with──> [--max-per-file and MMR applied before rerank (apply diversity first, then rerank the diverse set)]
 ```
 
 ### Dependency Notes
 
-- **`tree-sitter-languages` vs separate packages:** `tree-sitter-languages` is a PyPI package that ships pre-compiled grammars for 100+ languages via binary wheels. It is simpler to install than `tree-sitter-typescript` (which requires compilation). The STACK.md for this milestone should specify which package to use. `tree-sitter-languages` is the preferred choice for this project because it avoids C compilation in the `uv sync` pipeline. MEDIUM confidence — verify current `tree-sitter-languages` version ships TypeScript + TSX grammars.
-
-- **TSX grammar for `.tsx` files:** The TypeScript tree-sitter grammar repo ships two grammars: `typescript` (for `.ts`) and `tsx` (for `.tsx` and Flow-typed `.js`). `chunk_typescript()` must select the correct grammar by extension.
-
-- **`chunk_name` optional field:** The Python chunker's output dict has only `text`, `start_line`, `end_line`. Adding `chunk_name` is forward-compatible (Python dicts accept extra keys); `index_source()` builds `chunk_dict` explicitly and will not store `chunk_name` until the schema is ready. This is safe to add now without a schema migration.
-
-- **Character limit is applied in `chunk_file()`:** The `_enforce_char_limit(chunks, max_chars=4000)` call in `chunk_file()` applies after dispatch. `chunk_typescript()` does not need to implement it — parity with Python chunker.
+- **Cross-source labeling has zero new dependencies** — `source_name` is already in LanceDB. This is the safest v3 feature to ship first.
+- **Contiguous merging requires v2 to complete** — cannot merge adjacent method chunks if sub-chunking (SUB-01–SUB-03) is not yet in the index. Phase ordering: v2 closes, then contiguous merging.
+- **Centrality scoring is the highest-dependency v3 feature** — requires a new LanceDB schema migration (v5) and changes to `corpus index`. Should be its own phase.
+- **Multi-query AND intersection has no new dependencies** — pure Python post-processing on existing search. Low-risk to ship early in v3.
+- **`--rerank` is fully independent** — can be its own phase, deferred if scope is tight. Optional dependency on `sentence-transformers` should be an extras group in `pyproject.toml`.
+- **Graph features build on v1.2** — `graph.sqlite` and `GraphStore` already exist. `--expand-graph` and `--depth N` are extensions of existing infrastructure.
 
 ---
 
-## MVP Definition
+## MVP Definition for v3
 
-### Launch With (v1.5)
+### Launch With (v3 core)
 
-The minimum set to replace line-based chunking for TS/JS with meaningful AST chunking.
+The minimum that makes v3 a meaningful milestone — solves the "result flooding" problem and adds the most-asked-for graph UX:
 
-- [ ] `chunk_typescript(path)` function extracting top-level: `function_declaration`, `generator_function_declaration`, `class_declaration`, `abstract_class_declaration`, `interface_declaration`, `type_alias_declaration`, `lexical_declaration` (top-level consts) — IDX-01, IDX-02
-- [ ] Export-unwrapping: `export_statement` nodes whose child is a declaration are handled by extracting the full `export_statement` text with the declaration's line boundaries — IDX-02 detail
-- [ ] Silent fallback to `chunk_lines(path)` on parse failure and on empty extraction — IDX-03
-- [ ] Grammar selection by extension: `typescript` for `.ts`, `tsx` for `.tsx`, `javascript` for `.js`/`.jsx` — IDX-01 detail
-- [ ] `chunk_file()` dispatcher updated: `.ts`, `.tsx`, `.js`, `.jsx` → `chunk_typescript` — IDX-04
-- [ ] Test file `tests/ingest/test_chunker_typescript.py` with classes for: function extraction, class extraction, interface/type/enum extraction, top-level const extraction, line ranges, nested-not-separate, export-wrapped declarations, parse-failure fallback, no-constructs fallback — TEST-01
+- [ ] Cross-source labeling (CLI prefix + MCP `source` field) — zero risk, zero new dependencies
+- [ ] `--exclude-path <glob>` — single post-filter, trivial to implement
+- [ ] Same-file chunk cap (simplified diversity: `--max-per-file N`, default 3) — addresses the most common complaint without MMR complexity
+- [ ] Contiguous sub-chunk merging — display quality fix for v2 method chunks
+- [ ] `--expand-graph` on `corpus search` — surfaces graph neighbors alongside hits; 1 SQLite query per result
+- [ ] `corpus graph --depth N` — extends existing `corpus graph` to recursive walks
 
-### Add After Validation (v1.x)
+### Add After Core Validates
 
-- [ ] `chunk_name` field in returned dict — add the extracted name string to the dict; `index_source()` ignores it until schema migration is ready. Low-risk, enables future `--construct` filtering by name without re-parse.
-- [ ] `enum_declaration` extraction — TypeScript enums are a differentiator; include if test time allows
+Features that require more infrastructure or have higher risk:
 
-### Future Consideration (v2+)
+- [ ] Full MMR with `--diversity` flag — needs numpy cosine sim on candidate embeddings or RRF-score proxy
+- [ ] Multiple `--query` AND intersection — two search calls + set intersection
+- [ ] `--within-graph <slug>` soft scope — BFS + score boosting
+- [ ] Hub node labeling in graph walk — trivial addition once `--depth N` ships
 
-- [ ] `chunk_name` persisted in LanceDB `ChunkRecord` schema — requires `ensure_schema_v4()` migration; deferred to avoid schema churn
-- [ ] Method-level chunk option (class methods as separate chunks with class context prepended) — only valuable after chunk-level result display ships (PROJECT.md v2 candidate)
-- [ ] Ambient declaration handling for `.d.ts` files — only relevant if users index TypeScript declaration files explicitly
+### Defer to v3.x or v4
+
+- [ ] Centrality scoring — requires LanceDB schema v5 migration + index-time computation; high value but high complexity; own milestone
+- [ ] `--rerank` cross-encoder — requires new optional dependency; 20–35% quality gain for complex queries; useful but not blocking the core v3 goal
 
 ---
 
@@ -164,58 +415,38 @@ The minimum set to replace line-based chunking for TS/JS with meaningful AST chu
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| `function_declaration` extraction | HIGH — primary search target in any JS/TS codebase | LOW — two node type strings, one traversal | P1 |
-| `class_declaration` extraction | HIGH — classes are atomic units; line-based splits break class search | LOW — one node type string | P1 |
-| `interface_declaration` extraction | HIGH for TS repos — interfaces are the contract types users search | LOW — TypeScript grammar only | P1 |
-| `type_alias_declaration` extraction | HIGH for TS repos — types are frequently searched by name | LOW — short nodes, minimal risk | P1 |
-| Top-level `lexical_declaration` extraction | MEDIUM — catches `export const` and large constants | MEDIUM — requires filtering to root-body only; must avoid extracting local variables | P1 |
-| Silent fallback on parse failure | HIGH — prevents indexing crashes on malformed files | LOW — try/except, return chunk_lines | P1 |
-| Grammar selection by extension | HIGH — wrong grammar produces garbage parse trees | LOW — dict lookup on extension | P1 |
-| `chunk_file()` dispatch update | HIGH — without this, chunker is never invoked | LOW — one elif branch change | P1 |
-| Test suite parity | HIGH — maintains 293+ green tests baseline | MEDIUM — 8–12 test cases across node types | P1 |
-| Export-unwrapping | MEDIUM — improves chunk text quality for exported declarations | LOW — one extra walk step in traversal | P1 |
-| `enum_declaration` extraction | MEDIUM for TS repos — enums are discrete named units | LOW — one node type string | P2 |
-| `chunk_name` in dict | LOW now, HIGH later — enables future filtering without re-parse | LOW — `node.child_by_field_name("name").text` | P2 |
-| Separate TS vs JS grammar dispatch | LOW — TypeScript grammar parses JS but is heavier | LOW — extension lookup | P2 |
-
-**Priority key:**
-- P1: Required for v1.5 milestone
-- P2: Add during v1.5 if scope allows; no milestone risk if deferred
-- P3: Future consideration only
-
----
-
-## Parity Matrix: Python Chunker vs TypeScript Chunker
-
-| Behaviour | Python chunker | TypeScript chunker (target) |
-|-----------|---------------|----------------------------|
-| Top-level function extraction | `FunctionDef`, `AsyncFunctionDef` | `function_declaration`, `generator_function_declaration` |
-| Class extraction | `ClassDef` | `class_declaration`, `abstract_class_declaration` |
-| Type/interface extraction | Not applicable (Python has no interfaces) | `interface_declaration`, `type_alias_declaration` |
-| Enum extraction | Not applicable | `enum_declaration` |
-| Top-level const extraction | Not applicable (Python falls back to chunk_lines on no defs) | `lexical_declaration` at root body |
-| Nested constructs | NOT separate chunks | NOT separate chunks (methods stay inside class chunk) |
-| Parse failure fallback | `chunk_lines(path)` | `chunk_lines(path)` |
-| No-constructs fallback | `chunk_lines(path)` | `chunk_lines(path)` |
-| Output dict shape | `{text, start_line, end_line}` | `{text, start_line, end_line}` (plus optional `chunk_name`) |
-| Char limit enforcement | Applied by `chunk_file()` caller | Applied by `chunk_file()` caller — same location |
-| Library used | `ast` (stdlib) | `tree-sitter-languages` (PyPI) |
+| Cross-source labeling (CLI + MCP) | HIGH — multi-source users | LOW — display only | P1 |
+| `--exclude-path <glob>` | HIGH — test file exclusion | LOW — post-filter | P1 |
+| Same-file chunk cap (`--max-per-file`) | HIGH — solves result flooding | LOW — post-filter | P1 |
+| Contiguous sub-chunk merging | HIGH — display quality | LOW — sort+merge display pass | P1 |
+| `--expand-graph` flag | HIGH — graph layer users | MEDIUM — SQLite lookups per result | P1 |
+| `corpus graph --depth N` | HIGH — architectural analysis | MEDIUM — BFS traversal loop | P1 |
+| Full MMR with lambda | MEDIUM — power users | MEDIUM — cosine sim computation | P2 |
+| Multi-query AND intersection | MEDIUM — compound queries | MEDIUM — two search calls + intersect | P2 |
+| `--within-graph <slug>` soft scope | MEDIUM — subsystem scoping | MEDIUM — BFS + score boost | P2 |
+| Hub node labeling | LOW-MEDIUM — nice annotation | LOW — one aggregation query | P2 |
+| `--rerank` cross-encoder | MEDIUM — accuracy for NL queries | MEDIUM — new optional dependency | P3 |
+| Centrality scoring | HIGH (eventually) — hub-aware ranking | HIGH — schema v5 + index changes | P3 |
 
 ---
 
 ## Sources
 
-- Direct audit of `/src/corpus_analyzer/ingest/chunker.py` (`chunk_python`, `chunk_file`, `_enforce_char_limit`) — HIGH confidence
-- Direct audit of `tests/ingest/test_chunker.py` (parity test structure) — HIGH confidence
-- [tree-sitter-typescript node-types.json (TSX)](https://github.com/tree-sitter/tree-sitter-typescript/blob/master/tsx/src/node-types.json) — HIGH confidence (official grammar source)
-- [tree-sitter-typescript PyPI (v0.23.2)](https://pypi.org/project/tree-sitter-typescript/) — HIGH confidence (official package)
-- [py-tree-sitter documentation](https://tree-sitter.github.io/py-tree-sitter/) — HIGH confidence (official docs)
-- [supermemory code-chunk library — entity types and metadata](https://github.com/supermemoryai/code-chunk) — MEDIUM confidence (actively maintained OSS; entity type list verified against README)
-- [Building code-chunk: AST Aware Code Chunking (supermemory blog)](https://supermemory.ai/blog/building-code-chunk-ast-aware-code-chunking/) — MEDIUM confidence (design rationale and metadata fields)
-- [LanceDB: Building RAG on codebases Part 1](https://lancedb.com/blog/building-rag-on-codebases-part-1/) — MEDIUM confidence (node type names, metadata recommendations)
-- [cAST paper: Enhancing Code RAG with Structural Chunking via AST](https://arxiv.org/html/2506.15655v1) — MEDIUM confidence (empirical evidence for AST chunking quality gains)
-- [Better retrieval beats better models — AST chunking and hierarchical indexing](https://sderosiaux.substack.com/p/better-retrieval-beats-better-models) — MEDIUM confidence (function-level granularity recommendation)
+- [OpenSearch Native MMR — OpenSearch 3.3 announcement](https://opensearch.org/blog/improving-vector-search-diversity-through-native-mmr/) — MEDIUM confidence (article confirms native MMR ships in OpenSearch 3.3; lambda parameter semantics confirmed)
+- [Maximum Marginal Relevance — Full Stack Retrieval](https://community.fullstackretrieval.com/retrieval-methods/maximum-marginal-relevance) — MEDIUM confidence (search_type="mmr", k, fetch_k parameters confirmed; LangChain-LanceDB integration)
+- [LanceDB LangChain integration docs — max_marginal_relevance_search](https://reference.langchain.com/v0.3/python/community/vectorstores/langchain_community.vectorstores.lancedb.LanceDB.html) — HIGH confidence (official LangChain API reference; `lambda_mult` parameter confirmed)
+- [Pinecone — Rerankers and Two-Stage Retrieval](https://www.pinecone.io/learn/series/rag/rerankers/) — HIGH confidence (official Pinecone learning series; candidate set sizing, latency tradeoffs confirmed)
+- [Sentence Transformers — Cross-Encoder MS MARCO models](https://www.sbert.net/docs/pretrained-models/ce-msmarco.html) — HIGH confidence (official sbert.net docs; MiniLM-L6 model confirmed offline-capable)
+- [Sentence Transformers — Retrieve and Re-Rank](https://sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html) — HIGH confidence (official sbert.net example; two-stage pipeline implementation pattern)
+- [ZeroEntropy — Reranking model guide 2026](https://www.zeroentropy.dev/articles/ultimate-guide-to-choosing-the-best-reranking-model-in-2025) — MEDIUM confidence (latency numbers: 50ms for TinyBERT/20 docs confirmed)
+- [Axon — Graph-powered code intelligence engine](https://github.com/harshkedia177/axon) — MEDIUM confidence (blast radius BFS traversal pattern; `axon impact SYMBOL` with depth control)
+- [GraphRAG — Microsoft local search pattern](https://microsoft.github.io/graphrag/) — MEDIUM confidence (fan-out to neighbors as local search pattern; community context)
+- [Sourcegraph cross-repository code navigation](https://webflow.sourcegraph.com/blog/cross-repository-code-navigation) — MEDIUM confidence (source prefix display pattern in multi-repo search)
+- [Milvus multi-vector hybrid search](https://milvus.io/docs/multi-vector-search.md) — MEDIUM confidence (multi-query AND composition via multiple AnnSearchRequest; RRF fusion; Python-level intersection is equivalent approach for LanceDB)
+- [NetworkX in_degree_centrality documentation](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.in_degree_centrality.html) — HIGH confidence (official NetworkX docs; indegree centrality implementation)
+- Project `PROJECT.md` direct audit — HIGH confidence (existing features, schema state, planned v3 requirements confirmed)
 
 ---
-*Feature research for: v1.5 TypeScript/JavaScript AST-aware chunking*
+
+*Feature research for: v3 Intelligent Search — corpus-analyzer*
 *Researched: 2026-02-24*
