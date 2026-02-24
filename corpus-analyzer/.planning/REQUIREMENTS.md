@@ -57,36 +57,34 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 
 ## Traceability
 
-*(to be filled by roadmapper)*
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
-| CONF-03 | — | Pending |
-| CONF-04 | — | Pending |
-| RUFF-01 | — | Pending |
-| RUFF-02 | — | Pending |
-| RUFF-03 | — | Pending |
-| RUFF-04 | — | Pending |
-| RUFF-05 | — | Pending |
-| RUFF-06 | — | Pending |
-| RUFF-07 | — | Pending |
-| MYPY-01 | — | Pending |
-| MYPY-02 | — | Pending |
-| MYPY-03 | — | Pending |
-| MYPY-04 | — | Pending |
-| MYPY-05 | — | Pending |
-| MYPY-06 | — | Pending |
-| VALID-01 | — | Pending |
-| VALID-02 | — | Pending |
-| VALID-03 | — | Pending |
+| CONF-01 | Phase 9 | Pending |
+| CONF-02 | Phase 9 | Pending |
+| CONF-03 | Phase 9 | Pending |
+| CONF-04 | Phase 9 | Pending |
+| RUFF-01 | Phase 9 | Pending |
+| RUFF-02 | Phase 9 | Pending |
+| RUFF-03 | Phase 10 | Pending |
+| RUFF-04 | Phase 10 | Pending |
+| RUFF-05 | Phase 10 | Pending |
+| RUFF-06 | Phase 10 | Pending |
+| RUFF-07 | Phase 11 | Pending |
+| MYPY-01 | Phase 11 | Pending |
+| MYPY-02 | Phase 11 | Pending |
+| MYPY-03 | Phase 11 | Pending |
+| MYPY-04 | Phase 11 | Pending |
+| MYPY-05 | Phase 11 | Pending |
+| MYPY-06 | Phase 11 | Pending |
+| VALID-01 | Phase 12 | Pending |
+| VALID-02 | Phase 12 | Pending |
+| VALID-03 | Phase 12 | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-24 after initial definition*
+*Last updated: 2026-02-24 — traceability filled by roadmapper*
