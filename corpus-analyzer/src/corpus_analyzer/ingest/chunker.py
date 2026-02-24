@@ -208,10 +208,7 @@ def _chunk_class(node: ast.ClassDef, lines: list[str]) -> list[dict[str, Any]]:
         A list containing a single header chunk dict.
     """
     # Determine start_line (1-indexed): first decorator or class keyword
-    if node.decorator_list:
-        start_line = node.decorator_list[0].lineno
-    else:
-        start_line = node.lineno
+    start_line = node.decorator_list[0].lineno if node.decorator_list else node.lineno
 
     # Find method nodes in class body (FunctionDef or AsyncFunctionDef)
     method_nodes = [

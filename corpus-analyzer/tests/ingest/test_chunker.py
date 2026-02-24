@@ -628,12 +628,15 @@ class TestChunkPythonSubChunking:
         for c in chunks:
             if c.get("chunk_name") == name:
                 return c
-        raise AssertionError(f"No chunk with chunk_name={name!r}; got {[c.get('chunk_name') for c in chunks]}")
+        names = [c.get("chunk_name") for c in chunks]
+        raise AssertionError(f"No chunk with chunk_name={name!r}; got {names}")
 
     def test_class_with_methods_produces_header_chunk(self, tmp_path: Path) -> None:
         """A class with two methods produces a chunk named exactly 'MyClass' (the header)."""
         py_file = tmp_path / "test.py"
-        py_file.write_text("class MyClass:\n    def method_a(self): pass\n    def method_b(self): pass\n")
+        py_file.write_text(
+            "class MyClass:\n    def method_a(self): pass\n    def method_b(self): pass\n"
+        )
 
         chunks = chunk_python(py_file)
 
@@ -650,7 +653,7 @@ class TestChunkPythonSubChunking:
         assert header["text"].startswith("class MyClass:")
 
     def test_class_header_includes_init_self_assignments(self, tmp_path: Path) -> None:
-        """Header chunk includes self.x = value lines from __init__ when there are only assignments."""
+        """Header chunk includes self.x = value lines from __init__ when all are assignments."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
             "class MyClass:\n"
@@ -666,7 +669,7 @@ class TestChunkPythonSubChunking:
         assert "self.y = 0" in header["text"]
 
     def test_class_header_stops_at_first_non_assignment_in_init(self, tmp_path: Path) -> None:
-        """Header chunk does NOT include lines after the first non-assignment statement in __init__."""
+        """Header chunk does NOT include lines after the first non-assignment in __init__."""
         py_file = tmp_path / "test.py"
         py_file.write_text(
             "class MyClass:\n"
