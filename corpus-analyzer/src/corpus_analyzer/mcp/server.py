@@ -2,7 +2,6 @@
 
 import logging
 import sys
-from pathlib import Path
 from typing import Any, Optional
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
@@ -14,7 +13,6 @@ from corpus_analyzer.config import load_config  # noqa: E402,I001
 from corpus_analyzer.ingest.embedder import OllamaEmbedder  # noqa: E402,I001
 from corpus_analyzer.ingest.indexer import CorpusIndex  # noqa: E402,I001
 from corpus_analyzer.search.engine import CorpusSearch  # noqa: E402,I001
-from corpus_analyzer.search.formatter import extract_snippet  # noqa: E402,I001
 from corpus_analyzer.config.schema import CONFIG_PATH, DATA_DIR  # noqa: E402,I001
 
 
@@ -51,7 +49,21 @@ async def corpus_search(
 ) -> dict[str, Any]:
     """Search the corpus index with a natural language query.
 
-    Returns full file content for top matching files plus metadata.
+    Each result is a self-contained unit of knowledge with the full chunk body
+    and precise source line boundaries — no follow-up file reads needed.
+
+    Result fields:
+      - text: full untruncated chunk body (empty string for legacy rows where
+              chunk_text is empty or missing)
+      - start_line: 1-indexed start line in the source file (0 for legacy rows)
+      - end_line: 1-indexed end line in the source file (0 for legacy rows)
+      - path: absolute path to the source file
+      - score: relevance score
+      - construct_type: type of code/doc construct (function, class, documentation, …)
+      - chunk_name: name of the chunk (function name, heading, etc.)
+      - summary: brief LLM-generated summary of the chunk (may be empty)
+      - file_type: file extension (e.g. ".py", ".md")
+
     Use 'source', 'type', 'construct' for filtering; 'top_k' for result count.
     'min_score' filters out results below the given relevance threshold (0.0 means no filter).
     """
@@ -92,28 +104,17 @@ async def corpus_search(
 
     results = []
     for row in raw_results:
-        file_path = str(row.get("file_path", ""))
-        content_error: str | None = None
-        try:
-            full_content = Path(file_path).read_text(errors="replace")
-        except OSError as exc:
-            logging.warning("Cannot read file after indexing: %s — %s", file_path, exc)
-            full_content = ""
-            content_error = f"File not found: {file_path}"
-
         result_dict: dict[str, Any] = {
-            "path": file_path,
+            "text": str(row.get("chunk_text", "") or ""),
+            "start_line": int(row.get("start_line", 0) or 0),
+            "end_line": int(row.get("end_line", 0) or 0),
+            "path": str(row.get("file_path", "")),
             "score": float(row.get("_relevance_score", 0.0)),
-            "snippet": extract_snippet(str(row.get("text", "")), query),
-            "full_content": full_content,
             "construct_type": str(row.get("construct_type") or "documentation"),
+            "chunk_name": str(row.get("chunk_name", "") or ""),
             "summary": str(row.get("summary") or ""),
             "file_type": str(row.get("file_type", "")),
         }
-
-        if content_error is not None:
-            result_dict["content_error"] = content_error
-
         results.append(result_dict)
 
     return {"results": results}
