@@ -108,10 +108,11 @@ Plans:
   4. MCP `corpus_search` accepts `sort_by` with the same vocabulary as CLI (`relevance | construct | confidence | date | path`)
   5. `--min-score` help text is updated to reference the 0–1 normalised range (old RRF range documentation removed)
   6. `tests/ingest/test_round_trip.py` extended with Python class and TypeScript class fixtures — `ClassName.method_name` chunks exercised through the full `chunk_file()` → indexer → LanceDB pipeline (closes Phase 20-21 round-trip test gap)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 23-01: TBD
+- [ ] 23-01-PLAN.md — TDD: RRF score normalisation to 0–1 (NORM-01, engine + CLI help text)
+- [ ] 23-02-PLAN.md — TDD: MCP sort_by parameter + round-trip class fixtures (SORT-01)
 
 ---
 
@@ -248,6 +249,6 @@ Plans:
 | 20. Python Sub-Chunking | 2/2 | Complete    | 2026-02-24 | - |
 | 21. TypeScript Sub-Chunking | 1/1 | Complete    | 2026-02-24 | - |
 | 22. Name Filtering | 2/2 | Complete    | 2026-02-24 | - |
-| 23. Score Normalisation + MCP Sort | v2.1 | 0/TBD | Not started | - |
+| 23. Score Normalisation + MCP Sort | v2.1 | 0/2 | Not started | - |
 | 24. JSON Output | v2.1 | 0/TBD | Not started | - |
 | 25. Graph MCP + Quality Gate | v2.1 | 0/TBD | Not started | - |
