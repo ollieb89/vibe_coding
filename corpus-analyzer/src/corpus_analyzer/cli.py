@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from corpus_analyzer import __version__
@@ -185,8 +185,8 @@ def index_command(
         ) as progress:
             task_id = progress.add_task(f"Indexing {source.name}...", total=total)
 
-            def progress_callback(n: int) -> None:
-                progress.advance(task_id, n)
+            def progress_callback(n: int, _task_id: TaskID = task_id) -> None:
+                progress.advance(_task_id, n)
 
             result = index.index_source(
                 source,
@@ -291,7 +291,7 @@ def search_command(
         embedder.validate_connection()
     except RuntimeError as e:
         console.print(f"[red]Error:[/] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     index = CorpusIndex.open(DATA_DIR, embedder)
     search = CorpusSearch(index.table, embedder)
