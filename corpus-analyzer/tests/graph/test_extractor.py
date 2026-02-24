@@ -33,8 +33,7 @@ def test_mixed_formats_in_one_section() -> None:
 
 def test_also_extracts_related_files_section() -> None:
     md = "## Related Files\n\n- `SKILL.md` - Main skill guide\n- `ADVANCED.md`\n"
-    # .md extension is stripped: SKILL, ADVANCED
-    assert "SKILL" in extract_related_slugs(md) or "SKILL.md" in extract_related_slugs(md)
+    assert extract_related_slugs(md) == ["SKILL.md", "ADVANCED.md"]
 
 
 def test_returns_empty_when_no_related_section() -> None:
