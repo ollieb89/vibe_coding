@@ -18,6 +18,8 @@ from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.scanner import scan_directory
 from corpus_analyzer.core.utils import file_content_hash, get_file_mtime
 from corpus_analyzer.extractors import extract_document
+from corpus_analyzer.graph.registry import SlugRegistry
+from corpus_analyzer.graph.store import GraphStore
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex, SourceStatus
 from corpus_analyzer.ingest.scanner import walk_source
@@ -116,6 +118,13 @@ def index_command(
     # Open index
     index = CorpusIndex.open(DATA_DIR, embedder)
 
+    # Build graph store and slug registry once for the whole run
+    graph_store = GraphStore(DATA_DIR / "graph.sqlite")
+    source_roots = [Path(s.path) for s in config.sources]
+    registry = SlugRegistry.build(source_roots)
+    if len(registry) == 0:
+        console.print("[dim]Graph registry: no component directories found.[/]")
+
     # Index each source
     for source in config.sources:
         source_path = Path(source.path).expanduser()
@@ -167,7 +176,12 @@ def index_command(
             def progress_callback(n: int) -> None:
                 progress.advance(task_id, n)
 
-            result = index.index_source(source, progress_callback=progress_callback)
+            result = index.index_source(
+                source,
+                progress_callback=progress_callback,
+                graph_store=graph_store,
+                registry=registry,
+            )
 
         # Print summary
         console.print(
@@ -302,6 +316,46 @@ def search_command(
             console.print(f"  [italic]{result['summary']}[/italic]")
         console.print(f"  {extract_snippet(str(result['text']), query)}")
         console.print()
+
+
+@app.command("graph")
+def graph_command(
+    slug: Annotated[str, typer.Argument(help="Component slug or path fragment to look up")],
+    depth: Annotated[int, typer.Option("--depth", "-d", help="Traversal depth")] = 1,
+) -> None:
+    """Show upstream and downstream relationships for a component."""
+    if depth != 1:
+        console.print("[yellow]Note: --depth > 1 not yet implemented, showing depth=1.[/yellow]")
+    graph_db = DATA_DIR / "graph.sqlite"
+    if not graph_db.exists():
+        console.print("[yellow]No graph index found. Run 'corpus index' first.[/yellow]")
+        raise typer.Exit(code=1)
+
+    store = GraphStore(graph_db)
+
+    # Resolve slug to paths by substring match
+    matching_sources = store.search_paths(slug)
+
+    if not matching_sources:
+        console.print(f"[yellow]No relationships found for '[bold]{slug}[/bold]'.[/yellow]")
+        return
+
+    for source in sorted(matching_sources):
+        downstream = store.edges_from(source)
+        upstream = store.edges_to(source)
+        console.print(f"\n[bold blue]{Path(source).parent.name}[/] ([dim]{source}[/])")
+        if upstream:
+            console.print("  [dim]Upstream (depends on this):[/]")
+            for e in upstream:
+                name = Path(e["source_path"]).parent.name
+                flag = "" if e["resolved"] else " [dim](unresolved)[/]"
+                console.print(f"    \u2190 {name}{flag}")
+        if downstream:
+            console.print("  [dim]Downstream (this depends on):[/]")
+            for e in downstream:
+                name = Path(e["target_path"]).parent.name
+                flag = "" if e["resolved"] else " [dim](unresolved)[/]"
+                console.print(f"    \u2192 {name}{flag}")
 
 
 def _human_age(ts: str) -> str:

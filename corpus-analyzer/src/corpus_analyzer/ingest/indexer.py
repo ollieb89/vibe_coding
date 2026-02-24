@@ -17,6 +17,9 @@ from pathlib import Path
 import lancedb  # type: ignore[import-untyped]
 
 from corpus_analyzer.config.schema import SourceConfig
+from corpus_analyzer.graph.extractor import extract_related_slugs
+from corpus_analyzer.graph.registry import SlugRegistry
+from corpus_analyzer.graph.store import GraphStore
 from corpus_analyzer.ingest.chunker import chunk_file
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.scanner import file_content_hash, walk_source
@@ -179,14 +182,14 @@ class CorpusIndex:
         """Path to the source manifest JSON file."""
         return self._data_dir / "index" / "source_manifest.json"
 
-    def _load_manifest(self) -> dict[str, dict[str, object]]:
+    def _load_manifest(self) -> dict[str, dict[str, str | int]]:
         """Load the source manifest, returning empty dict on any error.
 
         Returns:
             Mapping of source_name → {last_indexed_at: str, file_count: int}.
         """
         try:
-            return json.loads(self._manifest_path.read_text())
+            return json.loads(self._manifest_path.read_text())  # type: ignore[no-any-return]
         except Exception:
             return {}
 
@@ -294,15 +297,25 @@ class CorpusIndex:
         source: SourceConfig,
         progress_callback: Callable[[int], None] | None = None,
         use_llm_classification: bool = True,
+        *,
+        graph_store: GraphStore | None = None,
+        registry: SlugRegistry | None = None,
     ) -> IndexResult:
         """Index a source, handling changes and stale chunks.
 
         Walks source files, chunks changed files, embeds them, and upserts
         to LanceDB. Deletes stale chunks (files no longer present).
 
+        When *graph_store* and *registry* are both provided, relationship edges
+        are extracted from each changed/new file's ``## Related Skills`` section
+        and written to the graph store.
+
         Args:
             source: SourceConfig to index.
             progress_callback: Optional callback(files_processed) for progress.
+            use_llm_classification: Unused legacy param (kept for compatibility).
+            graph_store: Optional GraphStore for writing relationship edges.
+            registry: Optional SlugRegistry for resolving slug references to paths.
 
         Returns:
             IndexResult with indexing statistics.
@@ -396,6 +409,23 @@ class CorpusIndex:
             # SUMM-02: prepend summary to first chunk text before embedding.
             if summary_text:
                 chunks[0]["text"] = f"{summary_text}\n\n{chunks[0]['text']}"
+
+            # GRAPH: extract relationship edges from ## Related Skills section.
+            if graph_store is not None and registry is not None and full_text:
+                try:
+                    slugs = extract_related_slugs(full_text)
+                    if slugs:
+                        graph_store.clear_edges_for(resolved_path)
+                        edges: list[tuple[str, bool, str]] = []
+                        for slug in slugs:
+                            resolved_target = registry.resolve(slug)
+                            if resolved_target is not None:
+                                edges.append((str(resolved_target), True, "related_skill"))
+                            else:
+                                edges.append((slug, False, "related_skill"))
+                        graph_store.write_edges(resolved_path, edges)
+                except Exception as exc:  # noqa: BLE001
+                    logging.warning("Failed to write graph edges for '%s': %s", resolved_path, exc)
 
             # Embed chunks
             texts = [chunk["text"] for chunk in chunks]
@@ -553,5 +583,4 @@ class CorpusIndex:
     def close(self) -> None:
         """Close the index and release resources."""
         # LanceDB handles cleanup automatically
-        pass
         pass
