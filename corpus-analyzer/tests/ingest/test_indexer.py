@@ -385,7 +385,6 @@ def test_indexer_stores_frontmatter_classification(tmp_path: Path) -> None:
         name="my-source",
         path=str(source_dir),
         summarize=False,
-        use_llm_classification=False
     )
 
     index.index_source(source)
