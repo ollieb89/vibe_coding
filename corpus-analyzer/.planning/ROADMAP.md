@@ -105,5 +105,5 @@ Plans:
 | 10. Manual Ruff — Leaf to Hub | v1.3 | 3/3 | Complete | 2026-02-24 |
 | 11. Manual Ruff — CLI + Mypy | v1.3 | 5/5 | Complete | 2026-02-24 |
 | 12. Validation Gate | v1.3 | 1/1 | Complete | 2026-02-24 |
-| 13. Engine Min-Score Filter | 1/1 | Complete   | 2026-02-24 | - |
+| 13. Engine Min-Score Filter | 1/1 | Complete    | 2026-02-24 | - |
 | 14. API / MCP / CLI Parity | v1.4 | 0/? | Not started | - |
