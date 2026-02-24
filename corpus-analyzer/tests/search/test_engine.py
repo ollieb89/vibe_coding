@@ -13,7 +13,7 @@ from pathlib import Path
 import lancedb  # type: ignore[import-untyped]
 import pytest
 
-from corpus_analyzer.search.engine import CONSTRUCT_PRIORITY, CorpusSearch
+from corpus_analyzer.search.engine import CONSTRUCT_PRIORITY, CorpusSearch, RRF_SCORE_CEILING
 from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, ensure_schema_v3
 
 
@@ -539,3 +539,26 @@ class TestHybridSearchNameFilter:
         assert results
         assert all("search" in str(r.get("chunk_name", "")).lower() for r in results)
         assert all(r.get("construct_type") == "function" for r in results)
+
+
+class TestScoreNormalisation:
+    """NORM-01: Scores returned by hybrid_search() must be in [0.0, 1.0] range."""
+
+    def test_scores_normalised_to_unit_range(self, search: CorpusSearch) -> None:
+        """All _relevance_score values in results are in [0.0, 1.0]."""
+        results = search.hybrid_search("search")
+        assert results, "Need results to test normalisation"
+        for r in results:
+            score = float(r["_relevance_score"])
+            assert 0.0 <= score <= 1.0, f"Score {score} is outside [0, 1]"
+
+    def test_score_ceiling_constant_matches_rrf_k(self) -> None:
+        """RRF_SCORE_CEILING equals 1/K + 1/K for the two-list fusion with K=60."""
+        assert RRF_SCORE_CEILING == pytest.approx(1.0 / 60 + 1.0 / 60)
+
+    def test_empty_query_scan_scores_zero(self, named_table) -> None:
+        """Empty-query scan path (no RRF) returns _relevance_score 0.0 per row."""
+        search_obj = CorpusSearch(named_table, MockEmbedder())
+        results = search_obj.hybrid_search("")
+        for r in results:
+            assert float(r.get("_relevance_score", 0.0)) == pytest.approx(0.0)
