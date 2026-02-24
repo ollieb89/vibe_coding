@@ -18,6 +18,8 @@ from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.scanner import scan_directory
 from corpus_analyzer.core.utils import file_content_hash, get_file_mtime
 from corpus_analyzer.extractors import extract_document
+from corpus_analyzer.graph.registry import SlugRegistry
+from corpus_analyzer.graph.store import GraphStore
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex, SourceStatus
 from corpus_analyzer.ingest.scanner import walk_source
@@ -116,6 +118,13 @@ def index_command(
     # Open index
     index = CorpusIndex.open(DATA_DIR, embedder)
 
+    # Build graph store and slug registry once for the whole run
+    graph_store = GraphStore(DATA_DIR / "graph.sqlite")
+    source_roots = [Path(s.path) for s in config.sources]
+    registry = SlugRegistry.build(source_roots)
+    if len(registry) == 0:
+        console.print("[dim]Graph registry: no component directories found.[/]")
+
     # Index each source
     for source in config.sources:
         source_path = Path(source.path).expanduser()
@@ -167,7 +176,12 @@ def index_command(
             def progress_callback(n: int) -> None:
                 progress.advance(task_id, n)
 
-            result = index.index_source(source, progress_callback=progress_callback)
+            result = index.index_source(
+                source,
+                progress_callback=progress_callback,
+                graph_store=graph_store,
+                registry=registry,
+            )
 
         # Print summary
         console.print(
