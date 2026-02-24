@@ -30,7 +30,7 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 ### Mypy
 
 - [ ] **MYPY-01**: `core/database.py` zero mypy errors — `cast(Table, ...)` pattern applied at all call sites
-- [ ] **MYPY-02**: `llm/chunked_processor.py` zero mypy errors — nested functions annotated, `Atom` dataclass promoted to module level
+- [x] **MYPY-02**: `llm/chunked_processor.py` zero mypy errors — nested functions annotated, `Atom` dataclass promoted to module level
 - [ ] **MYPY-03**: `utils/ui.py` zero mypy errors
 - [ ] **MYPY-04**: `extractors/markdown.py` and `extractors/__init__.py` zero mypy errors — ABC dict-dispatch annotated
 - [ ] **MYPY-05**: `llm/rewriter.py` zero mypy errors — operator bug investigated and fixed; `OllamaClient.db` field added
@@ -71,7 +71,7 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 | RUFF-06 | Phase 10 | Complete |
 | RUFF-07 | Phase 11 | Pending |
 | MYPY-01 | Phase 11 | Pending |
-| MYPY-02 | Phase 11 | Pending |
+| MYPY-02 | Phase 11 | Complete |
 | MYPY-03 | Phase 11 | Pending |
 | MYPY-04 | Phase 11 | Pending |
 | MYPY-05 | Phase 11 | Pending |
