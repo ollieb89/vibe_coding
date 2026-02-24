@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import ollama
 
-
 _DEFAULT_BATCH_SIZE = 8
 _DEFAULT_MAX_CHARS = 2000
 

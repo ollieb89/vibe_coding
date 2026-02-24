@@ -1,12 +1,11 @@
 """Document extractors package."""
 
 from pathlib import Path
-from typing import Optional
 
 from corpus_analyzer.core.models import Document
 
 
-def extract_document(file_path: Path, root: Path) -> Optional[Document]:
+def extract_document(file_path: Path, root: Path) -> Document | None:
     """
     Extract a document based on its file type.
 

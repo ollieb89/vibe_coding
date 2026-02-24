@@ -27,26 +27,26 @@ class AdvancedRewriter:
         """Initialize rewriter."""
         self.client = OllamaClient(model=model)
         self.templates_dir = templates_dir or Path("templates")
-        
+
     def _load_template(self, category: DocumentCategory) -> str:
         """Load the v1 template for a category."""
         # Map category to filename
         # e.g. howto -> howto.v1.md
         filename = f"{category.value}.v1.md"
         template_path = self.templates_dir / filename
-        
+
         if not template_path.exists():
             # Fallback to .md if .v1.md doesn't exist (during transition)
             template_path = self.templates_dir / f"{category.value}.md"
-            
+
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found for category: {category} at {template_path}")
-            
+
         return template_path.read_text(encoding="utf-8")
 
     def rewrite_document(
-        self, 
-        doc: Document, 
+        self,
+        doc: Document,
         output_dir: Path,
         dry_run: bool = False,
         optimized: bool = False
@@ -56,7 +56,7 @@ class AdvancedRewriter:
             # 1. Load Template
             if not doc.category:
                 return RewriteResult(success=False, error="Document has no category")
-                
+
             try:
                 template_content = self._load_template(doc.category)
             except FileNotFoundError as e:
@@ -65,18 +65,18 @@ class AdvancedRewriter:
             # 2. Prepare Output Paths
             category_dir = output_dir / doc.category.value
             category_dir.mkdir(parents=True, exist_ok=True)
-            
+
             stem = Path(doc.path).stem
             output_md_path = category_dir / f"{stem}.rewritten.md"
             output_json_path = category_dir / f"{stem}.sources.json"
-            
+
             # 2.5. Fetch Gold Standard Patterns (if optimized)
             exemplary_patterns = ""
             if optimized:
                 # Try to find a gold standard doc for the same category and first domain tag
                 tag = doc.domain_tags[0] if doc.domain_tags else None
                 gold_docs = list(self.client.db.get_gold_standard_documents(category=doc.category, tag=tag)) if hasattr(self.client, 'db') else []
-                
+
                 # If no db on client, we might need a different way to get gold docs
                 # For now, let's assume AdvancedRewriter might need the db
                 if gold_docs:
@@ -86,7 +86,7 @@ class AdvancedRewriter:
                         # Extract first 3k chars as pattern
                         exemplary_patterns += g_doc.path.read_text(encoding='utf-8', errors='replace')[:3000]
                         exemplary_patterns += "\n---\n"
-            
+
             # 3. Construct Prompt
             # We want to inject the template and the source content.
             system_prompt = (
@@ -100,7 +100,7 @@ class AdvancedRewriter:
                 "4. Identify the source file path in the output metadata.\n"
                 "5. Ensure the operational logic (if any) is preserved."
             )
-            
+
             if optimized:
                 system_prompt += (
                     "\nOPTIMIZATION MODE ENABLED:\n"
@@ -109,7 +109,7 @@ class AdvancedRewriter:
                     "from the Exemplary Patterns and apply them to the rewritten content. "
                     "The goal is to produce the 'best' possible version of this document."
                 )
-            
+
             user_prompt = f"""
 # Template to Follow
 ```markdown
@@ -119,7 +119,7 @@ class AdvancedRewriter:
 # Source Content
 (Path: {doc.path})
 ```markdown
-{doc.path.read_text(encoding="utf-8", errors="replace")[:12000]} 
+{doc.path.read_text(encoding="utf-8", errors="replace")[:12000]}
 ```
 (Note: Source content truncated at 12k chars for safety)
 
@@ -164,7 +164,7 @@ Please rewrite the Source Content to match the Template.
                 "generated_at": "timestamp_here" # TODO: Add timestamp
             }
             output_json_path.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
-            
+
             return RewriteResult(
                 success=True,
                 output_path=output_md_path,

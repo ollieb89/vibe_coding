@@ -11,7 +11,6 @@ import pytest
 
 from corpus_analyzer.store.schema import ChunkRecord, make_chunk_id
 
-
 # ---------------------------------------------------------------------------
 # make_chunk_id — determinism and uniqueness
 # ---------------------------------------------------------------------------

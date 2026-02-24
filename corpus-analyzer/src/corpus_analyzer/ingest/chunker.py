@@ -251,11 +251,11 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
 
 def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> list[dict[str, Any]]:
     """Enforce maximum character limit on chunks, splitting if necessary.
-    
+
     Args:
         chunks: List of chunks to process.
         max_chars: Maximum characters allowed per chunk.
-        
+
     Returns:
         List of chunks with character limit enforced.
     """
@@ -265,13 +265,13 @@ def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> 
         if len(text) <= max_chars:
             result.append(chunk)
             continue
-            
+
         # Split oversized chunk into smaller pieces
         lines = text.split("\n")
         current_lines = []
         current_start = chunk["start_line"]
         current_line_num = chunk["start_line"]
-        
+
         for line in lines:
             # Handle extremely long individual lines
             if len(line) > max_chars:
@@ -284,7 +284,7 @@ def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> 
                     })
                     current_lines = []
                     current_start = current_line_num
-                
+
                 # Split the long line into chunks
                 for i in range(0, len(line), max_chars):
                     chunk_text = line[i:i + max_chars]
@@ -310,7 +310,7 @@ def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> 
                 else:
                     current_lines.append(line)
             current_line_num += 1
-        
+
         # Add remaining lines
         if current_lines:
             result.append({
@@ -318,7 +318,7 @@ def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> 
                 "start_line": current_start,
                 "end_line": chunk["end_line"],
             })
-    
+
     return result
 
 
@@ -338,8 +338,8 @@ def chunk_file(path: Path) -> list[dict[str, Any]]:
     ext = path.suffix.lower()
 
     # Skip known binary file types
-    binary_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', 
-                         '.ttf', '.otf', '.eot', '.svg', '.pdf', '.zip', '.tar', 
+    binary_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2',
+                         '.ttf', '.otf', '.eot', '.svg', '.pdf', '.zip', '.tar',
                          '.gz', '.bz2', '.7z', '.exe', '.dll', '.so', '.dylib',
                          '.bin', '.dat', '.db', '.sqlite', '.sqlite3'}
     if ext in binary_extensions:
@@ -355,7 +355,7 @@ def chunk_file(path: Path) -> list[dict[str, Any]]:
         else:
             # Default to line-based chunking for unknown types
             chunks = chunk_lines(path)
-        
+
         # Enforce maximum character limit on all chunks
         return _enforce_char_limit(chunks, max_chars=4000)
     except UnicodeDecodeError:

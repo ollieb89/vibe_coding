@@ -9,7 +9,6 @@ from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.models import DocumentCategory
 from corpus_analyzer.llm.ollama_client import OllamaClient
 
-
 # Constants
 MAX_CONTENT_LENGTH = 16000  # Increased for Mistral's 32K context
 PLACEHOLDER_PATTERN = re.compile(r'\$[A-Z_]+')
@@ -37,14 +36,14 @@ class RewriteResult(NamedTuple):
 @dataclass
 class QualityReport:
     """Quality assessment of rewritten content."""
-    
+
     has_placeholders: bool = False
     is_truncated: bool = False
     has_frontmatter: bool = False
     has_valid_headings: bool = True
     has_unclosed_code_blocks: bool = False
     issues: list[str] = field(default_factory=list)
-    
+
     @property
     def score(self) -> float:
         """Calculate quality score (0-100)."""
@@ -60,7 +59,7 @@ class QualityReport:
         if self.has_unclosed_code_blocks:
             score -= 25
         return max(0, score)
-    
+
     @property
     def grade(self) -> str:
         """Return letter grade."""
@@ -87,7 +86,7 @@ def ensure_frontmatter(content: str, title: str, source_path: str) -> str:
     """Ensure content starts with YAML frontmatter."""
     if content.lstrip().startswith("---"):
         return content
-    
+
     return f"""---
 title: {title}
 source: {source_path}
@@ -100,27 +99,27 @@ def clean_model_output(content: str) -> str:
     """Remove wrapping markdown code blocks from LLM response."""
     content = content.strip()
     # Debug prints removed
-    
+
     lines = content.splitlines()
-    
+
     # Check for opening fence in first 5 lines (handling optional preamble)
     start_idx = -1
     for i in range(min(5, len(lines))):
         if lines[i].strip().startswith("```"):
             start_idx = i
             break
-            
+
     if start_idx != -1:
         # We found an opening fence. Check if it looks like a document wrapper.
-        
+
         # Check for closing fence at the end
         end_idx = len(lines)
         if lines[-1].strip() == "```":
             end_idx = -1
-            
+
         candidate_lines = lines[start_idx+1 : end_idx] if end_idx == -1 else lines[start_idx+1:]
         candidate = "\n".join(candidate_lines).strip()
-        
+
         # Validation: does it look like valid doc content?
         if candidate.startswith("---") or candidate.startswith("#"):
             content = candidate
@@ -128,7 +127,7 @@ def clean_model_output(content: str) -> str:
     # Second pass: Check for echoed instructions at the end
     # Mistral sometimes repeats the prompt's instructions at the end of the file
     content = INSTRUCTION_ECHO_PATTERN.sub("", content).strip()
-    
+
     # Check for trailing code block markers that might be left over
     if content.endswith("```"):
         content = content[:-3].strip()
@@ -139,25 +138,25 @@ def clean_model_output(content: str) -> str:
 def validate_output(content: str) -> QualityReport:
     """Post-validate LLM output for quality issues."""
     report = QualityReport()
-    
+
     # Check for retained placeholders
     if PLACEHOLDER_PATTERN.search(content):
         report.has_placeholders = True
         report.issues.append("Retained placeholder variables ($VAR)")
-    
+
     # Check for frontmatter
     if content.lstrip().startswith("---"):
         report.has_frontmatter = True
     else:
         report.issues.append("Missing YAML frontmatter")
-    
+
     # Check for truncation indicators
     for indicator in TRUNCATION_INDICATORS:
         if indicator in content:
             report.is_truncated = True
             report.issues.append(f"Possible truncation: found '{indicator}'")
             break
-    
+
     # Check heading hierarchy
     lines = content.split("\n")
     prev_level = 0
@@ -168,13 +167,13 @@ def validate_output(content: str) -> QualityReport:
                 report.has_valid_headings = False
                 report.issues.append(f"Heading skip: H{prev_level} to H{level}")
             prev_level = level
-    
+
     # Check for unclosed code blocks
     code_block_count = content.count("```")
     if code_block_count % 2 != 0:
         report.has_unclosed_code_blocks = True
         report.issues.append("Unclosed code block detected")
-    
+
     return report
 
 
@@ -231,13 +230,13 @@ Be concise but comprehensive. Preserve important details. Do not include these i
 
 
 import concurrent.futures
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 # ... existing imports ...
 
 class DocProcessResult(NamedTuple):
     """Result of processing a single document."""
-    path: Optional[Path]
+    path: Path | None
     errors: list[str]
     warnings: list[str]
 
@@ -265,15 +264,15 @@ def process_document(
 
         # Pre-process: filter placeholders
         content = preprocess_content(content)
-        
+
         # Check if content needs chunking
         if len(content) > MAX_CONTENT_LENGTH:
-            from corpus_analyzer.llm.chunked_processor import split_on_headings, merge_chunks
-            
+            from corpus_analyzer.llm.chunked_processor import merge_chunks, split_on_headings
+
             warnings.append(f"Chunking large document: {doc.relative_path} ({len(content)} chars)")
             chunks = split_on_headings(content, max_chunk_size=MAX_CONTENT_LENGTH)
             rewritten_chunks = []
-            
+
             for i, chunk in enumerate(chunks):
                 chunk_prompt = f"""Rewrite this section (Part {i+1}/{len(chunks)}) of the {category} document '{doc.title}'.
 Follow best practices and the original structure.
@@ -294,11 +293,11 @@ Follow best practices and the original structure.
                 )
                 rewritten_chunk = clean_model_output(rewritten_chunk)
                 rewritten_chunks.append(rewritten_chunk)
-            
+
             rewritten = merge_chunks(rewritten_chunks)
             # Ensure frontmatter is present after merging
             rewritten = ensure_frontmatter(rewritten, doc.title, doc.relative_path)
-            
+
         else:
             # Standard processing for normal sized docs
             prompt = f"""Rewrite the following {category} document following best practices for this document type.
@@ -331,13 +330,13 @@ Output the rewritten document in markdown format."""
                     errors.append(f"Advanced rewrite failed for {doc.path}: {res.error}")
                     # Fallback to standard? For now, just return error
                     return DocProcessResult(None, errors, warnings)
-            
+
             rewritten = client.generate(
                 prompt=prompt,
                 system=system_prompt,
                 temperature=0.3,
             )
-            
+
             # Clean and ensure frontmatter
             rewritten = clean_model_output(rewritten)
             rewritten = ensure_frontmatter(rewritten, doc.title, doc.relative_path)
@@ -347,14 +346,14 @@ Output the rewritten document in markdown format."""
         if quality.issues:
             for issue in quality.issues:
                 warnings.append(f"{doc.relative_path}: {issue}")
-        
+
         if quality.score < 60:
             warnings.append(f"{doc.relative_path}: Low quality score ({quality.grade})")
 
         # Save output
         output_path = output_dir / f"{doc.path.stem}_rewritten.md"
         output_path.write_text(rewritten)
-        
+
         return DocProcessResult(output_path, errors, warnings)
 
     except Exception as e:
@@ -399,7 +398,7 @@ def rewrite_category(
     output_files: list[Path] = []
     errors: list[str] = []
     warnings: list[str] = []
-    
+
     # Select category-specific prompt
     system_prompt = CATEGORY_PROMPTS.get(category, DEFAULT_SYSTEM_PROMPT)
     # Add negative constraints to system prompt
@@ -416,17 +415,17 @@ def rewrite_category(
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_doc = {
             executor.submit(
-                process_document, 
-                doc, 
-                client, 
-                system_prompt, 
-                output_dir, 
-                optimized, 
-                adv_rewriter, 
+                process_document,
+                doc,
+                client,
+                system_prompt,
+                output_dir,
+                optimized,
+                adv_rewriter,
                 category
             ): doc for doc in docs
         }
-        
+
         for future in concurrent.futures.as_completed(future_to_doc):
             doc = future_to_doc[future]
             try:

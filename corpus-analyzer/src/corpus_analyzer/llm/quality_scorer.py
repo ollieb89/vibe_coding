@@ -7,7 +7,7 @@ from enum import Enum
 
 class IssueSeverity(Enum):
     """Severity levels for quality issues."""
-    
+
     CRITICAL = "critical"  # Must be fixed
     HIGH = "high"          # Should be fixed
     MEDIUM = "medium"      # Consider fixing
@@ -18,7 +18,7 @@ class IssueSeverity(Enum):
 @dataclass
 class QualityIssue:
     """A specific quality issue found in content."""
-    
+
     severity: IssueSeverity
     category: str
     message: str
@@ -29,16 +29,16 @@ class QualityIssue:
 @dataclass
 class QualityScore:
     """Comprehensive quality assessment."""
-    
+
     raw_score: float = 100.0
     issues: list[QualityIssue] = field(default_factory=list)
-    
+
     # Detailed metrics
     structure_score: float = 100.0
     completeness_score: float = 100.0
     formatting_score: float = 100.0
     citation_score: float = 100.0
-    
+
     @property
     def overall_score(self) -> float:
         """Calculate weighted overall score."""
@@ -54,7 +54,7 @@ class QualityScore:
             self.formatting_score * weights['formatting'] +
             self.citation_score * weights['citation']
         )
-    
+
     @property
     def grade(self) -> str:
         """Return letter grade."""
@@ -68,7 +68,7 @@ class QualityScore:
         elif s >= 60:
             return "D"
         return "F"
-    
+
     @property
     def passed(self) -> bool:
         """Check if document passes quality threshold."""
@@ -95,28 +95,28 @@ TRUNCATION_INDICATORS = [
 
 def score_document(content: str, source_path: str | None = None) -> QualityScore:
     """Score a rewritten document for quality.
-    
+
     Args:
         content: The rewritten document content
         source_path: Optional path to original source for citation check
-        
+
     Returns:
         QualityScore with detailed metrics and issues
     """
     score = QualityScore()
-    
+
     # Structure analysis
     _check_structure(content, score)
-    
+
     # Completeness analysis
     _check_completeness(content, score)
-    
+
     # Formatting analysis
     _check_formatting(content, score)
-    
+
     # Citation analysis
     _check_citations(content, source_path, score)
-    
+
     return score
 
 
@@ -124,13 +124,13 @@ def _check_structure(content: str, score: QualityScore) -> None:
     """Check document structure quality."""
     lines = content.split('\n')
     headings = []
-    
+
     for i, line in enumerate(lines, 1):
         match = HEADING_PATTERN.match(line)
         if match:
             level = len(match.group(1))
             headings.append((i, level, match.group(2)))
-    
+
     if not headings:
         score.structure_score -= 30
         score.issues.append(QualityIssue(
@@ -140,7 +140,7 @@ def _check_structure(content: str, score: QualityScore) -> None:
             suggestion="Add at least a title heading (# Title)",
         ))
         return
-    
+
     # Check for title (H1)
     if headings[0][1] != 1:
         score.structure_score -= 10
@@ -151,10 +151,10 @@ def _check_structure(content: str, score: QualityScore) -> None:
             line=headings[0][0],
             suggestion="Start with a single # Title",
         ))
-    
+
     # Check heading hierarchy
     prev_level = 0
-    for line_num, level, text in headings:
+    for line_num, level, _text in headings:
         if level > prev_level + 1 and prev_level > 0:
             score.structure_score -= 5
             score.issues.append(QualityIssue(
@@ -179,7 +179,7 @@ def _check_completeness(content: str, score: QualityScore) -> None:
             message=f"Retained placeholders: {', '.join(set(placeholders))}",
             suggestion="Replace placeholders with actual content",
         ))
-    
+
     # Check for truncation indicators
     for indicator in TRUNCATION_INDICATORS:
         if indicator in content:
@@ -191,7 +191,7 @@ def _check_completeness(content: str, score: QualityScore) -> None:
                 suggestion="Process document in smaller chunks",
             ))
             break
-    
+
     # Check for summarized code blocks
     if "# ... (" in content or "// ... (" in content:
         score.completeness_score -= 25
@@ -215,7 +215,7 @@ def _check_formatting(content: str, score: QualityScore) -> None:
             message="Unclosed code block detected",
             suggestion="Ensure all ``` have matching closures",
         ))
-    
+
     # Check for very long lines (might indicate formatting issues)
     for i, line in enumerate(content.split('\n'), 1):
         if len(line) > 500 and not line.startswith('```'):
@@ -233,7 +233,7 @@ def _check_formatting(content: str, score: QualityScore) -> None:
 def _check_citations(content: str, source_path: str | None, score: QualityScore) -> None:
     """Check citation quality."""
     citations = CITATION_PATTERN.findall(content)
-    
+
     if not citations:
         score.citation_score -= 50
         score.issues.append(QualityIssue(

@@ -5,9 +5,6 @@ Uses inline fixture strings written to tmp_path for Path-based API.
 """
 
 from pathlib import Path
-from typing import Any
-
-import pytest
 
 from corpus_analyzer.ingest.chunker import (
     chunk_file,
@@ -15,7 +12,6 @@ from corpus_analyzer.ingest.chunker import (
     chunk_markdown,
     chunk_python,
 )
-
 
 # ---------------------------------------------------------------------------
 # chunk_markdown tests
@@ -26,7 +22,7 @@ class TestChunkMarkdown:
     """Tests for chunk_markdown function."""
 
     def test_splits_on_atx_headings(self, tmp_path: Path) -> None:
-        """chunk_markdown splits on ATX headings (^#{1,6}\s)."""
+        r"""chunk_markdown splits on ATX headings (^#{1,6}\s)."""
         md_file = tmp_path / "test.md"
         md_file.write_text("""# Heading 1
 Content under heading 1.

@@ -8,7 +8,6 @@ from pydantic import ValidationError
 
 from corpus_analyzer.config.schema import CorpusConfig, EmbeddingConfig, SourceConfig
 
-
 # ---------------------------------------------------------------------------
 # EmbeddingConfig tests
 # ---------------------------------------------------------------------------

@@ -9,8 +9,12 @@ from unittest.mock import patch
 import pytest
 
 from corpus_analyzer.config.schema import SourceConfig
+from corpus_analyzer.ingest.indexer import (  # type: ignore[attr-defined]
+    CorpusIndex,
+    IndexResult,
+    SourceStatus,
+)
 from corpus_analyzer.search.classifier import ClassificationResult
-from corpus_analyzer.ingest.indexer import CorpusIndex, IndexResult, SourceStatus  # type: ignore[attr-defined]
 
 
 class MockEmbedder:
@@ -28,26 +32,26 @@ class MockEmbedder:
 def test_indexer_extension_filtering_and_removal(tmp_path: Path):
     """Extension changes correctly filter files and remove stale chunks."""
     from corpus_analyzer.config.schema import SourceConfig
-    
+
     source_dir = tmp_path / "source"
     source_dir.mkdir()
     (source_dir / "file1.md").write_text("Markdown content")
     (source_dir / "file2.py").write_text("print('Python content')")
-    
+
     embedder = MockEmbedder()
     index = CorpusIndex.open(tmp_path, embedder)
-    
+
     # First index: allow both
     source1 = SourceConfig(name="test", path=str(source_dir), extensions=[".md", ".py"])
     res1 = index.index_source(source1)
-    
+
     assert res1.files_indexed == 2
     assert getattr(res1, "files_removed", 0) == 0
-    
+
     # Second index: allow only .md
     source2 = SourceConfig(name="test", path=str(source_dir), extensions=[".md"])
     res2 = index.index_source(source2)
-    
+
     assert res2.files_indexed == 0  # .md is skipped because it's unchanged
     assert getattr(res2, "files_removed", 0) == 1  # .py was removed
 

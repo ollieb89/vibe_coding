@@ -3,7 +3,6 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -75,7 +74,7 @@ class PythonSymbol(BaseModel):
 
     name: str
     kind: str  # "class" | "function" | "method"
-    docstring: Optional[str] = None
+    docstring: str | None = None
     line_start: int
     line_end: int
 
@@ -83,10 +82,10 @@ class PythonSymbol(BaseModel):
 class Chunk(BaseModel):
     """A chunk/section of a document."""
 
-    id: Optional[int] = None
+    id: int | None = None
     document_id: int
     content: str
-    heading: Optional[str] = None
+    heading: str | None = None
     chunk_index: int
     token_estimate: int = 0
 
@@ -94,7 +93,7 @@ class Chunk(BaseModel):
 class Document(BaseModel):
     """A document in the corpus."""
 
-    id: Optional[int] = None
+    id: int | None = None
     path: Path
     relative_path: str
     file_type: str  # md, py, txt, rst
@@ -109,7 +108,7 @@ class Document(BaseModel):
     token_estimate: int = 0
 
     # Python-specific
-    module_docstring: Optional[str] = None
+    module_docstring: str | None = None
     imports: list[str] = Field(default_factory=list)
     symbols: list[PythonSymbol] = Field(default_factory=list)
     is_cli: bool = False  # argparse/click/typer detection

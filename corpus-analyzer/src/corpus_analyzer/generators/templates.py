@@ -6,7 +6,6 @@ from corpus_analyzer.analyzers.shape import analyze_category
 from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.models import DocumentCategory
 
-
 TEMPLATES = ['howto', 'runbook', 'persona', 'reference', 'tutorial', 'spec']
 
 TEMPLATE_CONTRACTS = {
@@ -83,7 +82,7 @@ def _generate_template_md(category: str, required: list[str], optional: list[str
         f"type: {category}",
         "---",
         "",
-        f"# {{{{ title }}}}",
+        "# {{ title }}",
         "",
     ]
 

@@ -1,17 +1,18 @@
-import pytest
-from pathlib import Path
 from datetime import datetime
-from corpus_analyzer.core.database import CorpusDatabase
-from corpus_analyzer.core.models import Document, DocumentCategory, Heading, CodeBlock
+from pathlib import Path
+
 from corpus_analyzer.analyzers.quality import QualityAnalyzer
+from corpus_analyzer.core.database import CorpusDatabase
+from corpus_analyzer.core.models import CodeBlock, Document, DocumentCategory, Heading
+
 
 def test_quality_scoring(tmp_path):
     db_path = tmp_path / "test.sqlite"
     db = CorpusDatabase(db_path)
     db.initialize()
-    
+
     analyzer = QualityAnalyzer(db)
-    
+
     # 1. Low quality doc
     doc_low = Document(
         path=Path("low.md"), relative_path="low.md", file_type="md", title="Low",
@@ -19,7 +20,7 @@ def test_quality_scoring(tmp_path):
     )
     score_low = analyzer.calculate_score(doc_low)
     assert score_low < 0.3
-    
+
     # 2. High quality doc
     doc_high = Document(
         path=Path("high.md"), relative_path="high.md", file_type="md", title="High Quality Guide",
@@ -40,7 +41,7 @@ def test_analyze_all_marks_gold(tmp_path):
     db_path = tmp_path / "test.sqlite"
     db = CorpusDatabase(db_path)
     db.initialize()
-    
+
     # Add a good doc
     doc1 = Document(
         path=Path("good.md"), relative_path="good.md", file_type="md", title="Good Guide",
@@ -49,17 +50,17 @@ def test_analyze_all_marks_gold(tmp_path):
         code_blocks=[CodeBlock(content="code", content_hash="1", line_start=1, line_end=2)]
     )
     db.insert_document(doc1)
-    
+
     # Add a poor doc
     doc2 = Document(
         path=Path("poor.md"), relative_path="poor.md", file_type="md", title="Poor",
         mtime=datetime.now(), size_bytes=100, category=DocumentCategory.HOWTO
     )
     db.insert_document(doc2)
-    
+
     analyzer = QualityAnalyzer(db)
     analyzer.analyze_all()
-    
+
     # Check gold standard
     gold_docs = list(db.get_gold_standard_documents(category=DocumentCategory.HOWTO))
     assert len(gold_docs) == 1

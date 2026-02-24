@@ -3,7 +3,7 @@
 import json
 from collections import Counter
 from pathlib import Path
-from statistics import mean, median
+from statistics import mean
 from typing import NamedTuple
 
 from corpus_analyzer.core.database import CorpusDatabase

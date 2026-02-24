@@ -1,7 +1,7 @@
 """File system scanner for finding documents."""
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 
 def scan_directory(
@@ -47,6 +47,5 @@ def scan_directory(
         return
 
     for item in root.rglob("*"):
-        if item.is_file() and not should_ignore(item):
-            if item.suffix.lower() in extensions:
-                yield item
+        if item.is_file() and not should_ignore(item) and item.suffix.lower() in extensions:
+            yield item

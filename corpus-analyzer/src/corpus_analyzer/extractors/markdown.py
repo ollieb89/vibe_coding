@@ -110,8 +110,7 @@ class MarkdownExtractor(BaseExtractor):
         code_blocks = []
 
         # Track line numbers
-        lines = content.split("\n")
-        current_pos = 0
+        content.split("\n")
 
         for match in self.CODE_BLOCK_PATTERN.finditer(content):
             language = match.group(1) or ""

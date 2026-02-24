@@ -90,15 +90,14 @@ class PythonExtractor(BaseExtractor):
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     imports.append(alias.name.split(".")[0])
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imports.append(node.module.split(".")[0])
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.append(node.module.split(".")[0])
         return list(set(imports))
 
     def _extract_symbols(self, tree: ast.AST, content: str) -> list[PythonSymbol]:
         """Extract classes and functions with their docstrings."""
         symbols = []
-        lines = content.split("\n")
+        content.split("\n")
 
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, ast.ClassDef):

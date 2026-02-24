@@ -1,7 +1,9 @@
-from corpus_analyzer.core.database import CorpusDatabase
-from corpus_analyzer.core.models import Document, DocumentCategory
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+from corpus_analyzer.core.database import CorpusDatabase
+from corpus_analyzer.core.models import Document
+
 
 def test_set_gold_standard(tmp_path):
     db_path = tmp_path / "test.db"
@@ -14,14 +16,14 @@ def test_set_gold_standard(tmp_path):
     )
     db.insert_document(doc)
     doc_id = list(db.get_documents())[0].id
-    
+
     # Original state
     retrieved = db.get_document(doc_id)
     assert not retrieved.is_gold_standard
 
     # Update
     db.set_gold_standard(doc_id, True)
-    
+
     # Verify
     updated = db.get_document(doc_id)
     assert updated.is_gold_standard

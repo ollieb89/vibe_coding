@@ -2,7 +2,7 @@
 
 import math
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -26,20 +26,20 @@ class ClassificationResult(NamedTuple):
 @dataclass
 class DocumentFeatures:
     """Extracted features from document for classification."""
-    
+
     # Text features
     headings_text: str = ""
     full_text: str = ""
     title_text: str = ""
     code_languages: set[str] = field(default_factory=set)
-    
+
     # Structural features
     heading_count: int = 0
     code_block_count: int = 0
     link_count: int = 0
     has_numbered_sections: bool = False
     has_toc: bool = False
-    
+
     # Content indicators
     step_indicators: int = 0
     code_examples: int = 0
@@ -50,17 +50,17 @@ class DocumentFeatures:
 def extract_document_features(doc: Document, content: str | None = None) -> DocumentFeatures:
     """Extract comprehensive features from document."""
     features = DocumentFeatures()
-    
+
     # Basic text features
     features.headings_text = " ".join(h.text.lower() for h in doc.headings)
     features.title_text = doc.title.lower()
     features.heading_count = len(doc.headings)
     features.code_block_count = len(doc.code_blocks)
     features.link_count = len(doc.links)
-    
+
     # Code languages
     features.code_languages = {cb.language.lower() for cb in doc.code_blocks if cb.language}
-    
+
     # Full text content (if provided)
     if content:
         features.full_text = content.lower()
@@ -70,17 +70,17 @@ def extract_document_features(doc: Document, content: str | None = None) -> Docu
         for cb in doc.code_blocks:
             text_parts.append(cb.content.lower())
         features.full_text = " ".join(text_parts)
-    
+
     # Structural analysis
     features.has_numbered_sections = bool(re.search(r'\b(?:step\s+\d+|\d+\.|\d+\))', features.full_text, re.IGNORECASE))
     features.has_toc = bool(re.search(r'table\s+of\s+contents?|contents?:', features.full_text, re.IGNORECASE))
-    
+
     # Content indicators
     features.step_indicators = len(re.findall(r'\b(?:step|first|then|next|finally)\b', features.full_text, re.IGNORECASE))
     features.code_examples = len(re.findall(r'```[\w]*\n|example|code\s+snippet', features.full_text, re.IGNORECASE))
     features.api_patterns = len(re.findall(r'\b(?:api|endpoint|function|method|parameter)\b', features.full_text, re.IGNORECASE))
     features.diagram_references = len(re.findall(r'\b(?:diagram|chart|graph|figure)\b', features.full_text, re.IGNORECASE))
-    
+
     return features
 
 
@@ -88,12 +88,12 @@ def compute_tfidf_similarity(text: str, category_patterns: dict[DocumentCategory
     """Compute TF-IDF similarity between text and category patterns."""
     # Simple TF-IDF implementation
     similarities = {}
-    
+
     # Tokenize text
     tokens = re.findall(r'\b\w+\b', text.lower())
     token_counts = Counter(tokens)
     total_tokens = len(tokens)
-    
+
     for category, patterns in category_patterns.items():
         # Build category vocabulary from patterns
         category_tokens = []
@@ -101,13 +101,13 @@ def compute_tfidf_similarity(text: str, category_patterns: dict[DocumentCategory
             # Extract meaningful words from patterns
             pattern_words = re.findall(r'\b\w+\b', pattern.lower())
             category_tokens.extend(pattern_words)
-        
+
         if not category_tokens:
             similarities[category] = 0.0
             continue
-            
-        category_counts = Counter(category_tokens)
-        
+
+        Counter(category_tokens)
+
         # Compute cosine similarity
         similarity = 0.0
         for token in set(tokens) & set(category_tokens):
@@ -115,9 +115,9 @@ def compute_tfidf_similarity(text: str, category_patterns: dict[DocumentCategory
             # Simple IDF approximation
             idf = math.log(len(category_patterns) / sum(1 for p in category_patterns.values() if token in ' '.join(p)))
             similarity += tf * idf
-        
+
         similarities[category] = similarity
-    
+
     return similarities
 
 
@@ -192,21 +192,21 @@ CLASSIFICATION_RULES: list[tuple[DocumentCategory, float, list[str], list[str], 
 
 def classify_document(doc: Document, content: str | None = None) -> ClassificationResult:
     """Classify a single document using enhanced analysis."""
-    
+
     # Extract comprehensive features
     features = extract_document_features(doc, content)
-    
+
     # Build category patterns for TF-IDF
     category_patterns: dict[DocumentCategory, list[str]] = {}
     for category, _, heading_patterns, content_patterns, _ in CLASSIFICATION_RULES:
         category_patterns[category] = heading_patterns + content_patterns
-    
+
     # Compute TF-IDF similarity
     similarities = compute_tfidf_similarity(features.full_text, category_patterns)
-    
+
     # Enhanced scoring with features
     scores: dict[DocumentCategory, tuple[float, list[str], dict[str, float]]] = {}
-    
+
     for category, base_confidence, heading_patterns, content_patterns, feature_weights in CLASSIFICATION_RULES:
         matched = []
         feature_scores: dict[str, float] = {}
@@ -235,7 +235,7 @@ def classify_document(doc: Document, content: str | None = None) -> Classificati
                     feature_value = min(feature_value / 10.0, 1.0)
                 elif feature_name in ["heading_count", "code_block_count", "link_count"]:
                     feature_value = min(feature_value / 20.0, 1.0)
-            
+
             feature_score = weight * feature_value
             feature_scores[feature_name] = feature_score
             score += feature_score
@@ -261,11 +261,11 @@ def classify_document(doc: Document, content: str | None = None) -> Classificati
 
     # Sort categories by score
     sorted_categories = sorted(scores.keys(), key=lambda c: scores[c][0], reverse=True)
-    
+
     # Primary category
     best_category = sorted_categories[0]
     confidence, matched, feature_scores = scores[best_category]
-    
+
     # Secondary category (if close second)
     secondary_category = None
     secondary_confidence = 0.0
@@ -311,20 +311,20 @@ def classify_documents(db: CorpusDatabase, use_full_content: bool = True) -> int
                 content = None
 
         result = classify_document(doc, content)
-        
+
         # Update with enhanced classification data
         db.update_document_classification(
             doc_id=doc.id,
             category=result.category,
             confidence=result.confidence,
         )
-        
+
         # Store secondary category if available
         if result.secondary_category and result.secondary_confidence > 0.5:
             # Note: This would require database schema update
             # For now, we'll store in a simple way
             pass
-        
+
         count += 1
 
     return count

@@ -1,4 +1,5 @@
-from corpus_analyzer.llm.rewriter import validate_output, QualityReport
+from corpus_analyzer.llm.rewriter import validate_output
+
 
 def test_quality_score_relaxed():
     # A content that is good but might fail current strict checks (e.g., minor heading skips)

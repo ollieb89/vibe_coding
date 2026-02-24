@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 from corpus_analyzer.search.classifier import (
     CONSTRUCT_TYPES,
-    ClassificationResult,
     classify_by_rules,
     classify_file,
 )

@@ -6,13 +6,10 @@ All file operations use pytest tmp_path fixture.
 
 from pathlib import Path
 
-import pytest
-
 from corpus_analyzer.ingest.scanner import (
     file_content_hash,
     walk_source,
 )
-
 
 # ---------------------------------------------------------------------------
 # file_content_hash tests

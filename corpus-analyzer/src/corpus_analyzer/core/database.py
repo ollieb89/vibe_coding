@@ -1,7 +1,7 @@
 import json
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional
 
 import sqlite_utils
 
@@ -177,8 +177,8 @@ class CorpusDatabase:
 
     def get_documents(
         self,
-        category: Optional[DocumentCategory] = None,
-        file_type: Optional[str] = None,
+        category: DocumentCategory | None = None,
+        file_type: str | None = None,
     ) -> Iterator[Document]:
         """Retrieve documents with optional filtering."""
         query = "SELECT * FROM documents WHERE 1=1"
@@ -196,16 +196,16 @@ class CorpusDatabase:
         cols = [desc[0] for desc in cursor.description]
 
         for row in cursor.fetchall():
-            yield self._row_to_document(dict(zip(cols, row)))
+            yield self._row_to_document(dict(zip(cols, row, strict=False)))
 
-    def get_document_by_id(self, doc_id: int) -> Optional[Document]:
+    def get_document_by_id(self, doc_id: int) -> Document | None:
         """Get a single document by ID."""
         row = self.db.execute(
             "SELECT * FROM documents WHERE id = ?", [doc_id]
         ).fetchone()
         if row:
             cols = [desc[0] for desc in self.db.execute("SELECT * FROM documents LIMIT 0").description]
-            return self._row_to_document(dict(zip(cols, row)))
+            return self._row_to_document(dict(zip(cols, row, strict=False)))
         return None
 
     def update_document_classification(
@@ -213,7 +213,7 @@ class CorpusDatabase:
         doc_id: int,
         category: DocumentCategory,
         confidence: float,
-        domain_tags: Optional[list[DomainTag]] = None,
+        domain_tags: list[DomainTag] | None = None,
     ) -> None:
         """Update document classification."""
         data = {
@@ -253,15 +253,15 @@ class CorpusDatabase:
             {"is_gold_standard": 1 if is_gold else 0},
             alter=True
         )
-    
-    def get_document(self, doc_id: int) -> Optional[Document]:
+
+    def get_document(self, doc_id: int) -> Document | None:
         """Alias for get_document_by_id."""
         return self.get_document_by_id(doc_id)
 
     def get_gold_standard_documents(
         self,
-        category: Optional[DocumentCategory] = None,
-        tag: Optional[DomainTag] = None,
+        category: DocumentCategory | None = None,
+        tag: DomainTag | None = None,
     ) -> Iterator[Document]:
         """Retrieve gold standard documents."""
         query = "SELECT * FROM documents WHERE is_gold_standard = 1"
@@ -280,7 +280,7 @@ class CorpusDatabase:
         cols = [desc[0] for desc in cursor.description]
 
         for row in cursor.fetchall():
-            yield self._row_to_document(dict(zip(cols, row)))
+            yield self._row_to_document(dict(zip(cols, row, strict=False)))
 
     def get_categories(self) -> list[str]:
         """Get all unique categories in the corpus."""

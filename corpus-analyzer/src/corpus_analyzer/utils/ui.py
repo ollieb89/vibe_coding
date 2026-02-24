@@ -33,18 +33,18 @@ def print_sample_data(table_name: str, table_obj, limit: int = 5):
         return
 
     data_table = Table(title=f"Sample data from {table_name} (LIMIT {limit})", show_header=True, header_style="bold green")
-    
+
     all_cols = list(rows[0].keys())
     # Adjust display columns for readability
     if table_name == "documents":
         display_cols = ["id", "relative_path", "file_type", "title", "category", "category_confidence"]
     else:
         display_cols = all_cols[:8]
-    
+
     for col_name in display_cols:
         data_table.add_column(col_name, overflow="ellipsis")
-    
+
     for row in rows:
         data_table.add_row(*[str(row.get(c, "")) for c in display_cols])
-    
+
     console.print(data_table)

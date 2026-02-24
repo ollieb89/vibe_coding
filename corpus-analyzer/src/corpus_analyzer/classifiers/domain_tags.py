@@ -5,7 +5,6 @@ import re
 from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.models import Document, DomainTag
 
-
 # Domain detection patterns
 DOMAIN_PATTERNS: dict[DomainTag, list[str]] = {
     DomainTag.BACKEND: [

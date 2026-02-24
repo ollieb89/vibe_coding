@@ -12,7 +12,6 @@ from pydantic import ValidationError
 from corpus_analyzer.config.io import load_config, save_config
 from corpus_analyzer.config.schema import CorpusConfig, EmbeddingConfig, SourceConfig
 
-
 # ---------------------------------------------------------------------------
 # load_config tests
 # ---------------------------------------------------------------------------

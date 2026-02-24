@@ -1,9 +1,8 @@
 """Ollama client for local LLM integration."""
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import ollama
-from pydantic import BaseModel
 
 from corpus_analyzer.settings import settings
 

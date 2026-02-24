@@ -91,7 +91,7 @@ def test_corpus_search_content_error_present_on_oserror() -> None:
     with patch("corpus_analyzer.mcp.server.Path.read_text", side_effect=OSError("no such file")):
         async def _run_test() -> dict[str, Any]:
             return await corpus_search(query="hello", ctx=ctx)
-        
+
         result = asyncio.run(_run_test())
 
     assert "results" in result
@@ -111,7 +111,7 @@ def test_corpus_search_content_error_absent_on_success() -> None:
     with patch("corpus_analyzer.mcp.server.Path.read_text", return_value="file content"):
         async def _run_test() -> dict[str, Any]:
             return await corpus_search(query="hello", ctx=ctx)
-        
+
         result = asyncio.run(_run_test())
 
     assert "results" in result
