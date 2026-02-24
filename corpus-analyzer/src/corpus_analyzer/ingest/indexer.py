@@ -6,6 +6,7 @@ change detection and stale chunk cleanup.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -21,7 +22,31 @@ from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.scanner import file_content_hash, walk_source
 from corpus_analyzer.search.classifier import classify_file
 from corpus_analyzer.search.summarizer import generate_summary, should_summarize
-from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, ensure_schema_v3, make_chunk_id
+from corpus_analyzer.store.schema import (
+    ChunkRecord,
+    ensure_schema_v2,
+    ensure_schema_v3,
+    make_chunk_id,
+)
+
+
+@dataclass
+class SourceStatus:
+    """Pre-index check result for a single source.
+
+    Attributes:
+        source_name: Name of the source that was checked.
+        needs_indexing: True if the source has changes and should be indexed.
+        reason: Human-readable reason: "new source", "up to date", or "changes detected".
+        last_indexed_at: ISO 8601 UTC timestamp of last index run, or None if never indexed.
+        file_count: Number of files recorded at last index time (0 if never indexed).
+    """
+
+    source_name: str
+    needs_indexing: bool
+    reason: str
+    last_indexed_at: str | None
+    file_count: int = 0
 
 
 @dataclass
@@ -45,6 +70,20 @@ class IndexResult:
     elapsed: float = 0.0
 
 
+def _migrate_agent_config_to_agent(table: lancedb.table.Table) -> None:
+    """Rename legacy 'agent_config' construct_type values to 'agent'.
+
+    Idempotent — safe to call on tables that have already been migrated.
+    """
+    try:
+        table.update(
+            values={"construct_type": "agent"},
+            where="construct_type = 'agent_config'",
+        )
+    except Exception as exc:
+        logging.warning("Failed to migrate agent_config → agent: %s", exc)
+
+
 class CorpusIndex:
     """Manages the LanceDB vector index for document chunks.
 
@@ -52,15 +91,17 @@ class CorpusIndex:
     change detection, and stale chunk cleanup.
     """
 
-    def __init__(self, table: lancedb.table.Table, embedder: OllamaEmbedder) -> None:
-        """Initialize with LanceDB table and embedder.
+    def __init__(self, table: lancedb.table.Table, embedder: OllamaEmbedder, data_dir: Path) -> None:
+        """Initialize with LanceDB table, embedder, and data directory.
 
         Args:
             table: LanceDB table instance.
             embedder: OllamaEmbedder for generating embeddings.
+            data_dir: Root data directory (used for source manifest storage).
         """
         self._table = table
         self._embedder = embedder
+        self._data_dir = data_dir
 
     @property
     def table(self) -> lancedb.table.Table:
@@ -103,8 +144,9 @@ class CorpusIndex:
         # Ensure Phase 2 nullable columns exist regardless of table creation path.
         ensure_schema_v2(table)
         ensure_schema_v3(table)
+        _migrate_agent_config_to_agent(table)
 
-        return cls(table, embedder)
+        return cls(table, embedder, data_dir)
 
     @staticmethod
     def _verify_model_match(table: lancedb.table.Table, expected_model: str) -> None:
@@ -132,6 +174,121 @@ class CorpusIndex:
             # No records or no embedding_model column - no check needed
             pass
 
+    @property
+    def _manifest_path(self) -> Path:
+        """Path to the source manifest JSON file."""
+        return self._data_dir / "index" / "source_manifest.json"
+
+    def _load_manifest(self) -> dict[str, dict[str, object]]:
+        """Load the source manifest, returning empty dict on any error.
+
+        Returns:
+            Mapping of source_name → {last_indexed_at: str, file_count: int}.
+        """
+        try:
+            return json.loads(self._manifest_path.read_text())
+        except Exception:
+            return {}
+
+    def _save_source_stats(self, source_name: str, last_indexed_at: str, file_count: int) -> None:
+        """Persist source index stats to the manifest JSON.
+
+        Args:
+            source_name: Name of the source.
+            last_indexed_at: ISO 8601 UTC timestamp string.
+            file_count: Number of files found in the source walk.
+        """
+        manifest = self._load_manifest()
+        manifest[source_name] = {"last_indexed_at": last_indexed_at, "file_count": file_count}
+        try:
+            self._manifest_path.write_text(json.dumps(manifest, indent=2))
+        except Exception as exc:
+            logging.warning("Failed to write source manifest: %s", exc)
+
+    def _source_has_any_changes(
+        self,
+        source: SourceConfig,
+        last_indexed_at: str,
+        stored_file_count: int,
+    ) -> bool:
+        """Return True if the source has any new, modified, or deleted files.
+
+        Uses only mtime checks (no file reads) for speed.
+
+        Args:
+            source: SourceConfig to check.
+            last_indexed_at: ISO 8601 UTC string of last index time.
+            stored_file_count: File count recorded at last index time.
+
+        Returns:
+            True if any change detected; False if source is clean.
+        """
+        try:
+            last_ts = datetime.fromisoformat(last_indexed_at).timestamp()
+        except ValueError:
+            return True  # Can't parse — treat as changed
+
+        source_path = Path(source.path).expanduser()
+        current_files = list(
+            walk_source(source_path, source.include, source.exclude, extensions=source.extensions)
+        )
+
+        if len(current_files) != stored_file_count:
+            return True
+
+        for file_path in current_files:
+            try:
+                if file_path.stat().st_mtime > last_ts:
+                    return True
+            except OSError:
+                return True  # File disappeared mid-scan
+
+        return False
+
+    def check_source_status(self, source: SourceConfig) -> SourceStatus:
+        """Return the pre-index status of a source without modifying any state.
+
+        Performs a fast manifest-based check (mtime + file count only).
+        No LanceDB queries or file reads are performed.
+
+        Args:
+            source: SourceConfig to check.
+
+        Returns:
+            SourceStatus with needs_indexing flag, human-readable reason, and metadata.
+        """
+        manifest = self._load_manifest()
+
+        if source.name not in manifest:
+            return SourceStatus(
+                source_name=source.name,
+                needs_indexing=True,
+                reason="new source",
+                last_indexed_at=None,
+                file_count=0,
+            )
+
+        entry = manifest[source.name]
+        last_indexed_at = str(entry["last_indexed_at"])
+        file_count = int(entry["file_count"])
+
+        if self._source_has_any_changes(source, last_indexed_at, file_count):
+            return SourceStatus(
+                source_name=source.name,
+                needs_indexing=True,
+                reason="changes detected",
+                last_indexed_at=last_indexed_at,
+                file_count=file_count,
+            )
+
+        return SourceStatus(
+            source_name=source.name,
+            needs_indexing=False,
+            reason="up to date",
+            last_indexed_at=last_indexed_at,
+            file_count=file_count,
+        )
+
     def index_source(
         self,
         source: SourceConfig,
@@ -151,6 +308,23 @@ class CorpusIndex:
             IndexResult with indexing statistics.
         """
         start_time = time.time()
+
+        # Source-level fast pre-check: skip if manifest says nothing changed
+        manifest = self._load_manifest()
+        if source.name in manifest:
+            entry = manifest[source.name]
+            if not self._source_has_any_changes(
+                source,
+                str(entry["last_indexed_at"]),
+                int(entry["file_count"]),
+            ):
+                return IndexResult(
+                    source_name=source.name,
+                    files_indexed=0,
+                    chunks_written=0,
+                    files_skipped=int(entry["file_count"]),
+                    elapsed=time.time() - start_time,
+                )
 
         # Build file index from existing records for this source
         existing_files = self._get_existing_files(source.name)
@@ -274,6 +448,14 @@ class CorpusIndex:
         files_removed = len(files_to_remove)
 
         elapsed = time.time() - start_time
+
+        # Update manifest so next run can fast-path this source
+        self._save_source_stats(
+            source.name,
+            datetime.now(UTC).isoformat(),
+            files_found,
+        )
+
         return IndexResult(
             source_name=source.name,
             files_indexed=files_indexed,

@@ -104,6 +104,56 @@ def test_search_result_missing_relevance_score_does_not_raise() -> None:
     assert result.exit_code == 0
 
 
+def test_search_construct_sort_note_when_redundant() -> None:
+    """CLI prints a dim note when --construct and --sort construct are used together."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = [
+            {"file_path": "/fake/agent.md", "text": "agent content", "construct_type": "agent"}
+        ]
+        mock_search_cls.return_value = mock_search
+
+        result = runner.invoke(app, ["search", "query", "--construct", "agent", "--sort", "construct"])
+
+    assert result.exit_code == 0
+    assert "sorting by priority is implicit" in result.stdout
+
+
+def test_search_no_construct_sort_note_without_redundancy() -> None:
+    """CLI does NOT print the redundancy note when --construct is absent."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = [
+            {"file_path": "/fake/agent.md", "text": "agent content", "construct_type": "agent"}
+        ]
+        mock_search_cls.return_value = mock_search
+
+        result = runner.invoke(app, ["search", "query", "--sort", "construct"])
+
+    assert result.exit_code == 0
+    assert "sorting by priority is implicit" not in result.stdout
+
+
 def test_status_outputs_expected_metrics() -> None:
     with (
         patch("corpus_analyzer.cli.load_config", return_value=_config()),
