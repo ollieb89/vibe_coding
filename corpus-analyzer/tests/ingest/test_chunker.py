@@ -762,3 +762,212 @@ class TestChunkPythonSubChunking:
 
         header = self._get_header(chunks, "Simple")
         assert header["start_line"] == 1
+
+
+# ---------------------------------------------------------------------------
+# TestChunkPythonMethodChunks — SUB-02 per-method chunk behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestChunkPythonMethodChunks:
+    """Tests for SUB-02: per-method chunk extraction in _chunk_class() / chunk_python()."""
+
+    def test_class_methods_produce_dot_name_chunks(self, tmp_path: Path) -> None:
+        """A class with two methods produces method chunks named ClassName.method_name."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def method_a(self): pass\n"
+            "    def method_b(self): pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.method_a" for c in chunks)
+        assert any(c["chunk_name"] == "MyClass.method_b" for c in chunks)
+
+    def test_init_produces_dot_init_chunk(self, tmp_path: Path) -> None:
+        """__init__ produces a MyClass.__init__ method chunk."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def __init__(self, x: int) -> None:\n"
+            "        self.x = x\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.__init__" for c in chunks)
+
+    def test_dunder_methods_follow_dot_notation(self, tmp_path: Path) -> None:
+        """__str__ and __repr__ produce correctly named dot-notation chunks."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def __str__(self) -> str: return 'x'\n"
+            "    def __repr__(self) -> str: return 'MyClass()'\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.__str__" for c in chunks)
+        assert any(c["chunk_name"] == "MyClass.__repr__" for c in chunks)
+
+    def test_property_method_chunked(self, tmp_path: Path) -> None:
+        """@property decorated method produces a ClassName.method_name chunk."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    @property\n"
+            "    def value(self) -> int:\n"
+            "        return self._value\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.value" for c in chunks)
+
+    def test_classmethod_chunked(self, tmp_path: Path) -> None:
+        """@classmethod decorated method produces a ClassName.method_name chunk."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            'class MyClass:\n'
+            '    @classmethod\n'
+            '    def create(cls) -> "MyClass":\n'
+            '        return cls()\n'
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.create" for c in chunks)
+
+    def test_staticmethod_chunked(self, tmp_path: Path) -> None:
+        """@staticmethod decorated method produces a ClassName.method_name chunk."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    @staticmethod\n"
+            "    def helper() -> int:\n"
+            "        return 42\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.helper" for c in chunks)
+
+    def test_async_method_chunked(self, tmp_path: Path) -> None:
+        """async def method produces a chunk with dot-notation name."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    async def fetch(self) -> None:\n"
+            "        pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass.fetch" for c in chunks)
+
+    def test_method_chunk_text_contains_def_line(self, tmp_path: Path) -> None:
+        """Method chunk text contains the def line of the method."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def my_method(self) -> None:\n"
+            "        pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        method_chunk = next(
+            (c for c in chunks if c["chunk_name"] == "MyClass.my_method"), None
+        )
+        assert method_chunk is not None
+        assert "def my_method" in method_chunk["text"]
+
+    def test_method_chunk_line_range(self, tmp_path: Path) -> None:
+        """Method chunk start_line is the def line, end_line is the last body line."""
+        py_file = tmp_path / "test.py"
+        # class on line 1, def on line 2, pass on line 3
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def method(self) -> None:\n"
+            "        pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        method_chunk = next(
+            (c for c in chunks if c["chunk_name"] == "MyClass.method"), None
+        )
+        assert method_chunk is not None
+        assert method_chunk["start_line"] == 2
+        assert method_chunk["end_line"] == 3
+
+    def test_no_methods_no_method_chunks(self, tmp_path: Path) -> None:
+        """Class with no methods produces no ClassName.X method chunks."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("class Empty:\n    pass\n")
+
+        chunks = chunk_python(py_file)
+
+        assert not any("Empty." in c.get("chunk_name", "") for c in chunks)
+
+    def test_multi_class_file_all_classes_sub_chunked(self, tmp_path: Path) -> None:
+        """Two classes in one file both produce per-method sub-chunks."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class Alpha:\n"
+            "    def run(self): pass\n"
+            "\n"
+            "class Beta:\n"
+            "    def go(self): pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "Alpha.run" for c in chunks)
+        assert any(c["chunk_name"] == "Beta.go" for c in chunks)
+
+    def test_nested_class_treated_as_opaque(self, tmp_path: Path) -> None:
+        """Nested class inside a method is NOT recursively sub-chunked."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class Outer:\n"
+            "    def method(self):\n"
+            "        class Inner:\n"
+            "            def inner_method(self): pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert not any(c["chunk_name"] == "Outer.Inner.inner_method" for c in chunks)
+        assert any(c["chunk_name"] == "Outer.method" for c in chunks)
+
+    def test_monolithic_class_chunk_absent(self, tmp_path: Path) -> None:
+        """Class with 2 methods produces header + 2 method chunks (>= 3 total for class)."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def method_a(self): pass\n"
+            "    def method_b(self): pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        myclass_chunks = [c for c in chunks if c.get("chunk_name", "").startswith("MyClass")]
+        assert len(myclass_chunks) >= 3
+
+    def test_deterministic_output(self, tmp_path: Path) -> None:
+        """Calling chunk_python() twice on the same file produces identical results."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def alpha(self): pass\n"
+            "    def beta(self): pass\n"
+        )
+
+        result1 = chunk_python(py_file)
+        result2 = chunk_python(py_file)
+
+        assert result1 == result2
