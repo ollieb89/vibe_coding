@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v1.2 milestone)
+See: .planning/PROJECT.md (updated 2026-02-24 after v1.3 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Planning next milestone
+**Current focus:** v1.3 Code Quality
 
 ## Current Position
 
-Phase: 8 (Cleanup)
-Plan: 1/1 complete
-Status: Phase 8 complete; v1.2 milestone complete
-Last activity: 2026-02-24 — Phase 8 Plan 01 executed; use_llm_classification dead parameter removed
-
-Progress: [██████████] 100% (8/8 phases done)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-24 — Milestone v1.3 started
 
 ## Performance Metrics
 

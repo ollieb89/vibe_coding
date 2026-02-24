@@ -10,6 +10,17 @@ v1.1 adds configurable extension allowlists per source (no more config files pol
 
 v1.2 adds a relationship graph layer: `corpus index` now extracts `## Related Skills` / `## Related Files` links from indexed Markdown and persists them as a directed graph, queryable via `corpus graph <slug>`.
 
+v1.3 achieves a clean linting baseline across the entire codebase: zero mypy errors and zero ruff violations. Per-file line-length override (120 chars) for the legacy `llm/` module.
+
+## Current Milestone: v1.3 Code Quality
+
+**Goal:** Achieve a clean, zero-error linting baseline across the entire codebase.
+
+**Target features:**
+- Zero `ruff check` violations (382 auto-fixed + 147 manual)
+- Zero `mypy --strict` errors across all 9 affected files
+- Per-file ruff config: `llm/` module gets 120-char line limit
+
 ## Core Value
 
 Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
@@ -39,7 +50,9 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ### Active
 
-*(no active requirements — v1.2 shipped all v1 requirements)*
+- [ ] `uv run ruff check .` passes with zero errors (auto-fix + manual)
+- [ ] `uv run mypy src/` passes with zero errors (all 9 files clean)
+- [ ] `llm/` per-file line limit set to 120 chars in pyproject.toml
 
 ### Out of Scope
 
@@ -101,5 +114,4 @@ Known limitations heading into v2 planning:
 | Hardcode `use_llm=False` at call site (not remove arg) | `classify_file` defaults to `use_llm=True`; removing kwarg would silently switch to LLM classification | ✓ Good — preserved rule-based classification behaviour |
 
 ---
----
-*Last updated: 2026-02-24 after v1.2 milestone*
+*Last updated: 2026-02-24 after v1.3 milestone started*
