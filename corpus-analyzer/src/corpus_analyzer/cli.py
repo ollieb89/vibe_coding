@@ -3,6 +3,7 @@
 import json as json_module
 import time
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -359,10 +360,21 @@ def search_command(
                  "Can be used without a query to list all matching chunks.",
         ),
     ] = None,
+    output: Annotated[
+        str,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output format: text or json",
+        ),
+    ] = "text",
 ) -> None:
     """Search the indexed corpus with a natural language query."""
     if query is None and name_filter is None:
-        console.print("[red]Error:[/] Provide a query or --name to filter by chunk name.")
+        if output != "json":
+            console.print("[red]Error:[/] Provide a query or --name to filter by chunk name.")
+        else:
+            print("[]")
         raise typer.Exit(code=1)
     effective_query = query if query is not None else ""
 
@@ -403,8 +415,26 @@ def search_command(
             name=name_filter,
         )
     except ValueError as e:
-        console.print(f"[red]Error:[/] {e}")
+        if output != "json":
+            console.print(f"[red]Error:[/] {e}")
+        else:
+            print(json.dumps({"error": str(e)}))
         raise typer.Exit(code=1) from e
+
+    if output == "json":
+        json_results = []
+        for r in results:
+            json_results.append({
+                "path": r.get("file_path", ""),
+                "score": r.get("_relevance_score", 0.0),
+                "construct_type": r.get("construct_type"),
+                "chunk_name": r.get("chunk_name"),
+                "start_line": r.get("start_line", 0),
+                "end_line": r.get("end_line", 0),
+                "text": r.get("chunk_text", ""),
+            })
+        print(json.dumps(json_results, indent=2))
+        return
 
     if not results:
         if min_score > 0.0:

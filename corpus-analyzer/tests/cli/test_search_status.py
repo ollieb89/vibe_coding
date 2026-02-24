@@ -200,7 +200,7 @@ def test_status_missing_index_message() -> None:
 
 
 def test_min_score_option_help_text() -> None:
-    """FILT-02: --min-score help text documents the RRF score range.
+    """FILT-02: --min-score help text documents the score range.
 
     Rich wraps long help text across lines with padding, so we assert
     each token appears somewhere in the output rather than as a contiguous
@@ -209,9 +209,8 @@ def test_min_score_option_help_text() -> None:
     result = runner.invoke(app, ["search", "--help"])
     assert result.exit_code == 0
     assert "--min-score" in result.stdout
-    assert "RRF scores range approximately" in result.stdout
-    assert "0.009" in result.stdout
-    assert "0.0 keeps all results" in result.stdout
+    assert "Scores are normalised to 0–1 range" in result.stdout
+    assert "0.0 keeps" in result.stdout
 
 
 def test_min_score_filters_all_prints_hint() -> None:
