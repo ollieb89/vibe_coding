@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 — v1.5 milestone complete)
+See: .planning/PROJECT.md (updated 2026-02-24 — v2 milestone planned)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Planning next milestone — v1.5 archived, v2 planning not yet started
+**Current focus:** v2 Chunk-Level Precision — planning complete, Phase 17 next
 
 ## Current Position
 
-Phase: 16 of 16 (Integration Hardening — COMPLETE)
-Plan: 3 of 3 in current phase (16-03 complete)
-Status: v1.5 milestone archived — tagged, committed
-Last activity: 2026-02-24 — v1.5 milestone archived to .planning/milestones/
+Phase: 16 of 25 complete (Phase 17 next: Schema v4 — Chunk Data Layer)
+Plan: 0 of 2 in Phase 17
+Status: v2 milestone planned — requirements, roadmap, and milestone context written
+Last activity: 2026-02-24 — v2 milestone documentation created
 
-Progress: [██████████] 100% (v1.5 complete, archived)
+Progress: [░░░░░░░░░░] 0% of v2 (Phase 17 not started)
 
 ## Performance Metrics
 
@@ -76,16 +76,27 @@ Key 16-03 decisions:
 - Smoke test used Python API (chunk_file dispatch) rather than corpus index CLI — direct API call confirms dispatch wiring cleanly without requiring LanceDB configured sources
 - v1.5 milestone declared complete after all quality gates confirmed: ruff 0 violations, mypy 0 errors, 320 tests passing
 
+### v2 Planning Decisions
+
+- CLI format: `file:start-end [construct] score:X.XXX` (grep/compiler-error pattern, IDE-clickable)
+- MCP returns full chunk `text` untruncated; CLI truncates to 200 chars for display
+- Schema v4 adds columns with defaults — users re-index to backfill; migration is idempotent
+- `ClassName.method_name` dot notation for method sub-chunks (Python and TypeScript)
+- `--name foo` flag (not `--construct name:foo`) — separate flag, case-insensitive substring match
+- Per-query min-max score normalisation inside the search engine (not at display layer)
+- `corpus_graph` MCP reuses existing `GraphStore` — no new storage layer
+
 ### Pending Todos
 
-None.
+None — v2 planning complete, ready to start Phase 17.
 
 ### Blockers/Concerns
 
-None — 320 tests passing. Ruff-clean. Mypy-clean. v1.5 milestone complete.
+None — 320 tests passing. Ruff-clean. Mypy-clean. v2 planning documentation written.
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 16-03-PLAN.md (validation gate + PROJECT.md update). v1.5 milestone complete.
+Stopped at: v2 milestone documentation complete (v2-REQUIREMENTS.md, v2-ROADMAP.md, MILESTONE-CONTEXT.md, PROJECT.md updated).
 Resume file: None
+Next step: Phase 17-01-PLAN.md — TDD RED for schema v4 (`ChunkRecord` v4 fields + `ensure_schema_v4()` migration)
