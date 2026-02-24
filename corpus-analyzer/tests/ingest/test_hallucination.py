@@ -48,7 +48,9 @@ def test_zero_hallucination_line_ranges(filename: str, chunker: callable) -> Non
 
         # Validate line numbers are 1-indexed and within bounds
         assert start_line >= 1, f"start_line must be >= 1, got {start_line}"
-        assert end_line >= start_line, f"end_line must be >= start_line, got {end_line} < {start_line}"
+        assert end_line >= start_line, (
+            f"end_line must be >= start_line, got {end_line} < {start_line}"
+        )
         assert end_line <= len(lines), f"end_line {end_line} exceeds file length {len(lines)}"
 
         # Extract expected text from file
@@ -85,7 +87,6 @@ def test_chunk_text_matches_exact_content() -> None:
     fixture_path = fixture_dir / "sample.py"
 
     content = fixture_path.read_text(encoding="utf-8")
-    lines = content.splitlines(keepends=False)
 
     chunks = chunk_python(fixture_path)
 

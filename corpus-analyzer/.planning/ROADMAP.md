@@ -9,7 +9,7 @@
 - ✅ **v1.4 Search Precision** - Phases 13–14 (shipped 2026-02-24)
 - ✅ **v1.5 TypeScript AST Chunking** - Phases 15–16 (shipped 2026-02-24)
 - ✅ **v2.0 Chunk Foundation** - Phases 17–18 (shipped 2026-02-24)
-- 🚧 **v2.1 Result Quality** - Phases 19–25 (in progress)
+- ✅ **v2.1 Result Quality** - Phases 19–25 (shipped 2026-02-24)
 
 ## Phases
 
@@ -20,7 +20,7 @@ See archived milestone files in `.planning/milestones/`.
 
 </details>
 
-### 🚧 v2.1 Result Quality (Phases 19–25)
+### ✅ v2.1 Result Quality (Phases 19–25)
 
 **Milestone Goal:** Complete the chunk-level search experience — MCP self-contained chunks, method sub-chunking, name filtering, normalised scores, JSON output, and graph MCP.
 
@@ -37,7 +37,7 @@ See archived milestone files in `.planning/milestones/`.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 19-01-PLAN.md — TDD: self-contained MCP response (text, start_line, end_line; remove snippet/full_content)
+- [x] 19-01-PLAN.md — TDD: self-contained MCP response (text, start_line, end_line; remove snippet/full_content)
 
 ---
 
@@ -55,8 +55,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 20-01-PLAN.md — TDD: class header chunk extraction (_chunk_class() helper, SUB-01)
-- [ ] 20-02-PLAN.md — TDD: per-method chunk extraction (ClassName.method_name, SUB-02)
+- [x] 20-01-PLAN.md — TDD: class header chunk extraction (_chunk_class() helper, SUB-01)
+- [x] 20-02-PLAN.md — TDD: per-method chunk extraction (ClassName.method_name, SUB-02)
 
 ---
 
@@ -73,7 +73,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 21-01-PLAN.md — TDD: TypeScript per-method chunk extraction (_chunk_ts_class(), SUB-03)
+- [x] 21-01-PLAN.md — TDD: TypeScript per-method chunk extraction (_chunk_ts_class(), SUB-03)
 
 ---
 
@@ -91,8 +91,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 22-01-PLAN.md — TDD: engine name filter + empty-query name-only search (NAME-01, NAME-03 engine)
-- [ ] 22-02-PLAN.md — TDD: CLI --name flag + optional query + MCP name parameter (NAME-01, NAME-02, NAME-03)
+- [x] 22-01-PLAN.md — TDD: engine name filter + empty-query name-only search (NAME-01, NAME-03 engine)
+- [x] 22-02-PLAN.md — TDD: CLI --name flag + optional query + MCP name parameter (NAME-01, NAME-02, NAME-03)
 
 ---
 
@@ -111,8 +111,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 23-01-PLAN.md — TDD: RRF score normalisation to 0–1 (NORM-01, engine + CLI help text)
-- [ ] 23-02-PLAN.md — TDD: MCP sort_by parameter + round-trip class fixtures (SORT-01)
+- [x] 23-01-PLAN.md — TDD: RRF score normalisation to 0–1 (NORM-01, engine + CLI help text)
+- [x] 23-02-PLAN.md — TDD: MCP sort_by parameter + round-trip class fixtures (SORT-01)
 
 ---
 
@@ -142,7 +142,7 @@ Plans:
   2. `corpus_graph` reuses the existing `GraphStore` with zero new storage — no schema changes required
   3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `ingest/chunker.py` and `ingest/ts_chunker.py` (Python and TypeScript chunking modules)
   4. A parametrised integration test verifies that every stored `start_line`/`end_line` matches actual file content for `.md`, `.py`, and `.ts` fixtures (zero hallucination)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [x] 25-01: Add corpus_graph MCP tool
@@ -174,7 +174,7 @@ Plans:
   3. Special methods (`__init__`, `__str__`, `__repr__`) follow the same dot-notation naming
   4. The monolithic class chunk no longer appears — it is replaced by the header + per-method chunks
   5. Re-indexing an already-indexed Python file produces the same chunks deterministically
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 21: TypeScript Method Sub-Chunking
 **Goal**: TypeScript classes are indexed at method granularity — each method becomes a separately searchable chunk named `ClassName.method_name`
@@ -185,7 +185,7 @@ Plans:
   2. Each method chunk is named `ClassName.method_name` with correct `start_line`/`end_line`
   3. The constructor becomes `ClassName.constructor`
   4. Top-level functions and non-class constructs are unaffected and continue to index as before
-**Plans**: TBD
+**Plans**: 1 plan
 
 ### Phase 22: Name Filtering
 **Goal**: Users can filter search results by chunk name on both CLI and MCP, enabling targeted lookup of specific methods or constructs
@@ -209,7 +209,7 @@ Plans:
   3. MCP `corpus_search` result scores are in 0–1 range
   4. MCP `corpus_search` accepts `sort_by` with the same vocabulary as CLI (`relevance | construct | confidence | date | path`)
   5. `--min-score` help text is updated to reference the 0–1 normalised range (old RRF range documentation removed)
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 24: JSON Output
 **Goal**: `corpus search` results can be piped to other tools via a machine-readable JSON format
@@ -220,7 +220,7 @@ Plans:
   2. Each JSON object contains the same fields as a `SearchResult` (path, score, construct_type, chunk_name, start_line, end_line, text, etc.)
   3. `--output json` composes with all existing filter flags including `--name`, `--min-score`, `--sort-by`, `--limit`
   4. The output is valid JSON parseable by `jq` and Python `json.loads()`
-**Plans**: TBD
+**Plans**: 1 plan
 
 ### Phase 25: Graph MCP and Quality Gate
 **Goal**: LLM clients can traverse the codebase dependency graph via MCP; chunking module coverage meets the 85% branch target with a zero-hallucination line-range contract
@@ -231,7 +231,7 @@ Plans:
   2. `corpus_graph` reuses the existing `GraphStore` with zero new storage — no schema changes required
   3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `ingest/chunker.py` and `ingest/ts_chunker.py` (Python and TypeScript chunking modules)
   4. A parametrised integration test verifies that every stored `start_line`/`end_line` matches actual file content for `.md`, `.py`, and `.ts` fixtures (zero hallucination)
-**Plans**: TBD
+**Plans**: 3 plans
 
 ## Progress
 
@@ -250,6 +250,6 @@ Plans:
 | 20. Python Sub-Chunking | 2/2 | Complete    | 2026-02-24 | - |
 | 21. TypeScript Sub-Chunking | 1/1 | Complete    | 2026-02-24 | - |
 | 22. Name Filtering | 2/2 | Complete    | 2026-02-24 | - |
-| 23. Score Normalisation + MCP Sort | v2.1 | 0/2 | Not started | - |
-| 24. JSON Output | v2.1 | 0/TBD | Not started | - |
+| 23. Score Normalisation + MCP Sort | v2.1 | 2/2 | Complete | 2026-02-24 |
+| 24. JSON Output | v2.1 | 1/1 | Complete | 2026-02-24 |
 | 25. Graph MCP + Quality Gate | v2.1 | 3/3 | Complete | 2026-02-24 |

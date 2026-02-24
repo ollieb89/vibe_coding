@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v2.1 Result Quality (Phases 19–25) — roadmap defined, ready for Phase 19
+**Current focus:** v3 deferred requirements and prioritization
 
 ## Current Position
 
-Phase: 22 (Name Filtering)
-Plan: 02 complete
-Status: Phase 22 complete — 2/2 plans done
-Last activity: 2026-02-24 — 22-02 CLI --name flag + MCP name parameter wiring
+Phase: 25 (Graph MCP + Quality Gate)
+Plan: verification + synchronization complete
+Status: v2.1 complete — phases 19–25 closed
+Last activity: 2026-02-24 — full regression (433 passed), docs synchronized
 
-Progress: [===       ] 3/7 phases — v2.1 in progress
+Progress: [==========] 7/7 phases — v2.1 shipped
 
 ## Performance Metrics
 
@@ -53,10 +53,10 @@ Progress: [===       ] 3/7 phases — v2.1 in progress
 - Phases: 2 (17, 18)
 - Timeline: 1 day (2026-02-24)
 
-**v2.1 In Progress:**
-- Plans completed: 6 (19-01, 20-01, 20-02, 21-01, 22-01, 22-02)
-- Phases: 3/7 complete (19–25) — phases 19, 20-21 partial, 22 complete
-- Timeline: started 2026-02-24
+**v2.1 Complete:**
+- Plans completed: 11 (19-01, 20-01, 20-02, 21-01, 22-01, 22-02, 23-01, 23-02, 24-01, 25-01, 25-02/25-03)
+- Phases: 7/7 complete (19–25)
+- Timeline: completed 2026-02-24
 
 ## Accumulated Context
 
@@ -98,6 +98,9 @@ Key 17-02 decisions:
 - [Phase 22-name-filtering]: Empty query uses table.search() scan instead of hybrid search — LanceDB raises ValueError for empty text query in hybrid mode
 - [Phase 22-name-filtering]: name filter applied post-retrieval after text-term filter, before min_score; name='' treated as None via falsy check
 - [Phase 22-name-filtering]: name_filter guard placed before embedder/index setup to avoid connection overhead on bad input; effective_query='' pattern for name-only CLI mode
+- [Phase 23-norm-sort]: scores are normalised to 0–1 in engine and MCP sort_by defaults to relevance when omitted
+- [Phase 24-json]: JSON output path is strict machine output (no Rich formatting leakage) and returns [] for empty results
+- [Phase 25-quality-gate]: branch coverage validated at chunker.py 94% and ts_chunker.py 87%; zero-hallucination test suite passing
 
 ### v2.1 Roadmap Notes
 
@@ -121,6 +124,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 22-02-PLAN.md (CLI --name flag + MCP name parameter wiring)
+Stopped at: Completed v2.1 regression + planning artifact synchronization
 Resume file: None
-Next step: Phase 23 — Score normalisation (NORM-01)
+Next step: Select and scope next v3 requirement batch

@@ -13,7 +13,7 @@ from pathlib import Path
 import lancedb  # type: ignore[import-untyped]
 import pytest
 
-from corpus_analyzer.search.engine import CONSTRUCT_PRIORITY, CorpusSearch, RRF_SCORE_CEILING
+from corpus_analyzer.search.engine import CONSTRUCT_PRIORITY, RRF_SCORE_CEILING, CorpusSearch
 from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, ensure_schema_v3
 
 
@@ -554,7 +554,7 @@ class TestScoreNormalisation:
 
     def test_score_ceiling_constant_matches_rrf_k(self) -> None:
         """RRF_SCORE_CEILING equals 1/K + 1/K for the two-list fusion with K=60."""
-        assert RRF_SCORE_CEILING == pytest.approx(1.0 / 60 + 1.0 / 60)
+        assert pytest.approx(1.0 / 60 + 1.0 / 60) == RRF_SCORE_CEILING
 
     def test_empty_query_scan_scores_zero(self, named_table) -> None:
         """Empty-query scan path (no RRF) returns _relevance_score 0.0 per row."""

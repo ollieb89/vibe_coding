@@ -43,11 +43,11 @@ def test_search_json_output() -> None:
         result = runner.invoke(app, ["search", "--output", "json", "test"])
 
     assert result.exit_code == 0
-    
+
     data = json.loads(result.stdout)
     assert isinstance(data, list)
     assert len(data) == 1
-    
+
     first = data[0]
     assert first["path"] == "/test/path.md"
     assert first["score"] == 0.95
@@ -79,7 +79,7 @@ def test_search_json_empty_results() -> None:
 
     assert result.exit_code == 0
     assert result.stdout.strip() == "[]"
-    
+
     data = json.loads(result.stdout)
     assert data == []
 
@@ -101,10 +101,13 @@ def test_search_json_error_results() -> None:
         mock_search.hybrid_search.side_effect = ValueError("Invalid source filter value")
         mock_search_cls.return_value = mock_search
 
-        result = runner.invoke(app, ["search", "query", "--source", "bad value", "--output", "json"])
+        result = runner.invoke(
+            app,
+            ["search", "query", "--source", "bad value", "--output", "json"],
+        )
 
     assert result.exit_code == 1
-    
+
     data = json.loads(result.stdout)
     assert "error" in data
     assert "Invalid source filter value" in data["error"]

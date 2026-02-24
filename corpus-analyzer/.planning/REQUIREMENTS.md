@@ -8,8 +8,8 @@
 ### MCP Completeness
 
 - [x] **CHUNK-03**: MCP `corpus_search` response includes `start_line`, `end_line`, and full untruncated `text` per result — self-contained unit of knowledge for LLM callers
-- [ ] **SORT-01**: MCP `corpus_search` accepts `sort_by` parameter (same vocabulary as CLI: `relevance | construct | confidence | date | path`); translated to engine vocabulary via existing `_API_SORT_MAP`
-- [ ] **NORM-01**: Scores normalised to 0–1 per query via min-max normalisation inside the search engine; Python API `SearchResult.score`, CLI display, and MCP response all see the same normalised value
+- [x] **SORT-01**: MCP `corpus_search` accepts `sort_by` parameter (same vocabulary as CLI: `relevance | construct | confidence | date | path`); translated to engine vocabulary via existing `_API_SORT_MAP`
+- [x] **NORM-01**: Scores normalised to 0–1 per query via min-max normalisation inside the search engine; Python API `SearchResult.score`, CLI display, and MCP response all see the same normalised value
 
 ### Method Sub-Chunking
 
@@ -25,16 +25,16 @@
 
 ### JSON Output
 
-- [ ] **JSON-01**: `corpus search --output json` emits a valid JSON array to stdout; suppresses Rich formatting entirely; composable with all filter flags including `--name`
+- [x] **JSON-01**: `corpus search --output json` emits a valid JSON array to stdout; suppresses Rich formatting entirely; composable with all filter flags including `--name`
 
 ### Graph MCP
 
-- [ ] **GRAPH-01**: MCP `corpus_graph` tool accepts `slug: str`; returns `upstream: list[str]` and `downstream: list[str]` neighbour paths; reuses `GraphStore` without new storage
+- [x] **GRAPH-01**: MCP `corpus_graph` tool accepts `slug: str`; returns `upstream: list[str]` and `downstream: list[str]` neighbour paths; reuses `GraphStore` without new storage
 
 ### Quality
 
-- [ ] **QUAL-01**: `pytest --cov --cov-branch` reports 85%+ branch coverage on `chunking/` modules (`chunker.py`, `py_chunker.py`, `ts_chunker.py`)
-- [ ] **QUAL-02**: Parametrised zero-hallucination integration test: every stored `start_line`/`end_line` matches actual file content across `.md`, `.py`, and `.ts` fixtures
+- [x] **QUAL-01**: `pytest --cov --cov-branch` reports 85%+ branch coverage on ingest chunking modules (`ingest/chunker.py`, `ingest/ts_chunker.py`)
+- [x] **QUAL-02**: Parametrised zero-hallucination integration test: every stored `start_line`/`end_line` matches actual file content across `.md`, `.py`, and `.ts` fixtures
 
 ## v3 Requirements (Deferred)
 
@@ -83,12 +83,12 @@
 | NAME-01 | Phase 22 | Complete |
 | NAME-02 | Phase 22 | Complete |
 | NAME-03 | Phase 22 | Complete |
-| NORM-01 | Phase 23 | Pending |
-| SORT-01 | Phase 23 | Pending |
-| JSON-01 | Phase 24 | Pending |
-| QUAL-01 | Phase 25 | Pending |
-| QUAL-02 | Phase 25 | Pending |
-| GRAPH-01 | Phase 25 | Pending |
+| NORM-01 | Phase 23 | Complete |
+| SORT-01 | Phase 23 | Complete |
+| JSON-01 | Phase 24 | Complete |
+| QUAL-01 | Phase 25 | Complete |
+| QUAL-02 | Phase 25 | Complete |
+| GRAPH-01 | Phase 25 | Complete |
 
 **Coverage:**
 - v2.1 requirements: 13 total

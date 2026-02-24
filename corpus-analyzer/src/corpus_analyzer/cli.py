@@ -1,15 +1,22 @@
 """CLI entry point using Typer."""
 
+import json
 import json as json_module
 import time
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 
 from corpus_analyzer import __version__

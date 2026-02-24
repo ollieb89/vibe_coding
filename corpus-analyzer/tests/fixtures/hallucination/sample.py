@@ -1,7 +1,5 @@
 """Sample Python file for testing chunking."""
 
-import os
-from typing import Any
 
 
 class SampleClass:

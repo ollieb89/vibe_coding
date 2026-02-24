@@ -48,36 +48,31 @@ async def corpus_graph(
     Args:
         slug: The component slug or path fragment to look up.
     """
-    if ctx and ctx.lifespan_context:
-        config = ctx.lifespan_context.get("config")
-    else:
-        config = load_config(CONFIG_PATH)
-
-    db_path = config.data_dir / "graph.sqlite"
+    db_path = DATA_DIR / "graph.sqlite"
     store = GraphStore(db_path)
-    
+
     paths = store.search_paths(slug)
     if not paths:
         return f"No components found matching '{slug}'."
-        
+
     lines = [f"Found {len(paths)} components matching '{slug}':\n"]
     for path in paths:
         lines.append(f"Component: {path}")
-        
+
         upstream = store.edges_to(path)
         if upstream:
             lines.append("  Upstream (depends on this):")
             for edge in upstream:
                 lines.append(f"    - {edge['source_path']}")
-                
+
         downstream = store.edges_from(path)
         if downstream:
             lines.append("  Downstream (this depends on):")
             for edge in downstream:
                 lines.append(f"    - {edge['target_path']} (resolved: {edge['resolved']})")
-                
+
         lines.append("")
-        
+
     return "\n".join(lines).strip()
 
 

@@ -7,14 +7,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from corpus_analyzer.ingest.chunker import (
+    _enforce_char_limit,
     chunk_file,
     chunk_lines,
     chunk_markdown,
     chunk_python,
-    _enforce_char_limit,
 )
 
 
