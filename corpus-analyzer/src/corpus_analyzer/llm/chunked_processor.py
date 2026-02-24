@@ -22,6 +22,17 @@ class DocumentChunk:
         return len(self.content)
 
 
+@dataclass
+class Atom:
+    """Atomic block unit used by split_on_headings."""
+
+    lines: list[str]
+    heading: str | None
+    level: int
+    is_code: bool
+    start_idx: int
+
+
 def split_on_headings(content: str, max_chunk_size: int = 8000) -> list[DocumentChunk]:
     """Split document into chunks on logical boundaries (headings, code blocks).
 
@@ -40,14 +51,6 @@ def split_on_headings(content: str, max_chunk_size: int = 8000) -> list[Document
 
     # Step 1: Group lines into "Atomic Blocks"
     # Atoms: Heading, CodeFence+Content, Paragraph
-    @dataclass
-    class Atom:
-        lines: list[str]
-        heading: str | None
-        level: int
-        is_code: bool
-        start_idx: int
-
     atoms: list[Atom] = []
     current_lines: list[str] = []
     current_heading: str | None = None
