@@ -15,9 +15,9 @@ Requirements for the Search Precision milestone. All map to roadmap phases.
 
 ### API / MCP Parity
 
-- [ ] **PARITY-01**: Python `search()` API accepts `sort_by` parameter (engine already supports it; wrapper does not currently forward it)
-- [ ] **PARITY-02**: Python `search()` API accepts `min_score` parameter
-- [ ] **PARITY-03**: MCP `corpus_search` tool accepts `min_score` parameter
+- [x] **PARITY-01**: Python `search()` API accepts `sort_by` parameter (engine already supports it; wrapper does not currently forward it)
+- [x] **PARITY-02**: Python `search()` API accepts `min_score` parameter
+- [x] **PARITY-03**: MCP `corpus_search` tool accepts `min_score` parameter
 
 ## v2 Requirements
 
@@ -49,9 +49,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FILT-01 | Phase 13 | Complete |
 | FILT-02 | Phase 14 | Pending |
 | FILT-03 | Phase 14 | Pending |
-| PARITY-01 | Phase 14 | Pending |
-| PARITY-02 | Phase 14 | Pending |
-| PARITY-03 | Phase 14 | Pending |
+| PARITY-01 | Phase 14 | Complete |
+| PARITY-02 | Phase 14 | Complete |
+| PARITY-03 | Phase 14 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 6 total
