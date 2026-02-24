@@ -33,7 +33,7 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 - [x] **MYPY-02**: `llm/chunked_processor.py` zero mypy errors — nested functions annotated, `Atom` dataclass promoted to module level
 - [x] **MYPY-03**: `utils/ui.py` zero mypy errors
 - [x] **MYPY-04**: `extractors/markdown.py` and `extractors/__init__.py` zero mypy errors — ABC dict-dispatch annotated
-- [ ] **MYPY-05**: `llm/rewriter.py` zero mypy errors — operator bug investigated and fixed; `OllamaClient.db` field added
+- [x] **MYPY-05**: `llm/rewriter.py` zero mypy errors — operator bug investigated and fixed; `OllamaClient.db` field added
 - [x] **MYPY-06**: `llm/ollama_client.py`, `ingest/chunker.py`, `analyzers/shape.py` zero mypy errors
 
 ### Validation
@@ -74,7 +74,7 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 | MYPY-02 | Phase 11 | Complete |
 | MYPY-03 | Phase 11 | Complete |
 | MYPY-04 | Phase 11 | Complete |
-| MYPY-05 | Phase 11 | Pending |
+| MYPY-05 | Phase 11 | Complete |
 | MYPY-06 | Phase 11 | Complete |
 | VALID-01 | Phase 12 | Pending |
 | VALID-02 | Phase 12 | Pending |

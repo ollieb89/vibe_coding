@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Phase 9 — Config and Auto-Fix (v1.3)
+**Current focus:** Phase 11 — Manual Ruff CLI + Mypy (v1.3)
 
 ## Current Position
 
 Phase: 11 of 12 (Manual Ruff CLI + Mypy)
-Plan: 1 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-24 — Phase 11 Plan 1 complete (RUFF-07: all 47 ruff violations in cli.py fixed, project-wide zero violations, 281 tests passing)
+Plan: 5 of 5 in current phase (COMPLETE)
+Status: Phase complete
+Last activity: 2026-02-24 — Phase 11 Plan 5 complete (MYPY-05: rewriter.py mypy-clean, entire codebase zero mypy errors, 281 tests passing)
 
-Progress: [██░░░░░░░░] 20% (v1.3)
+Progress: [██████████] 100% phase 11 complete (v1.3)
 
 ## Performance Metrics
 
@@ -34,7 +34,7 @@ Progress: [██░░░░░░░░] 20% (v1.3)
 - Timeline: 1 day (2026-02-24)
 
 **v1.3 Summary (in progress):**
-- Total plans completed: 5
+- Total plans completed: 10
 - Phases: 4 (9–12)
 
 ## Accumulated Context
@@ -65,6 +65,9 @@ Recent decisions affecting current work:
 - [11-03]: chain_lines local res variable typed as list[str] to satisfy mypy inference for extend() calls
 - [11-04]: response.message.content (typed Optional[str]) not dict subscript (Any) for ollama ChatResponse access
 - [11-04]: OllamaClient is a plain class — self.db: CorpusDatabase | None = None with TYPE_CHECKING guard resolves both no-any-return and unblocks plan 05
+- [11-05]: DEFAULT_SYSTEM_PROMPT trailing comma was genuine runtime bug — TypeError on unmapped category at line 401 (operator error on tuple not str)
+- [11-05]: adv_rewriter: Any is correct — AdvancedRewriter imported inside function to avoid circular imports
+- [11-05]: Guard self.client.db with `is not None` (not hasattr) when attribute is typed Optional — hasattr always returns True for typed fields
 
 ### Pending Todos
 
@@ -72,10 +75,10 @@ None.
 
 ### Blockers/Concerns
 
-- [Phase 11]: rewriter.py line 406 operator error requires reading branch logic in context — cannot resolve from error output alone
+None — phase 11 complete, codebase is ruff-clean and mypy-clean.
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 11-01-PLAN.md (RUFF-07: all 47 ruff violations in cli.py fixed — project-wide zero ruff violations, 281 tests passing)
+Stopped at: Completed 11-05-PLAN.md (MYPY-05: rewriter.py mypy-clean, uv run mypy src/ exits 0 — 53 source files zero errors, 281 tests passing)
 Resume file: None
