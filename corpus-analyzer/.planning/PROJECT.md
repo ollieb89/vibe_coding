@@ -56,9 +56,23 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ Python `search()` API accepts `sort_by` and `min_score` with `ValueError` validation (PARITY-01, PARITY-02) — v1.4
 - ✓ MCP `corpus_search()` accepts `min_score: Optional[float]` with `None`→`0.0` + `filtered_by_min_score` signal (PARITY-03) — v1.4
 
+## Current Milestone: v1.5 TypeScript AST Chunking
+
+**Goal:** Replace line-based chunking for TypeScript and JavaScript with tree-sitter AST-aware chunking, matching the precision and parity of the existing Python AST chunker.
+
+**Target features:**
+- tree-sitter based AST chunker for `.ts`, `.tsx`, `.js`, `.jsx`
+- Chunk types: functions/methods, classes, interfaces/types, top-level constants
+- Silent line-based fallback on parse failure
+- Full test coverage at parity with the Python AST chunker
+
 ### Active
 
-<!-- v1.5 or later — no milestone planned yet -->
+- [ ] tree-sitter AST chunker for `.ts`, `.tsx`, `.js`, `.jsx` (IDX-01)
+- [ ] Chunk granularity: functions, methods, classes, interfaces/types, top-level constants (IDX-02)
+- [ ] Silent line-based fallback when tree-sitter cannot parse a file (IDX-03)
+- [ ] Test suite at full parity with Python AST chunker coverage (TEST-01)
+- [ ] Integration: new chunker wired into indexer dispatch for TS/JS extensions (IDX-04)
 
 ### Out of Scope
 
@@ -67,7 +81,6 @@ Surface relevant agent files instantly — query an entire local agent library a
 - Web UI — CLI + MCP sufficient for target users
 - LLM rewriting (corpus-analyzer original feature) — retained but not the focus
 - Chunk-level results (CHUNK-01–CHUNK-03) — v2 candidate
-- TypeScript/JS AST chunking (IDX-01) — v2 candidate
 
 ## Context
 
@@ -130,4 +143,4 @@ Known limitations heading into v2 planning:
 | FILT-03 branch checks `min_score > 0.0` before generic no-results | Contextual hint only fires when the user deliberately filtered; doesn't appear on regular empty results | ✓ Good — tested by asserting absence of generic message alongside presence of hint |
 
 ---
-*Last updated: 2026-02-24 after v1.4 milestone*
+*Last updated: 2026-02-24 after v1.5 milestone start*

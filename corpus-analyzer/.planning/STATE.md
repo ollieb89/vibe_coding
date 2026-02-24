@@ -2,18 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v1.4 milestone)
+See: .planning/PROJECT.md (updated 2026-02-24 after v1.5 milestone start)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Planning next milestone
+**Current focus:** v1.5 TypeScript AST Chunking
 
 ## Current Position
 
-Phase: v1.4 complete — no active phase
-Status: Milestone v1.4 Search Precision archived. Ready for v1.5 planning.
-Last activity: 2026-02-24 — Archived milestone v1.4
-
-Progress: [██████████] 100% (v1.4 shipped)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-24 — Milestone v1.5 started
 
 ## Performance Metrics
 
