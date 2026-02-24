@@ -4,10 +4,10 @@ import concurrent.futures
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from corpus_analyzer.core.database import CorpusDatabase
-from corpus_analyzer.core.models import DocumentCategory
+from corpus_analyzer.core.models import Document, DocumentCategory
 from corpus_analyzer.llm.ollama_client import OllamaClient
 
 # Constants
@@ -227,7 +227,7 @@ DEFAULT_SYSTEM_PROMPT = """You are a technical documentation expert. Your task i
 9. Do not end with a trailing code block marker unless it closes a valid block.
 10. Ensure logical heading hierarchy (H1 -> H2 -> H3, do not skip levels).
 
-Be concise but comprehensive. Preserve important details. Do not include these instructions in the output.""",
+Be concise but comprehensive. Preserve important details. Do not include these instructions in the output."""
 
 
 class DocProcessResult(NamedTuple):
@@ -238,12 +238,12 @@ class DocProcessResult(NamedTuple):
 
 
 def process_document(
-    doc,
+    doc: Document,
     client: OllamaClient,
     system_prompt: str,
     output_dir: Path,
     optimized: bool,
-    adv_rewriter,
+    adv_rewriter: Any,
     category: str,
 ) -> DocProcessResult:
     """Process a single document."""

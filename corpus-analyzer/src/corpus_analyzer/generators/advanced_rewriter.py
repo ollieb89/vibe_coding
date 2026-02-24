@@ -79,7 +79,7 @@ class AdvancedRewriter:
                 tag = doc.domain_tags[0] if doc.domain_tags else None
                 gold_docs = (
                     list(self.client.db.get_gold_standard_documents(category=doc.category, tag=tag))
-                    if hasattr(self.client, "db")
+                    if self.client.db is not None
                     else []
                 )
 
