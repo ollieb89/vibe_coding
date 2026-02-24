@@ -262,7 +262,7 @@ def test_corpus_search_legacy_row_empty_text() -> None:
 
 
 def test_corpus_search_no_snippet_field() -> None:
-    """Regression guard: 'snippet' must NOT appear in result dict (old truncated preview removed)."""
+    """Regression guard: 'snippet' must NOT appear in result dict (old truncated preview)."""
     from corpus_analyzer.mcp.server import corpus_search
 
     raw = [
