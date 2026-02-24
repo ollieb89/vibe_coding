@@ -22,19 +22,18 @@ v2 exposes chunk-level search results across all surfaces. CLI output switches t
 
 Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
 
-## Next Milestone: v3.0 Intelligent Search
+## Current Milestone: v2.1 Result Quality
 
-**Goal:** Stop flooding results with variations of the same file — deliver diverse, graph-enriched search results with MMR ranking, multi-query composition, recursive graph traversal, and centrality-boosted scoring.
+**Goal:** Complete the chunk-level search experience — MCP self-contained chunks, method sub-chunking, name filtering, normalised scores, JSON output, and graph MCP.
 
 **Target features:**
-- MMR-style result diversity: penalize near-duplicate/same-file chunks; surface architectural spread
-- Multi-query AND composition (`--query auth --query saml` intersection)
-- `--expand-graph` flag: search results augmented with categorized graph neighbors `[Depends On]` / `[Imported By]`
-- Recursive graph walk with configurable depth and hub-node centrality emphasis
-- Centrality scoring: high-indegree files receive a score boost in hybrid search
-- Contiguous sub-chunk merging: adjacent method chunks from the same file merged in display
-- Cross-source labeling: source name on every CLI result and MCP `source` field
-- Optional two-stage re-ranking: `--rerank` flag enables cross-encoder/LLM re-rank of top-20
+- MCP `corpus_search` response includes `start_line`, `end_line`, `text` per result (CHUNK-03)
+- Python + TypeScript method sub-chunking: `ClassName.method_name` naming (SUB-01–03)
+- `corpus search --name <fragment>` and MCP `name` parameter (NAME-01–03)
+- MCP `sort_by` + 0–1 normalised scores (SORT-01, NORM-01)
+- `corpus search --output json` for shell piping (JSON-01)
+- `corpus_graph` MCP tool for LLM graph traversal (GRAPH-01)
+- 85%+ branch coverage on chunking modules; zero-hallucination line-range contract (QUAL-01–02)
 
 ## Requirements
 
@@ -85,7 +84,7 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ LanceDB schema v4: `start_line`, `end_line`, `chunk_name`, `chunk_text` persisted per chunk; `ensure_schema_v4()` idempotent migration; all chunkers emit v4 fields (CHUNK-01) — v2.0
 - ✓ CLI `corpus search` output: grep/IDE-clickable format `path:start-end [construct] score:X.XXX` with 200-char indented chunk text preview; Rich markup escaped (CHUNK-02) — v2.0
 
-### Active (v2.1 — next milestone)
+### Active (v2.1 — current milestone)
 
 - [ ] MCP `corpus_search` response includes `start_line`, `end_line`, `text` per result — self-contained unit of knowledge (CHUNK-03)
 - [ ] Python AST chunker: class header chunk (`ClassName`) + per-method chunks (`ClassName.method_name`) (SUB-01, SUB-02)
@@ -209,4 +208,4 @@ Remaining known limitations (deferred):
 | `corpus_graph` MCP reuses `GraphStore` (no new storage) | Graph layer complete since v1.2; MCP tool is a thin wrapper; zero schema changes required | — Pending (v2.2) |
 
 ---
-*Last updated: 2026-02-24 after v2.0 Chunk Foundation milestone*
+*Last updated: 2026-02-24 after v2.1 milestone started*

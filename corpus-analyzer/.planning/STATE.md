@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v2.0 milestone)
+See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v2.1 Result Quality (Phases 19–25) — v2.0 shipped; next: Phase 19 MCP chunk response
+**Current focus:** v2.1 Result Quality (Phases 19–25) — defining requirements
 
 ## Current Position
 
-Phase: v2.0 complete (Phases 17–18 shipped as v2.0 Chunk Foundation)
-Plan: — (milestone tagged; ready for v2.1)
-Status: v2.0 shipped — CHUNK-01 + CHUNK-02 delivered; tagged v2.0; 340 tests passing
-Last activity: 2026-02-24 — v2.0 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-24 — Milestone v2.1 started
 
-Progress: v2.0 SHIPPED (Phases 17–18); v2.1 not started (Phases 19–25 planned)
+Progress: v2.1 not started — requirements defining
 
 ## Performance Metrics
 
