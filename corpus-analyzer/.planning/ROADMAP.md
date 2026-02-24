@@ -243,7 +243,7 @@ Plans:
 | 15–16. TS AST Chunking | v1.5 | 5/5 | Complete | 2026-02-24 |
 | 17–18. Chunk Foundation | v2.0 | 4/4 | Complete | 2026-02-24 |
 | 19. MCP Chunk Response | 1/1 | Complete    | 2026-02-24 | - |
-| 20. Python Sub-Chunking | 2/2 | Complete   | 2026-02-24 | - |
+| 20. Python Sub-Chunking | 2/2 | Complete    | 2026-02-24 | - |
 | 21. TypeScript Sub-Chunking | v2.1 | 0/TBD | Not started | - |
 | 22. Name Filtering | v2.1 | 0/TBD | Not started | - |
 | 23. Score Normalisation + MCP Sort | v2.1 | 0/TBD | Not started | - |
