@@ -613,3 +613,149 @@ class TestChunkFile:
 
         assert len(chunks) >= 1
         assert "key: value" in chunks[0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# TestChunkPythonSubChunking — SUB-01 class header chunk behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestChunkPythonSubChunking:
+    """Tests for SUB-01: class header chunk extraction in chunk_python."""
+
+    def _get_header(self, chunks: list[dict], name: str) -> dict:
+        """Return first chunk whose chunk_name == name."""
+        for c in chunks:
+            if c.get("chunk_name") == name:
+                return c
+        raise AssertionError(f"No chunk with chunk_name={name!r}; got {[c.get('chunk_name') for c in chunks]}")
+
+    def test_class_with_methods_produces_header_chunk(self, tmp_path: Path) -> None:
+        """A class with two methods produces a chunk named exactly 'MyClass' (the header)."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("class MyClass:\n    def method_a(self): pass\n    def method_b(self): pass\n")
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "MyClass" for c in chunks)
+
+    def test_class_header_contains_class_signature(self, tmp_path: Path) -> None:
+        """Header chunk text starts with 'class MyClass:'."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("class MyClass:\n    def method_a(self): pass\n")
+
+        chunks = chunk_python(py_file)
+
+        header = self._get_header(chunks, "MyClass")
+        assert header["text"].startswith("class MyClass:")
+
+    def test_class_header_includes_init_self_assignments(self, tmp_path: Path) -> None:
+        """Header chunk includes self.x = value lines from __init__ when there are only assignments."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def __init__(self, x: int) -> None:\n"
+            "        self.x = x\n"
+            "        self.y = 0\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        header = self._get_header(chunks, "MyClass")
+        assert "self.x = x" in header["text"]
+        assert "self.y = 0" in header["text"]
+
+    def test_class_header_stops_at_first_non_assignment_in_init(self, tmp_path: Path) -> None:
+        """Header chunk does NOT include lines after the first non-assignment statement in __init__."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class MyClass:\n"
+            "    def __init__(self, x: int) -> None:\n"
+            "        self.x = x\n"
+            "        self._setup()  # non-assignment call\n"
+            "        self.y = 1\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        header = self._get_header(chunks, "MyClass")
+        assert "self.x = x" in header["text"]
+        assert "self._setup()" not in header["text"]
+        assert "self.y = 1" not in header["text"]
+
+    def test_class_without_init_produces_header_chunk(self, tmp_path: Path) -> None:
+        """Class with no __init__ still produces a header chunk."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("class Empty:\n    pass\n")
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "Empty" for c in chunks)
+
+    def test_class_with_no_methods_header_only(self, tmp_path: Path) -> None:
+        """Class with no methods (enum-style) produces exactly one chunk named ClassName."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            'class Status:\n'
+            '    ACTIVE = "active"\n'
+            '    INACTIVE = "inactive"\n'
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert len(chunks) == 1
+        assert chunks[0]["chunk_name"] == "Status"
+
+    def test_class_decorators_in_header(self, tmp_path: Path) -> None:
+        """Class decorator appears in the header chunk text."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "@dataclass\n"
+            "class Point:\n"
+            "    x: float\n"
+            "    y: float\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        header = self._get_header(chunks, "Point")
+        assert "@dataclass" in header["text"]
+
+    def test_class_level_attributes_in_header(self, tmp_path: Path) -> None:
+        """Class-level attribute defined outside __init__ appears in header chunk."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "class Cfg:\n"
+            '    KEY = "value"\n'
+            "    def method(self): pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        header = self._get_header(chunks, "Cfg")
+        assert 'KEY = "value"' in header["text"]
+
+    def test_top_level_function_unchanged_alongside_class(self, tmp_path: Path) -> None:
+        """Top-level function alongside a class is still a single chunk with its own name."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text(
+            "def top_func():\n"
+            "    pass\n"
+            "\n"
+            "class MyClass:\n"
+            "    def method(self): pass\n"
+        )
+
+        chunks = chunk_python(py_file)
+
+        assert any(c["chunk_name"] == "top_func" for c in chunks)
+
+    def test_header_chunk_line_range(self, tmp_path: Path) -> None:
+        """Header chunk start_line is the class keyword line (no decorator here)."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("class Simple:\n    def method(self): pass\n")
+
+        chunks = chunk_python(py_file)
+
+        header = self._get_header(chunks, "Simple")
+        assert header["start_line"] == 1
