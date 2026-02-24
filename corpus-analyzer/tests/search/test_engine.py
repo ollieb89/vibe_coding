@@ -422,3 +422,120 @@ def test_min_score_filters_below_threshold(search: CorpusSearch) -> None:
     results = search.hybrid_search("search", min_score=max_score)
     assert len(results) >= 1
     assert all(float(r.get("_relevance_score", 0.0)) >= max_score for r in results)
+
+
+# --- Name filter tests ---
+
+@pytest.fixture
+def named_table(tmp_path: Path):
+    """Table seeded with rows that have distinct chunk_names for name-filter tests."""
+    db = lancedb.connect(str(tmp_path / "named_idx"))
+    table = db.create_table("chunks", schema=ChunkRecord, mode="overwrite")
+    ensure_schema_v2(table)
+    now = datetime.now(UTC).isoformat()
+    rows: list[dict[str, object]] = [
+        {
+            "chunk_id": "n1",
+            "file_path": "/repo/src/search.py",
+            "source_name": "src",
+            "text": "def search foo bar baz",
+            "vector": [0.1] * 768,
+            "start_line": 1, "end_line": 5,
+            "file_type": ".py",
+            "content_hash": "h1",
+            "embedding_model": "nomic-embed-text",
+            "indexed_at": now,
+            "construct_type": "function",
+            "summary": None,
+            "chunk_name": "SearchEngine.search",
+            "chunk_text": "def search(self): ...",
+        },
+        {
+            "chunk_id": "n2",
+            "file_path": "/repo/src/index.py",
+            "source_name": "src",
+            "text": "def index foo bar baz",
+            "vector": [0.2] * 768,
+            "start_line": 10, "end_line": 20,
+            "file_type": ".py",
+            "content_hash": "h2",
+            "embedding_model": "nomic-embed-text",
+            "indexed_at": now,
+            "construct_type": "function",
+            "summary": None,
+            "chunk_name": "SearchEngine.index",
+            "chunk_text": "def index(self): ...",
+        },
+        {
+            "chunk_id": "n3",
+            "file_path": "/repo/src/util.py",
+            "source_name": "src",
+            "text": "def helper foo bar baz",
+            "vector": [0.3] * 768,
+            "start_line": 1, "end_line": 5,
+            "file_type": ".py",
+            "content_hash": "h3",
+            "embedding_model": "nomic-embed-text",
+            "indexed_at": now,
+            "construct_type": "function",
+            "summary": None,
+            "chunk_name": "HelperClass.run",
+            "chunk_text": "def run(self): ...",
+        },
+    ]
+    table.add(rows)
+    table.create_fts_index("text", replace=True)
+    return table
+
+
+class TestHybridSearchNameFilter:
+    """NAME-01/NAME-03: Tests for the name= filter and empty-query name-only search."""
+
+    def test_name_filter_returns_matching_chunks(self, named_table) -> None:
+        """NAME-01: name='search' returns only chunks whose chunk_name contains 'search' (ci)."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        results = search.hybrid_search("foo", name="search")
+        assert results
+        assert all("search" in str(r.get("chunk_name", "")).lower() for r in results)
+
+    def test_name_filter_case_insensitive(self, named_table) -> None:
+        """NAME-01: name filter is case-insensitive ('SEARCH' matches 'SearchEngine.search')."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        results = search.hybrid_search("foo", name="SEARCH")
+        assert results
+        assert all("search" in str(r.get("chunk_name", "")).lower() for r in results)
+
+    def test_name_filter_dot_notation(self, named_table) -> None:
+        """NAME-01: name='SearchEngine.search' narrows to that specific method chunk."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        results = search.hybrid_search("foo", name="SearchEngine.search")
+        assert len(results) == 1
+        assert results[0]["chunk_name"] == "SearchEngine.search"
+
+    def test_name_filter_no_match_returns_empty(self, named_table) -> None:
+        """NAME-01: name filter with no matching chunk_name returns empty list."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        results = search.hybrid_search("foo", name="NonExistentClass.method")
+        assert results == []
+
+    def test_name_none_is_noop(self, named_table) -> None:
+        """NAME-01: name=None behaves identically to omitting the parameter."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        without_name = search.hybrid_search("foo")
+        with_none = search.hybrid_search("foo", name=None)
+        assert with_none == without_name
+
+    def test_empty_query_with_name_skips_text_filter(self, named_table) -> None:
+        """NAME-03: empty query + name filter returns name-matching chunks without text match."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        results = search.hybrid_search("", name="helper")
+        assert results
+        assert all("helper" in str(r.get("chunk_name", "")).lower() for r in results)
+
+    def test_name_composes_with_construct_filter(self, named_table) -> None:
+        """NAME-01: name filter composes with construct_type filter as AND predicate."""
+        search = CorpusSearch(named_table, MockEmbedder())
+        results = search.hybrid_search("foo", name="search", construct_type="function")
+        assert results
+        assert all("search" in str(r.get("chunk_name", "")).lower() for r in results)
+        assert all(r.get("construct_type") == "function" for r in results)
