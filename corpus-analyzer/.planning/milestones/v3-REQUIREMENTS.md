@@ -1,7 +1,7 @@
 # Requirements: v3.0 Intelligent Search
 
 **Defined:** 2026-02-24
-**Status:** PLANNING
+**Status:** ROADMAP CREATED
 **Milestone:** v3.0 Intelligent Search
 **Depends on:** v2 complete (Phases 17–25; specifically Phase 17 for RANK-02, Phase 23 for RERANK score normalisation)
 
@@ -115,26 +115,26 @@ Fully isolated from other v3 features; ships last.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COORD-01 | Phase 26 | Planned |
-| XSRC-01 | Phase 26 | Planned |
-| XSRC-02 | Phase 26 | Planned |
-| FILTER-01 | Phase 26 | Planned |
-| FILTER-02 | Phase 26 | Planned |
-| RANK-01 | Phase 27 | Planned |
-| RANK-02 | Phase 27 | Planned |
-| RANK-03 | Phase 27 | Planned |
-| MULTI-01 | Phase 28 | Planned |
-| BOOST-01 | Phase 28 | Planned |
-| RERANK-01 | Phase 29 | Planned |
-| RERANK-02 | Phase 29 | Planned |
-| DEP-01 | Phase 30 | Planned |
-| GCENT-01 | Phase 30 | Planned |
-| GCENT-02 | Phase 30 | Planned |
-| GEXP-01 | Phase 31 | Planned |
-| GWALK-01 | Phase 31 | Planned |
-| GWALK-02 | Phase 31 | Planned |
-| V3QUAL-01 | Phase 32 | Planned |
-| V3QUAL-02 | Phase 32 | Planned |
+| COORD-01 | Phase 26 | Pending |
+| XSRC-01 | Phase 26 | Pending |
+| XSRC-02 | Phase 26 | Pending |
+| FILTER-01 | Phase 26 | Pending |
+| FILTER-02 | Phase 26 | Pending |
+| RANK-01 | Phase 27 | Pending |
+| RANK-02 | Phase 27 | Pending |
+| RANK-03 | Phase 27 | Pending |
+| MULTI-01 | Phase 28 | Pending |
+| BOOST-01 | Phase 28 | Pending |
+| RERANK-01 | Phase 29 | Pending |
+| RERANK-02 | Phase 29 | Pending |
+| DEP-01 | Phase 30 | Pending |
+| GCENT-01 | Phase 30 | Pending |
+| GCENT-02 | Phase 30 | Pending |
+| GEXP-01 | Phase 31 | Pending |
+| GWALK-01 | Phase 31 | Pending |
+| GWALK-02 | Phase 31 | Pending |
+| V3QUAL-01 | Phase 32 | Pending |
+| V3QUAL-02 | Phase 32 | Pending |
 
 **Coverage:**
 - v3 requirements: 20 total (18 primary + 2 quality)
@@ -143,4 +143,4 @@ Fully isolated from other v3 features; ships last.
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-24 after initial definition*
+*Last updated: 2026-02-24 — roadmap created (v3-ROADMAP.md, Phases 26–32)*
