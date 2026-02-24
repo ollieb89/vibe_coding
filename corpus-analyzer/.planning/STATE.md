@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 10 of 12 (Manual Ruff Leaf-to-Hub)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-24 — Phase 10 Plan 1 complete (E741/E402/B017 semantic violations fixed, 281 tests passing)
+Last activity: 2026-02-24 — Phase 10 Plan 2 complete (E501 leaf-module wrapping, 19 violations fixed, 281 tests passing)
 
-Progress: [█░░░░░░░░░] 10% (v1.3)
+Progress: [██░░░░░░░░] 20% (v1.3)
 
 ## Performance Metrics
 
@@ -34,7 +34,7 @@ Progress: [█░░░░░░░░░] 10% (v1.3)
 - Timeline: 1 day (2026-02-24)
 
 **v1.3 Summary (in progress):**
-- Total plans completed: 0
+- Total plans completed: 2
 - Phases: 4 (9–12)
 
 ## Accumulated Context
@@ -52,6 +52,8 @@ Recent decisions affecting current work:
 - [10-01]: Use `lnk` (not `link2`) for database.py deserialization rename to avoid shadowing imported Link class
 - [10-01]: Use `level_val` for chunked_processor.py rename to match semantics of force_level/current_level source variables
 - [10-01]: ruff --fix (safe only) sufficient for scripts/ F401/W293; no --unsafe-fixes needed
+- [Phase 10-02]: Wrap for-loop CLASSIFICATION_RULES unpacking by parenthesising the iterable, not the variables
+- [Phase 10-02]: shape.py f-string: extract depth_rows local variable to avoid unreadable inline generator expression
 
 ### Pending Todos
 
@@ -65,5 +67,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 10-01-PLAN.md (E741/E402/B017 semantic fixes)
+Stopped at: Completed 10-02-PLAN.md (E501 leaf-module wrapping)
 Resume file: None

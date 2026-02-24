@@ -21,7 +21,7 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 
 ### Ruff Manual
 
-- [ ] **RUFF-03**: All E501 line-length violations in leaf modules fixed (wrapping, not shortening content)
+- [x] **RUFF-03**: All E501 line-length violations in leaf modules fixed (wrapping, not shortening content)
 - [x] **RUFF-04**: All B-series violations fixed (B905/B007/B017/B023/B904/B008) — no B006 in cli.py (covered by CONF-04)
 - [x] **RUFF-05**: All F841/E741 violations fixed (unused variables, ambiguous names)
 - [x] **RUFF-06**: All E402 import ordering violations in `llm/rewriter.py` fixed
@@ -65,7 +65,7 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 | CONF-04 | Phase 9 | Complete |
 | RUFF-01 | Phase 9 | Complete |
 | RUFF-02 | Phase 9 | Complete |
-| RUFF-03 | Phase 10 | Pending |
+| RUFF-03 | Phase 10 | Complete |
 | RUFF-04 | Phase 10 | Complete |
 | RUFF-05 | Phase 10 | Complete |
 | RUFF-06 | Phase 10 | Complete |
