@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v1.5 milestone start)
+See: .planning/PROJECT.md (updated 2026-02-24 — v1.5 milestone complete)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v1.5 TypeScript AST Chunking — Phase 16: Integration Hardening (in progress)
+**Current focus:** v1.5 TypeScript AST Chunking — COMPLETE. Phase 16: Integration Hardening done.
 
 ## Current Position
 
-Phase: 16 of 16 (Integration Hardening — in progress)
-Plan: 2 of 3 in current phase (16-02 complete)
-Status: Phase 16 in progress
-Last activity: 2026-02-24 — 16-02 GREEN phase: size guard + ImportError fallback implemented
+Phase: 16 of 16 (Integration Hardening — COMPLETE)
+Plan: 3 of 3 in current phase (16-03 complete)
+Status: Phase 16 complete — v1.5 milestone validated
+Last activity: 2026-02-24 — 16-03 validation gate: ruff+mypy+320 tests all pass, PROJECT.md updated
 
-Progress: [███░░░░░░░] 30% (v1.5)
+Progress: [██████████] 100% (v1.5 complete)
 
 ## Performance Metrics
 
@@ -43,9 +43,9 @@ Progress: [███░░░░░░░] 30% (v1.5)
 - Phases: 2 (13, 14)
 - Timeline: 1 day (2026-02-24)
 
-**v1.5 In progress:**
-- Plans completed: 4 (15-01, 15-02, 16-01, 16-02)
-- Phases: 1 complete (15), 1 in progress (16)
+**v1.5 Complete:**
+- Plans completed: 5 (15-01, 15-02, 16-01, 16-02, 16-03)
+- Phases: 2 complete (15, 16)
 - Timeline: 1 day (2026-02-24)
 
 ## Accumulated Context
@@ -72,16 +72,20 @@ Key 16-02 decisions:
 - Separate except ImportError and except Exception clauses preserved (not merged) per locked CONTEXT.md decision
 - Removed quotes from Parser return type annotation — ruff UP037 requires unquoted form when from __future__ import annotations is present; TYPE_CHECKING guard is sufficient for mypy
 
+Key 16-03 decisions:
+- Smoke test used Python API (chunk_file dispatch) rather than corpus index CLI — direct API call confirms dispatch wiring cleanly without requiring LanceDB configured sources
+- v1.5 milestone declared complete after all quality gates confirmed: ruff 0 violations, mypy 0 errors, 320 tests passing
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-None — 320 tests passing. Ruff-clean. Mypy-clean.
+None — 320 tests passing. Ruff-clean. Mypy-clean. v1.5 milestone complete.
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 16-02-PLAN.md (size guard + ImportError fallback GREEN). Ready for 16-03.
+Stopped at: Completed 16-03-PLAN.md (validation gate + PROJECT.md update). v1.5 milestone complete.
 Resume file: None

@@ -70,7 +70,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 **Milestone Goal:** Replace line-based chunking for `.ts`, `.tsx`, `.js`, `.jsx` with tree-sitter AST-aware chunking, matching the precision and test coverage of the existing Python AST chunker.
 
 - [x] **Phase 15: Core AST Chunker** — Install deps, implement `chunk_typescript()` TDD-style, wire dispatch, full test suite green (**2 plans**) (completed 2026-02-24)
-- [ ] **Phase 16: Integration Hardening** — Size guard, ImportError fallback, ruff/mypy/all-tests validation gate
+- [x] **Phase 16: Integration Hardening** — Size guard, ImportError fallback, ruff/mypy/all-tests validation gate (completed 2026-02-24)
 
 ## Phase Details
 
@@ -125,4 +125,4 @@ Plans:
 | 13. Engine Min-Score Filter | v1.4 | 1/1 | Complete | 2026-02-24 |
 | 14. API / MCP / CLI Parity | v1.4 | 2/2 | Complete | 2026-02-24 |
 | 15. Core AST Chunker | v1.5 | 2/2 | Complete | 2026-02-24 |
-| 16. Integration Hardening | 2/3 | In Progress|  | - |
+| 16. Integration Hardening | 3/3 | Complete   | 2026-02-24 | - |

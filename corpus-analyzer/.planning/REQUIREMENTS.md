@@ -30,7 +30,7 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 
 ### Quality
 
-- [ ] **QUAL-01**: `uv run ruff check .` exits 0 and `uv run mypy src/` exits 0 after all changes; all 293+ existing tests continue to pass
+- [x] **QUAL-01**: `uv run ruff check .` exits 0 and `uv run mypy src/` exits 0 after all changes; all 293+ existing tests continue to pass
 
 ## Future Requirements
 
@@ -69,7 +69,7 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 | IDX-09 | Phase 16 | Complete |
 | TEST-01 | Phase 15 | Complete |
 | TEST-02 | Phase 15 | Complete |
-| QUAL-01 | Phase 16 | Pending |
+| QUAL-01 | Phase 16 | Complete |
 
 **Coverage:**
 - v1.5 requirements: 13 total
