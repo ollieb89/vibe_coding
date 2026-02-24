@@ -29,6 +29,9 @@ CONSTRUCT_PRIORITY: dict[str, int] = {
 
 _VALID_SORT_VALUES = frozenset({"relevance", "construct", "confidence", "date", "path"})
 
+_RRF_K: int = 60
+RRF_SCORE_CEILING: float = 1.0 / _RRF_K + 1.0 / _RRF_K  # two-list fusion ceiling
+
 
 class CorpusSearch:
     """Hybrid BM25 + vector search over the LanceDB `chunks` table."""
@@ -64,8 +67,8 @@ class CorpusSearch:
                 "confidence" (descending), "date" (descending), "path" (ascending).
             min_score: Minimum _relevance_score threshold (inclusive). Results
                 below this score are excluded. Default 0.0 keeps all results
-                (all real RRF scores are positive). RRF scores range approximately
-                0.009–0.033 for K=60. Negative values behave the same as 0.0.
+                (all real scores are positive). Scores are normalised to 0–1 range;
+                0.5 is a rough mid-quality threshold. Negative values behave the same as 0.0.
             name: Optional case-insensitive substring filter on chunk_name. None means
                 no filter. When query is empty/whitespace-only, the text-term match
                 check is skipped so name filtering alone can surface results
@@ -140,7 +143,13 @@ class CorpusSearch:
                 if name_lower in str(r.get("chunk_name", "") or "").lower()
             ]
 
-        # RRF scores range ~0.009–0.033 for K=60; min_score=0.0 is a no-op.
+        # Normalise _relevance_score to [0.0, 1.0] range (NORM-01).
+        # Empty-query scan rows have no _relevance_score; they stay at 0.0.
+        for r in results:
+            raw = float(r.get("_relevance_score", 0.0))
+            r["_relevance_score"] = min(raw / RRF_SCORE_CEILING, 1.0) if raw > 0.0 else 0.0
+
+        # Scores are now in 0-1 range; min_score=0.0 is a no-op.
         if min_score > 0.0:
             results = [
                 r for r in results

@@ -338,9 +338,8 @@ def search_command(
         typer.Option(
             "--min-score",
             help=(
-                "Exclude results below this RRF score threshold. "
-                "RRF scores range approximately 0.009–0.033 (K=60); "
-                "0.0 keeps all results (default)."
+                "Exclude results below this score threshold. "
+                "Scores are normalised to 0–1 range; 0.0 keeps all results (default)."
             ),
         ),
     ] = 0.0,
