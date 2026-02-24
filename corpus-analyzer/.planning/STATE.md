@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v1.5 milestone start)
 ## Current Position
 
 Phase: 15 of 16 (Core AST Chunker)
-Plan: — of — in current phase
-Status: Ready to plan
-Last activity: 2026-02-24 — Roadmap created for v1.5 (Phases 15–16)
+Plan: 1 of 2 in current phase (15-01 complete)
+Status: In progress
+Last activity: 2026-02-24 — 15-01 RED tests committed
 
-Progress: [░░░░░░░░░░] 0% (v1.5)
+Progress: [█░░░░░░░░░] 10% (v1.5)
 
 ## Performance Metrics
 
@@ -55,6 +55,10 @@ Key v1.5 decisions from research:
 - Fall back only on uncaught exception or zero constructs — NOT on `root_node.has_error` alone
 - All changes confined to three files: `chunker.py`, `test_chunker.py`, `pyproject.toml`
 
+Key 15-01 decisions:
+- Module-level import of ts_chunker in test file ensures clean RED state (ModuleNotFoundError at collection)
+- test_dispatches_other_to_chunk_lines renamed to test_dispatches_ts_to_chunk_typescript (correctly reflects new intent)
+
 ### Pending Todos
 
 None.
@@ -66,5 +70,5 @@ None — 293 tests passing. Ruff-clean, mypy-clean. Research complete (HIGH conf
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: v1.5 roadmap created. Ready for `/gsd:plan-phase 15`.
+Stopped at: 15-01-PLAN.md complete (RED tests committed). Ready for Plan 02 (GREEN implementation).
 Resume file: None

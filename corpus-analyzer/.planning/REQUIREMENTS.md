@@ -25,8 +25,8 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 
 ### Tests
 
-- [ ] **TEST-01**: `TestChunkTypeScript` class at full parity with `TestChunkPython` — covers: function extraction, generator extraction, class extraction, interface extraction, type alias extraction, lexical declaration (arrow functions), enum extraction, export-unwrapping, line-range accuracy (1-indexed), JSX syntax in TSX grammar, non-ASCII identifiers, `has_error` partial tree (should NOT fall back), deliberate catastrophic parse failure (should fall back), size guard fallback
-- [ ] **TEST-02**: `TestChunkFile` dispatch assertions updated for all four extensions (`.ts`, `.tsx`, `.js`, `.jsx` → `chunk_typescript`); existing `.ts` line-based dispatch test updated to reflect new behaviour
+- [x] **TEST-01**: `TestChunkTypeScript` class at full parity with `TestChunkPython` — covers: function extraction, generator extraction, class extraction, interface extraction, type alias extraction, lexical declaration (arrow functions), enum extraction, export-unwrapping, line-range accuracy (1-indexed), JSX syntax in TSX grammar, non-ASCII identifiers, `has_error` partial tree (should NOT fall back), deliberate catastrophic parse failure (should fall back), size guard fallback
+- [x] **TEST-02**: `TestChunkFile` dispatch assertions updated for all four extensions (`.ts`, `.tsx`, `.js`, `.jsx` → `chunk_typescript`); existing `.ts` line-based dispatch test updated to reflect new behaviour
 
 ### Quality
 
@@ -67,8 +67,8 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 | IDX-07 | Phase 15 | Pending |
 | IDX-08 | Phase 16 | Pending |
 | IDX-09 | Phase 16 | Pending |
-| TEST-01 | Phase 15 | Pending |
-| TEST-02 | Phase 15 | Pending |
+| TEST-01 | Phase 15 | Complete |
+| TEST-02 | Phase 15 | Complete |
 | QUAL-01 | Phase 16 | Pending |
 
 **Coverage:**

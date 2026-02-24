@@ -122,5 +122,5 @@ Plans:
 | 12. Validation Gate | v1.3 | 1/1 | Complete | 2026-02-24 |
 | 13. Engine Min-Score Filter | v1.4 | 1/1 | Complete | 2026-02-24 |
 | 14. API / MCP / CLI Parity | v1.4 | 2/2 | Complete | 2026-02-24 |
-| 15. Core AST Chunker | v1.5 | 0/? | Not started | - |
+| 15. Core AST Chunker | 1/2 | In Progress|  | - |
 | 16. Integration Hardening | v1.5 | 0/? | Not started | - |
