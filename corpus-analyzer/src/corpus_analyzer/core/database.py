@@ -139,7 +139,7 @@ class CorpusDatabase:
                 f"update_file_fingerprint: no document found for path {path_str!r}"
             )
 
-    def _doc_to_dict(self, doc: Document) -> dict:
+    def _doc_to_dict(self, doc: Document) -> dict[str, Any]:
         """Convert a Document model to a database dictionary."""
         return {
             "path": str(doc.path),
@@ -184,7 +184,7 @@ class CorpusDatabase:
     ) -> Iterator[Document]:
         """Retrieve documents with optional filtering."""
         query = "SELECT * FROM documents WHERE 1=1"
-        params: list = []
+        params: list[str] = []
 
         if category:
             query += " AND category = ?"
@@ -270,7 +270,7 @@ class CorpusDatabase:
     ) -> Iterator[Document]:
         """Retrieve gold standard documents."""
         query = "SELECT * FROM documents WHERE is_gold_standard = 1"
-        params: list = []
+        params: list[str] = []
 
         if category:
             query += " AND category = ?"
@@ -301,8 +301,10 @@ class CorpusDatabase:
         ).fetchall()
         return {row[0]: row[1] for row in rows}
 
-    def _row_to_document(self, row: dict) -> Document:
+    def _row_to_document(self, row: dict[str, Any]) -> Document:
         """Convert a database row to a Document model."""
+        _cc = row.get("category_confidence")
+        _qs = row.get("quality_score")
         return Document(
             id=row["id"],
             path=Path(row["path"]),
@@ -320,17 +322,9 @@ class CorpusDatabase:
             symbols=[PythonSymbol(**s) for s in json.loads(row.get("symbols") or "[]")],
             is_cli=bool(row.get("is_cli", 0)),
             category=DocumentCategory(row.get("category", "unknown")),
-            category_confidence=float(
-                row.get("category_confidence")
-                if row.get("category_confidence") is not None
-                else 0.0
-            ),
+            category_confidence=float(_cc) if _cc is not None else 0.0,
             domain_tags=[DomainTag(t) for t in json.loads(row.get("domain_tags") or "[]")],
-            quality_score=float(
-                row.get("quality_score")
-                if row.get("quality_score") is not None
-                else 0.0
-            ),
+            quality_score=float(_qs) if _qs is not None else 0.0,
             is_gold_standard=bool(
                 row.get("is_gold_standard")
                 if row.get("is_gold_standard") is not None
