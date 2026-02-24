@@ -69,7 +69,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 **Milestone Goal:** Replace line-based chunking for `.ts`, `.tsx`, `.js`, `.jsx` with tree-sitter AST-aware chunking, matching the precision and test coverage of the existing Python AST chunker.
 
-- [ ] **Phase 15: Core AST Chunker** — Install deps, implement `chunk_typescript()` TDD-style, wire dispatch, full test suite green
+- [ ] **Phase 15: Core AST Chunker** — Install deps, implement `chunk_typescript()` TDD-style, wire dispatch, full test suite green (**2 plans**)
 - [ ] **Phase 16: Integration Hardening** — Size guard, ImportError fallback, ruff/mypy/all-tests validation gate
 
 ## Phase Details
@@ -84,10 +84,11 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
   3. `export function foo()` and `export class Bar` produce chunks with the full exported text — export-unwrapping is verified by test assertion
   4. `.tsx` and `.jsx` files parse JSX syntax without fallback; `.ts` uses the TypeScript grammar; `.js` uses the JavaScript grammar
   5. `TestChunkTypeScript` passes with all cases from `TestChunkPython` adapted: all node types, line-range accuracy, non-ASCII identifiers, JSX parse, `has_error` partial tree does NOT fall back, deliberate catastrophic parse failure DOES fall back; `TestChunkFile` dispatch assertions cover all four extensions
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: TBD
+- [ ] 15-01-PLAN.md — TDD RED: write failing TestChunkTypeScript tests + update TestChunkFile dispatch
+- [ ] 15-02-PLAN.md — GREEN: add deps, implement ts_chunker.py, wire chunk_file() dispatch
 
 ### Phase 16: Integration Hardening
 **Goal**: The TypeScript chunker is production-safe under adversarial inputs (minified files, missing package install) and the full codebase passes the zero-violation quality gate
