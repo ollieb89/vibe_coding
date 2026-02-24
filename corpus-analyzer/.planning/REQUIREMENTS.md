@@ -20,8 +20,8 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 - [x] **IDX-05**: Silent fallback to `chunk_lines()` when parse raises an exception or zero named constructs are extracted; does NOT fall back on `root_node.has_error` alone (tree-sitter is error-tolerant)
 - [x] **IDX-06**: Returned chunk dict includes `chunk_name` field (name of extracted construct); indexer ignores the extra key today; forward-compatible with future `--construct` name filtering
 - [x] **IDX-07**: Parser loader uses `@lru_cache` — grammar binaries loaded once per dialect per process (prevents 30s overhead on 500+ TS file corpora)
-- [ ] **IDX-08**: Files exceeding 50,000 characters skip AST parse and fall back to `chunk_lines()` directly (guard against minified and generated files)
-- [ ] **IDX-09**: `ImportError` guard in `chunk_file()` — if `tree-sitter` or `tree-sitter-language-pack` is absent, fall back to line chunking rather than raising at import time
+- [x] **IDX-08**: Files exceeding 50,000 characters skip AST parse and fall back to `chunk_lines()` directly (guard against minified and generated files)
+- [x] **IDX-09**: `ImportError` guard in `chunk_file()` — if `tree-sitter` or `tree-sitter-language-pack` is absent, fall back to line chunking rather than raising at import time
 
 ### Tests
 
@@ -65,8 +65,8 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 | IDX-05 | Phase 15 | Complete |
 | IDX-06 | Phase 15 | Complete |
 | IDX-07 | Phase 15 | Complete |
-| IDX-08 | Phase 16 | Pending |
-| IDX-09 | Phase 16 | Pending |
+| IDX-08 | Phase 16 | Complete |
+| IDX-09 | Phase 16 | Complete |
 | TEST-01 | Phase 15 | Complete |
 | TEST-02 | Phase 15 | Complete |
 | QUAL-01 | Phase 16 | Pending |
