@@ -9,10 +9,10 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 
 ### Config
 
-- [ ] **CONF-01**: `pyproject.toml` has `per-file-ignores` suppressing E501 for `src/corpus_analyzer/llm/*.py`
-- [ ] **CONF-02**: `pyproject.toml` has `[[tool.mypy.overrides]]` disabling strict checks for `python-frontmatter` imports
-- [ ] **CONF-03**: `pyproject.toml` excludes `.windsurf/` and `.planning/` from ruff scope
-- [ ] **CONF-04**: `pyproject.toml` has `per-file-ignores` for `cli.py` B006 (Typer list default trap)
+- [x] **CONF-01**: `pyproject.toml` has `per-file-ignores` suppressing E501 for `src/corpus_analyzer/llm/*.py`
+- [x] **CONF-02**: `pyproject.toml` has `[[tool.mypy.overrides]]` disabling strict checks for `python-frontmatter` imports
+- [x] **CONF-03**: `pyproject.toml` excludes `.windsurf/` and `.planning/` from ruff scope
+- [x] **CONF-04**: `pyproject.toml` has `per-file-ignores` for `cli.py` B006 (Typer list default trap)
 
 ### Ruff Auto-Fix
 
@@ -59,10 +59,10 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-01 | Phase 9 | Pending |
-| CONF-02 | Phase 9 | Pending |
-| CONF-03 | Phase 9 | Pending |
-| CONF-04 | Phase 9 | Pending |
+| CONF-01 | Phase 9 | Complete |
+| CONF-02 | Phase 9 | Complete |
+| CONF-03 | Phase 9 | Complete |
+| CONF-04 | Phase 9 | Complete |
 | RUFF-01 | Phase 9 | Pending |
 | RUFF-02 | Phase 9 | Pending |
 | RUFF-03 | Phase 10 | Pending |
