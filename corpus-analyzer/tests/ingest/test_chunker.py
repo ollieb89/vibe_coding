@@ -100,6 +100,25 @@ Final line.
         # First chunk should still start with the heading
         assert chunks[0]["text"].startswith("# Large Section")
 
+    def test_chunk_markdown_emits_chunk_name(self, tmp_path: Path) -> None:
+        """chunk_markdown returns dicts with 'chunk_name' equal to the heading line verbatim."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("# My Heading\n\nBody text.\n")
+
+        chunks = chunk_markdown(md_file)
+
+        assert chunks[0]["chunk_name"] == "# My Heading"
+
+    def test_chunk_markdown_emits_chunk_text(self, tmp_path: Path) -> None:
+        """chunk_markdown returns dicts with 'chunk_text' containing the full section text."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("# My Heading\n\nBody text.\n")
+
+        chunks = chunk_markdown(md_file)
+
+        assert "chunk_text" in chunks[0]
+        assert chunks[0]["chunk_text"].startswith("# My Heading")
+
 
 # ---------------------------------------------------------------------------
 # chunk_python tests
@@ -189,6 +208,25 @@ z = 3
         # Should use chunk_lines fallback
         assert len(chunks) >= 1
         assert all("start_line" in c and "end_line" in c for c in chunks)
+
+    def test_chunk_python_emits_chunk_name(self, tmp_path: Path) -> None:
+        """chunk_python returns dicts with 'chunk_name' equal to the function/class name."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("def my_func(x: int) -> int:\n    return x + 1\n")
+
+        chunks = chunk_python(py_file)
+
+        assert chunks[0]["chunk_name"] == "my_func"
+
+    def test_chunk_python_emits_chunk_text(self, tmp_path: Path) -> None:
+        """chunk_python returns dicts with 'chunk_text' containing the raw source lines."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("def my_func(x: int) -> int:\n    return x + 1\n")
+
+        chunks = chunk_python(py_file)
+
+        assert "chunk_text" in chunks[0]
+        assert "def my_func" in chunks[0]["chunk_text"]
 
 
 # ---------------------------------------------------------------------------

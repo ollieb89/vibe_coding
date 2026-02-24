@@ -7,6 +7,8 @@ not hardcoded, to keep tests resilient to schema changes.
 
 import hashlib
 
+import lancedb  # type: ignore[import-untyped]
+import pyarrow as pa
 import pytest
 from pydantic import ValidationError
 
@@ -134,6 +136,8 @@ class TestChunkRecordInstantiation:
             "summary",
             "classification_source",
             "classification_confidence",
+            "chunk_name",   # Phase 17
+            "chunk_text",   # Phase 17
         }
         actual = set(ChunkRecord.model_fields.keys())
         assert expected_fields == actual, f"Missing fields: {expected_fields - actual}"
@@ -181,3 +185,57 @@ class TestChunkRecordInstantiation:
         record1 = self._make_valid_record(chunk_id=cid1)
         record2 = self._make_valid_record(chunk_id=cid2)
         assert record1.chunk_id == record2.chunk_id
+
+
+# ---------------------------------------------------------------------------
+# ensure_schema_v4 — LanceDB migration helper
+# ---------------------------------------------------------------------------
+
+
+def _make_minimal_table(tmp_path: object) -> lancedb.table.Table:
+    """Create a minimal v3-schema LanceDB table without chunk_name or chunk_text."""
+    db = lancedb.connect(str(tmp_path) + "/test.lancedb")  # type: ignore[arg-type]
+    schema = pa.schema([
+        pa.field("chunk_id", pa.string()),
+        pa.field("text", pa.string()),
+    ])
+    return db.create_table("chunks", schema=schema)  # type: ignore[no-any-return]
+
+
+class TestEnsureSchemaV4:
+    """Tests for the ensure_schema_v4() migration helper.
+
+    All tests in this class are RED until Phase 17-02 adds ensure_schema_v4
+    to corpus_analyzer.store.schema.  The import is deferred inside each
+    test method so that the rest of test_schema.py can still be collected
+    and the pre-existing tests remain GREEN.
+    """
+
+    def test_ensure_schema_v4_adds_chunk_name_column(self, tmp_path: object) -> None:
+        """ensure_schema_v4 adds 'chunk_name' column to a v3-schema table."""
+        from corpus_analyzer.store.schema import ensure_schema_v4  # RED: ImportError
+
+        table = _make_minimal_table(tmp_path)
+        ensure_schema_v4(table)
+        col_names = {f.name for f in table.schema}
+        assert "chunk_name" in col_names
+
+    def test_ensure_schema_v4_adds_chunk_text_column(self, tmp_path: object) -> None:
+        """ensure_schema_v4 adds 'chunk_text' column to a v3-schema table."""
+        from corpus_analyzer.store.schema import ensure_schema_v4  # RED: ImportError
+
+        table = _make_minimal_table(tmp_path)
+        ensure_schema_v4(table)
+        col_names = {f.name for f in table.schema}
+        assert "chunk_text" in col_names
+
+    def test_ensure_schema_v4_is_idempotent(self, tmp_path: object) -> None:
+        """Calling ensure_schema_v4 twice does not raise and both columns remain present."""
+        from corpus_analyzer.store.schema import ensure_schema_v4  # RED: ImportError
+
+        table = _make_minimal_table(tmp_path)
+        ensure_schema_v4(table)
+        ensure_schema_v4(table)  # second call must be a no-op
+        col_names = {f.name for f in table.schema}
+        assert "chunk_name" in col_names
+        assert "chunk_text" in col_names
