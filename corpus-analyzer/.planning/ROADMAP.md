@@ -244,7 +244,7 @@ Plans:
 | 17–18. Chunk Foundation | v2.0 | 4/4 | Complete | 2026-02-24 |
 | 19. MCP Chunk Response | 1/1 | Complete    | 2026-02-24 | - |
 | 20. Python Sub-Chunking | 2/2 | Complete    | 2026-02-24 | - |
-| 21. TypeScript Sub-Chunking | 1/1 | Complete   | 2026-02-24 | - |
+| 21. TypeScript Sub-Chunking | 1/1 | Complete    | 2026-02-24 | - |
 | 22. Name Filtering | v2.1 | 0/TBD | Not started | - |
 | 23. Score Normalisation + MCP Sort | v2.1 | 0/TBD | Not started | - |
 | 24. JSON Output | v2.1 | 0/TBD | Not started | - |
