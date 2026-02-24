@@ -318,6 +318,51 @@ def search_command(
         console.print()
 
 
+@app.command("graph")
+def graph_command(
+    slug: Annotated[str, typer.Argument(help="Component slug or path fragment to look up")],
+    depth: Annotated[int, typer.Option("--depth", "-d", help="Traversal depth")] = 1,
+) -> None:
+    """Show upstream and downstream relationships for a component."""
+    from corpus_analyzer.graph.store import GraphStore
+
+    graph_db = DATA_DIR / "graph.sqlite"
+    if not graph_db.exists():
+        console.print("[yellow]No graph index found. Run 'corpus index' first.[/yellow]")
+        raise typer.Exit(code=1)
+
+    store = GraphStore(graph_db)
+
+    # Resolve slug to paths by substring match
+    with store._connect() as conn:
+        all_rows = conn.execute("SELECT * FROM relationships").fetchall()
+    matching_sources = {
+        dict(r)["source_path"] for r in all_rows
+        if slug in dict(r)["source_path"] or slug in dict(r)["target_path"]
+    }
+
+    if not matching_sources:
+        console.print(f"[yellow]No relationships found for '[bold]{slug}[/bold]'.[/yellow]")
+        return
+
+    for source in sorted(matching_sources):
+        downstream = store.edges_from(source)
+        upstream = store.edges_to(source)
+        console.print(f"\n[bold blue]{Path(source).parent.name}[/] ([dim]{source}[/])")
+        if upstream:
+            console.print("  [dim]Upstream (depends on this):[/]")
+            for e in upstream:
+                name = Path(e["source_path"]).parent.name
+                flag = "" if e["resolved"] else " [dim](unresolved)[/]"
+                console.print(f"    \u2190 {name}{flag}")
+        if downstream:
+            console.print("  [dim]Downstream (this depends on):[/]")
+            for e in downstream:
+                name = Path(e["target_path"]).parent.name
+                flag = "" if e["resolved"] else " [dim](unresolved)[/]"
+                console.print(f"    \u2192 {name}{flag}")
+
+
 def _human_age(ts: str) -> str:
     """Convert ISO timestamp to human-readable age string ('2 hours ago')."""
     try:
