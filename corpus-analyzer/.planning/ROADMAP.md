@@ -107,6 +107,7 @@ Plans:
   3. MCP `corpus_search` result scores are in 0–1 range
   4. MCP `corpus_search` accepts `sort_by` with the same vocabulary as CLI (`relevance | construct | confidence | date | path`)
   5. `--min-score` help text is updated to reference the 0–1 normalised range (old RRF range documentation removed)
+  6. `tests/ingest/test_round_trip.py` extended with Python class and TypeScript class fixtures — `ClassName.method_name` chunks exercised through the full `chunk_file()` → indexer → LanceDB pipeline (closes Phase 20-21 round-trip test gap)
 **Plans**: TBD
 
 Plans:
@@ -139,7 +140,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. MCP exposes a `corpus_graph` tool that accepts `slug: str` and returns `upstream` and `downstream` neighbour path lists
   2. `corpus_graph` reuses the existing `GraphStore` with zero new storage — no schema changes required
-  3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `chunking/chunker.py`, `chunking/py_chunker.py`, and `chunking/ts_chunker.py`
+  3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `ingest/chunker.py` and `ingest/ts_chunker.py` (Python and TypeScript chunking modules)
   4. A parametrised integration test verifies that every stored `start_line`/`end_line` matches actual file content for `.md`, `.py`, and `.ts` fixtures (zero hallucination)
 **Plans**: TBD
 
@@ -226,7 +227,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. MCP exposes a `corpus_graph` tool that accepts `slug: str` and returns `upstream` and `downstream` neighbour path lists
   2. `corpus_graph` reuses the existing `GraphStore` with zero new storage — no schema changes required
-  3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `chunking/chunker.py`, `chunking/py_chunker.py`, and `chunking/ts_chunker.py`
+  3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `ingest/chunker.py` and `ingest/ts_chunker.py` (Python and TypeScript chunking modules)
   4. A parametrised integration test verifies that every stored `start_line`/`end_line` matches actual file content for `.md`, `.py`, and `.ts` fixtures (zero hallucination)
 **Plans**: TBD
 
