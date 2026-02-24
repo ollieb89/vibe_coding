@@ -34,10 +34,10 @@ See archived milestone files in `.planning/milestones/`.
   2. The `text` field contains the full untruncated chunk text (not the 200-char preview used by CLI)
   3. An LLM caller receives everything needed to understand a result without a follow-up file-read tool call
   4. Legacy rows (where `chunk_text` is empty) return empty string for `text` rather than erroring
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 19-01: TBD
+- [ ] 19-01-PLAN.md — TDD: self-contained MCP response (text, start_line, end_line; remove snippet/full_content)
 
 ---
 
@@ -157,7 +157,7 @@ Plans:
   2. The `text` field contains the full untruncated chunk text (not the 200-char preview used by CLI)
   3. An LLM caller receives everything needed to understand a result without a follow-up file-read tool call
   4. Legacy rows (where `chunk_text` is empty) return empty string for `text` rather than erroring
-**Plans**: TBD
+**Plans**: 1 plan
 
 ### Phase 20: Python Method Sub-Chunking
 **Goal**: Python classes are indexed at method granularity — each method becomes a separately searchable chunk named `ClassName.method_name`
@@ -241,7 +241,7 @@ Plans:
 | 13–14. Search Precision | v1.4 | 3/3 | Complete | 2026-02-24 |
 | 15–16. TS AST Chunking | v1.5 | 5/5 | Complete | 2026-02-24 |
 | 17–18. Chunk Foundation | v2.0 | 4/4 | Complete | 2026-02-24 |
-| 19. MCP Chunk Response | v2.1 | 0/TBD | Not started | - |
+| 19. MCP Chunk Response | v2.1 | 0/1 | Not started | - |
 | 20. Python Sub-Chunking | v2.1 | 0/TBD | Not started | - |
 | 21. TypeScript Sub-Chunking | v2.1 | 0/TBD | Not started | - |
 | 22. Name Filtering | v2.1 | 0/TBD | Not started | - |
