@@ -15,7 +15,7 @@
 
 ### Cleanup
 
-- [ ] **CLEAN-01**: Dead `use_llm_classification` parameter removed from `index_source()` function signature
+- [x] **CLEAN-01**: Dead `use_llm_classification` parameter removed from `index_source()` function signature
 
 ## v2 Requirements
 
@@ -49,7 +49,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRAPH-03 | Phase 7 | Complete |
 | GRAPH-04 | Phase 7 | Complete |
 | GRAPH-05 | Phase 7 | Complete |
-| CLEAN-01 | Phase 8 | Pending |
+| CLEAN-01 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 6 total

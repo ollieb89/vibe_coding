@@ -33,7 +33,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 ### v1.2 Graph Linker (Phases 7–8)
 
 - [x] **Phase 7: Graph Layer** — Relationship extraction, storage, and CLI query command (COMPLETE)
-- [ ] **Phase 8: Cleanup** — Remove dead `use_llm_classification` parameter
+- [x] **Phase 8: Cleanup** — Remove dead `use_llm_classification` parameter (completed 2026-02-24)
 
 ## Phase Details
 
@@ -73,4 +73,4 @@ Plans:
 | 5. Extension Filtering | v1.1 | 2/2 | Complete | 2026-02-23 |
 | 6. Frontmatter Classification | v1.1 | 2/2 | Complete | 2026-02-23 |
 | 7. Graph Layer | v1.2 | —/— | Complete | 2026-02-24 |
-| 8. Cleanup | v1.2 | 0/1 | Not started | — |
+| 8. Cleanup | 1/1 | Complete   | 2026-02-24 | — |

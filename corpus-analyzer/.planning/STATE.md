@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24 after v1.2 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v1.2 Graph Linker — Phase 8: Cleanup
+**Current focus:** v1.2 Graph Linker — Phase 8: Cleanup (complete)
 
 ## Current Position
 
 Phase: 8 (Cleanup)
-Plan: TBD
-Status: Phase 7 complete; Phase 8 not started
-Last activity: 2026-02-24 — v1.2 roadmap created; Phase 7 retroactively marked complete
+Plan: 1/1 complete
+Status: Phase 8 complete; v1.2 milestone complete
+Last activity: 2026-02-24 — Phase 8 Plan 01 executed; use_llm_classification dead parameter removed
 
-Progress: [████████░░] 87.5% (7/8 phases done)
+Progress: [██████████] 100% (8/8 phases done)
 
 ## Performance Metrics
 
@@ -28,20 +28,22 @@ Progress: [████████░░] 87.5% (7/8 phases done)
 - Phases: 2
 - Timeline: 1 day (2026-02-23)
 
-**v1.2 Summary (in progress):**
-- Total plans completed: TBD
+**v1.2 Summary:**
+- Total plans completed: 1
 - Phases: 2 (7–8)
 - Phase 7 complete at roadmap creation
+- Phase 8 complete: 2026-02-24 (2 min)
 
 ## Accumulated Context
 
 ### Decisions
 
-All key decisions archived in PROJECT.md Key Decisions table.
+- Removed `use_llm_classification` dead parameter from `index_source()` and `SourceConfig` — field defaulted to False and was never set to True in production; removal shrinks API surface
+- Hardcode `use_llm=False` at `classify_file` call site rather than removing argument — classify_file defaults to `use_llm=True` which would silently switch to LLM classification
 
 ### Pending Todos
 
-- Plan and execute Phase 8: remove dead `use_llm_classification` parameter from `index_source()`
+None.
 
 ### Blockers/Concerns
 
@@ -50,5 +52,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: v1.2 roadmap created; Phase 7 retroactively complete; Phase 8 pending
-Resume with: /gsd:plan-phase 8
+Stopped at: Completed 08-01-PLAN.md (v1.2 milestone complete)
+Resume with: N/A — v1.2 complete
