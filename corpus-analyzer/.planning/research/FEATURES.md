@@ -1,8 +1,17 @@
 # Feature Research
 
-**Domain:** Local semantic search engine for AI agent libraries (skills, workflows, prompts, code) — queried by code agents via MCP
-**Researched:** 2026-02-23
-**Confidence:** MEDIUM-HIGH (MCP spec verified via official docs; search feature patterns from multiple real tools; agent-specific patterns from ecosystem observation + LOW confidence where single-source)
+**Domain:** Python code quality pass — zero mypy errors + zero ruff violations on an existing codebase
+**Researched:** 2026-02-24
+**Confidence:** HIGH (errors enumerated from live tool output; fix patterns from official mypy/ruff docs + Python typing conventions)
+
+---
+
+## Note on Template Reuse
+
+This milestone is a code quality pass, not a product feature build. The template sections are repurposed:
+- "Table Stakes" = fix categories that are mandatory for the milestone goal (zero errors)
+- "Differentiators" = approach choices that determine quality and safety of the fix pass
+- "Anti-Features" = fix approaches that look correct but introduce risk
 
 ---
 
@@ -10,300 +19,246 @@
 
 ### Table Stakes (Users Expect These)
 
-Features that any serious local code/doc search tool must have. Missing these means the product feels broken, not just incomplete.
+Fix categories that must be addressed to reach the milestone goal. All are mandatory — skipping any leaves a non-zero error count.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Hybrid search (BM25 + vector) | Pure keyword misses semantic matches; pure vector misses exact names like `run_shell_tool`. Developers expect both. | MEDIUM | Standard 2025 pattern: two routes + RRF fusion. SQLite FTS5 for BM25 already exists. Vector store TBD. |
-| Absolute file path in results | Agents need a path they can immediately pass to `read_file`. Relative paths require the agent to resolve context. | LOW | Always return absolute path. Never relative. |
-| Relevance score in results | Agents use score to decide whether a result is worth consuming. Without it, they must guess relevance. | LOW | Normalize to 0.0–1.0 range. RRF produces unnormalized scores — normalize before returning. |
-| Snippet / excerpt in results | Agents need context to decide if a file is relevant WITHOUT reading the whole file. Snippet = one LLM call saved per result. | MEDIUM | Extract top-matching chunk, not always the top of file. Preserve surrounding context (3–5 lines). |
-| File metadata in results | File type, last modified, size — used by agents to filter stale or irrelevant results before reading. | LOW | Already available from filesystem stat. |
-| Multi-file-type indexing | Agent libraries are mixed: `.md` skills, `.py` agents, `.json`/`.yaml` configs, `.ts`/`.js` wrappers. Missing any type = incomplete library picture. | MEDIUM | Existing extractor handles `.md`, `.py`. Need JSON/YAML/TS/JS extractors. |
-| Incremental indexing (mtime+hash) | Full re-index of large agent repos is too slow to be practical. Tool must detect only changed files. | MEDIUM | Two-tier detection: compare mtime first (cheap), then SHA-256 hash (confirms real change). Pattern confirmed by DeepContext, files-db, cocoindex. |
-| CLI search command | Developers need to test search interactively without writing code. | LOW | `corpus search "query"` — already have Typer CLI. |
-| MCP server exposing search | Claude Code and other agents query tools automatically via MCP. Without MCP, agents can't use Corpus without custom integration. | MEDIUM | MCP spec (2025-06-18) is stable and well-documented. Use FastMCP or raw JSON-RPC over stdio/SSE. |
-| Source directory management | Developers need to register permanent source dirs and add ad-hoc dirs. Without this, every index operation requires re-specifying paths. | LOW | Config file (`sources.toml` or similar) + `corpus add <dir>` CLI. |
-| Result count limiting | Agents have context window limits. Returning 50 results will overflow context and waste tokens. | LOW | Default `top_k=5`, configurable. DeepContext specifically reduces token consumption 40% by limiting results. |
+| Fix Category | Rule(s) | Count | Auto-Fix? | Notes |
+|-------------|---------|-------|-----------|-------|
+| Blank line whitespace | W293, W291 | 297 (264+33) | YES — `ruff check --fix` | Largest single category. `[*]` marker on most; 11 W293 and 1 W291 have no `[*]` — need manual check. Concentrated in `llm/` and `classifiers/` modules. |
+| Import sorting | I001 | 26 | YES — `ruff check --fix` | All 26 are auto-fixable `[*]`. Sorting enforced by isort-compatible rules. |
+| Unused imports | F401 | 33 | YES — `ruff check --fix` | All auto-fixable. Split: test files have `pytest`/`mock` imports; source files have leftover `Optional`, `typing.Any`, `DocumentCategory`, progress bar components. None are in `__init__.py` re-export position — safe to auto-remove. |
+| UP045 Optional modernisation | UP045 | 21 | YES — `ruff check --fix` | All auto-fixable. `Optional[X]` → `X \| None`. Concentrated in `.windsurf/` assets and `extractors/__init__.py`. After fix, `from typing import Optional` imports become unused and F401 will catch them. Run ruff twice or in sequence. |
+| f-string without placeholders | F541 | 2 | YES — `ruff check --fix` | Trivial. Strip the `f` prefix. |
+| Invalid escape sequence | W605 | 1 | YES — `ruff check --fix` | `\s` in a raw string context. Change to `r"\s"` or `"\\s"`. |
+| Line too long | E501 | 104 | NO — manual only | Ruff cannot auto-wrap lines. Distribution: `llm/unified_rewriter.py` (91 violations), `cli.py` (49), `llm/rewriter.py` (45), `llm/chunked_processor.py` (42). The milestone plan is: set `per-file-ignores` for `llm/` at 120 chars, which will eliminate the bulk of violations. Remaining lines in `cli.py` and test files need manual wrapping. |
+| mypy: union-attr on sqlite-utils Table\|View | union-attr | 8 | NO — manual | `db["table"]` returns `Table \| View` per sqlite-utils type stubs (py.typed is present). `View` lacks `insert`, `update`, `delete_where`. Fix: `cast(sqlite_utils.Table, self.db["documents"])` at each call site, OR assign `tbl: sqlite_utils.Table = self.db["table"]` once per method. Cast is safer — runtime type is always `Table` for these named tables. |
+| mypy: no-any-return | no-any-return | 3 | NO — manual | `sqlite_utils` execute returns `sqlite3.Cursor`; `.fetchone()[0]` is `Any`. Fix: add explicit `int(...)` cast or assign to typed variable before return. All three are in `core/database.py`. |
+| mypy: untyped nested functions | no-untyped-def, no-untyped-call | 11 | NO — manual | `finalize_atom`, `get_chunk_text`, `chain_lines` are nested closures inside `chunked_processor.py`. They reference outer mutable state via `nonlocal`. Fix: add parameter + return type annotations to each. Signatures are straightforward: `list[str]` in, `None` or `list[str]` out. |
+| mypy: missing return type annotations | no-untyped-def | 4 | NO — manual | `utils/ui.py` has two public functions missing both arg types and return types. `table_obj` arg is a `sqlite_utils.Table`; return type is `None` for both. Plus `rewriter.py` line 245 (one arg untyped). |
+| mypy: missing generic type params | type-arg | 6 | NO — manual | `dict` and `list` used without type parameters (e.g., `params: list = []`). Fix: `list[Any]` or specific element type. Locations: `database.py` (4 instances), `markdown.py` (1), `shape.py` (1). |
+| mypy: import-untyped (python-frontmatter) | import-untyped | 1 | NO — config | `python-frontmatter` has no stubs and no `py.typed`. Fix: add `[[tool.mypy.overrides]]` section with `module = "frontmatter"` and `ignore_missing_imports = true`. Do NOT add `# type: ignore` inline — pyproject.toml config is cleaner and reusable. |
+| mypy: abstract class instantiation | abstract | 1 | NO — manual | `extractors/__init__.py` line 34 calls `extractor_class()` where mypy infers the type as `type[BaseExtractor]` (the abstract base). Both `MarkdownExtractor` and `PythonExtractor` do implement `extract()` — mypy's abstract check is triggered because the dict value type is `type[BaseExtractor]`. Fix: annotate the dict as `dict[str, type[MarkdownExtractor] \| type[PythonExtractor]]` or use `type[BaseExtractor]` with a `# type: ignore[abstract]` comment on the instantiation line (acceptable here — the dict values are always concrete subclasses). |
+| mypy: arg-type on float() | arg-type | 2 | NO — manual | `database.py` lines 318/320: `float(row.get("category_confidence") if ... else 0.0)`. `row.get()` returns `Any \| None`; the conditional expression produces `Any \| float \| None`. mypy rejects `None` as a `float()` arg. Fix: use `float(row.get("category_confidence") or 0.0)` — the `or` coerces falsy to `0.0` and guarantees a numeric argument. |
+| mypy: attr-defined (OllamaClient.db) | attr-defined | 1 | NO — manual | `rewriter.py` line 414: `adv_rewriter.client.db = db` — dynamically assigning an attribute not defined on `OllamaClient`. Fix: add `db: Optional[CorpusDatabase] = None` field to `OllamaClient` class. This is a design smell (dynamic attribute injection) — adding a typed field is the correct fix, not `# type: ignore`. |
+| mypy: operator error (tuple + str) | operator | 1 | NO — manual | `rewriter.py` line 406: variable inferred as `str \| tuple[str]`; the code appends a `str` to it as if it were always a `tuple`. Fix: inspect the branch logic and either use a `list[str]` or ensure the variable is always one type. This is a genuine bug — the type error reflects real ambiguity. |
+| mypy: var-annotated | var-annotated | 1 | NO — manual | `chunker.py` line 271: `current_lines = []` with no type annotation. Fix: `current_lines: list[str] = []`. |
+| mypy: no-any-return on ollama_client | no-any-return | 1 | NO — manual | `ollama_client.py` line 42: method declared to return `str` but returns `Any` from Ollama SDK. Fix: explicit `str(...)` cast on the return value. |
+| E402 imports not at top | E402 | 5 | NO — manual | `rewriter.py` has deferred imports inside a function (conditional import for optional heavy dep). `test_debug.py` configures logging before imports. Fix for rewriter: move imports to top or add `# noqa: E402` with explanation. Fix for test_debug.py: restructure to configure logging after imports or use `# noqa: E402`. |
+| Bugbear B-series | B006/B007/B008/B017/B023/B904/B905 | 14 | MIXED | See detailed breakdown below. |
 
-### Differentiators (Competitive Advantage)
+**B-series breakdown:**
 
-Features that set Corpus apart from generic file search MCP servers. These are specifically relevant to the AI agent library use case.
+| Rule | Count | Auto-Fix? | What it flags | Fix pattern |
+|------|-------|-----------|---------------|-------------|
+| B905 | 3 | NO | `zip()` without `strict=` | Add `strict=False` (explicit opt-out) or `strict=True` if lengths must match. |
+| B007 | 3 | NO | Loop variable not used in body | Rename to `_` or `_text`, `_i`, `_chunk`. |
+| B017 | 2 | NO | `pytest.raises(Exception)` — too broad | Change to specific exception class, e.g. `pytest.raises(ValueError)`. |
+| B006 | 2 | NO | Mutable default arg (e.g., `def f(x=[])`) | Change to `None` default + `if x is None: x = []` pattern. |
+| B023 | 1 | NO | Closure captures loop variable | Capture at definition time: `lambda v=task_id: ...` |
+| B904 | 1 | NO | `raise X` inside `except` without `from` | Change to `raise X from err` or `raise X from None`. |
+| B008 | 1 | NO | `Query(...)` in function default arg | Move to module-level constant or compute inside function body. |
+| F841 | 4 | NO | Variable assigned but never used | Delete the assignment or prefix with `_`. |
+| E741 | 4 | NO | Ambiguous variable name `l` | Rename to `line`, `link`, or `el`. All four are in `database.py` and `chunked_processor.py` using `l` as a loop variable in list comprehensions. |
 
-| Feature | Value Proposition | Complexity | Notes |
+---
+
+### Differentiators (Approach Choices That Matter)
+
+Decisions about HOW to do the fix pass that determine quality, safety, and maintainability of the result.
+
+| Approach | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Document category in results | Agents can immediately understand _what_ a result is (skill, runbook, howto, ADR) without reading it. Filters downstream decisions. | LOW | Already exists in the classifier pipeline (`DocumentCategory` enum). Expose it in search results. |
-| Domain tag filtering | Agent building a frontend workflow should be able to filter to `domain:frontend` or `domain:typescript`. Reduces irrelevant noise. | LOW | `DomainTag` enum already exists. Expose as search filter parameter. |
-| File type / extension filter | A query for "authentication" should be filterable to Python-only, or markdown-only. Reduces signal-to-noise. | LOW | Filter on stored extension metadata. |
-| Directory scope filter | Agent can scope search to a specific repo or subdirectory it's working within. Prevents cross-repo confusion. | LOW | Filter on file path prefix. |
-| Chunk-level results (not just file-level) | Return the specific section of a large file that matches, not the whole file. Saves tokens; agents read less. | HIGH | Requires chunk storage (already in `Chunk` model), chunk-level embedding, and chunk-level search. This is the hard path but highest agent value. |
-| Configurable embedding provider | Developers offline must use Ollama; developers who want quality prefer OpenAI/Cohere. Flexibility removes a blocker for adoption. | MEDIUM | Already planned in PROJECT.md. Abstract provider interface; Ollama first, OpenAI/Cohere optional. |
-| Python API for programmatic search | Developers building their own agent orchestration can call Corpus as a library without going through MCP. | LOW | Thin wrapper over the same search logic. Natural given Python codebase. |
-| Quality score / gold standard flag in results | An agent querying for "how to write a skill" should prefer exemplary files. Quality signal distinguishes canonical from draft. | LOW | `quality_score` and `is_gold_standard` already exist on `Document`. Expose in results, allow filter `gold_standard_only=true`. |
-| is_gold_standard filter | Let agents request only high-quality exemplary files — useful for "show me the best example of X" queries. | LOW | Simple boolean filter on existing field. |
-| Source-aware search (search a specific named source) | A developer with 20 cloned repos wants to search "only my anthropic repos". Named sources enable this without path guessing. | MEDIUM | Requires source tagging in the index at ingest time. |
+| Run auto-fix first, manual second | Eliminates 383 violations in one command (`ruff check --fix`). Prevents wasted effort manually fixing things ruff would auto-fix. | LOW | Command: `uv run ruff check . --fix`. Then commit the auto-fix separately before manual changes — keeps diff reviewable. |
+| `per-file-ignores` for llm/ at 120 chars | Eliminates ~180 E501 violations (bulk of llm/ module) without manual line-wrapping. The `llm/` code is legacy rewriter logic, not the v1.3 focus. | LOW | In pyproject.toml: `[tool.ruff.lint.per-file-ignores]` with `"src/corpus_analyzer/llm/*.py" = ["E501"]` or set line-length = 120 for that path. |
+| mypy overrides for untyped third-party libs | Correct way to silence `import-untyped` for `python-frontmatter`. Keeps `# type: ignore` out of source files. | LOW | `[[tool.mypy.overrides]]` in pyproject.toml: `module = "frontmatter"`, `ignore_missing_imports = true`. |
+| cast() for sqlite-utils union-attr | More explicit than `# type: ignore`. Communicates intent ("we know this is a Table, not a View"). Type-safe: will catch if the return type changes. | LOW | `from typing import cast; import sqlite_utils; tbl = cast(sqlite_utils.Table, self.db["name"])` |
+| Fix the OllamaClient.db attr-defined as a real field | Better than `# type: ignore` — adds the field properly so the type system tracks it. Signals the design intent explicitly. | LOW | Add `db: Optional["CorpusDatabase"] = None` to `OllamaClient`. Uses quoted forward reference to avoid circular import. |
+| Separate auto-fix commit from manual fix commit | Keeps the diff reviewable. Auto-fix produces whitespace/import churn that obscures real changes if mixed. | LOW | Two commits: (1) `ruff check --fix` output, (2) manual fixes. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+---
 
-Features that seem natural but should be deliberately excluded from v1.
+### Anti-Features (Fix Approaches to Avoid)
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Real-time file watching | Developers assume search is always up-to-date. Feels modern. | Adds daemon process complexity, requires background service management, startup/shutdown lifecycle, and OS-specific watcher APIs. For agent use, agents call `corpus index` before a session; real-time is over-engineering for v1. | Explicit `corpus index --refresh` command. Fast incremental re-index makes this painless enough. |
-| Web UI / browser search interface | Looks impressive in demos. | Target users are developers + code agents. CLI is faster; MCP is the agent interface. Web UI adds a server process, frontend build, and maintenance surface for zero user benefit in this context. | CLI with rich terminal output (already have `rich`). |
-| Cloud/hosted index sync | Enterprise teams want shared indexes. | Introduces auth, networking, privacy concerns, latency, and backend infrastructure. v1 is explicitly local-only by design (PROJECT.md Out of Scope). | Document how to share the SQLite file over a shared filesystem if teams need it. Defer cloud to v2+. |
-| Multi-modal search (images, audio, PDFs) | Agent libraries sometimes include diagrams or design docs. | Agent library files are overwhelmingly text. PDFs with embedded text are edge cases. Supporting binary blobs requires heavy extraction dependencies and inflates scope significantly. | Text extraction from `.pdf` can be added as a separate extractor later if needed. Not v1. |
-| LLM-generated query expansion | Improving recall by expanding queries with synonyms sounds like a quality win. | Adds an LLM call per search query — kills the "under a second" latency target from PROJECT.md. Agents issue many rapid queries; each LLM round-trip adds 1–5 seconds. | Good hybrid search (BM25+vector) already handles synonyms via semantic embedding. No LLM needed. |
-| Exposing all corpus-analyzer rewriter commands via MCP | Rewriting is a power feature; exposing it seems natural. | Agents auto-invoke MCP tools. Auto-invoked LLM rewriting on agent queries is unpredictable, expensive, and destructive without explicit human approval. MCP tool budget: fewer focused tools beat many sprawling tools. | Keep rewriter as CLI-only, human-initiated. MCP exposes search only. |
-| Per-result explanation ("why did this match?") | Developers debugging search quality want to understand scoring. | Generating explanations requires additional LLM calls or complex scoring decomposition. Adds latency and complexity for a debugging use case that belongs in a `corpus explain` CLI command, not in hot-path search. | Add a `corpus explain <file_path> <query>` CLI debug command separately. |
+Fix strategies that seem expedient but introduce risk or reduce quality.
+
+| Anti-Feature | Why Requested | Why Problematic | Alternative |
+|--------------|---------------|-----------------|-------------|
+| `# type: ignore` on union-attr errors | Fastest way to silence mypy union-attr errors | Hides a genuine ambiguity. If sqlite-utils ever returns a View, runtime errors become silent. Future mypy runs also flag `warn_unused_ignores` — unused ignores become new errors. | Use `cast(sqlite_utils.Table, ...)` at each call site. Explicit, safe, communicates intent. |
+| `# type: ignore[import-untyped]` inline in markdown.py | Inline suppression silences the error | `warn_unused_ignores = true` in pyproject.toml means if stubs are added later, the ignore becomes an error. Pollutes source file. | Use `[[tool.mypy.overrides]]` in pyproject.toml — one place, no source file pollution. |
+| Bulk `# noqa: E501` inline comments for line length | Fastest per-line fix | 104 individual `# noqa` comments creates massive diff noise and obscures real violations in future. `warn_unused_ignores` may not apply to ruff noqa but visual noise is high. | Use `per-file-ignores` config for the `llm/` directory. For remaining violations, actually wrap the line. |
+| Annotating dynamic `dict`/`list` with bare `Any` | `list[Any]` satisfies mypy `type-arg` | `Any` suppresses all downstream type checking on that variable. Better to use `list[str]` or `dict[str, int]` when the actual type is known. | Use the specific type. Fall back to `list[Any]` only when the content is genuinely heterogeneous (e.g., raw sqlite row data). |
+| Fixing the rewriter.py operator bug with a type cast | `cast(tuple[str], var)` silences the error | The operator error on line 406 reflects a real ambiguity in the code — the variable can be `str` or `tuple[str]`. A cast papers over a genuine bug. | Inspect the branch logic, determine the correct type, fix the code. This is the one error that might reveal a latent bug. |
+| Running `ruff check --fix --unsafe-fixes` | Fixes more violations automatically | Unsafe fixes modify code semantics, not just formatting. On a production codebase with 281 passing tests, unsafe fixes risk introducing failures. | Stick to safe auto-fixes. Do unsafe fixes manually, one at a time. |
+| Fixing all mypy errors in a single commit | Simpler commit history | One large commit makes review hard and makes bisecting regressions difficult if a test breaks. | Group by file or by error category. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Source Management (config file + corpus add)]
-    └──requires──> [Incremental Indexing]
-                       └──requires──> [File extraction pipeline (existing)]
-                       └──requires──> [Embedding generation]
-                                          └──requires──> [Embedding provider abstraction]
+[Auto-fix pass (ruff --fix)]
+    └──before──> [Manual E501 fixes]
+                     └──before──> [per-file-ignores config]
+    └──before──> [Manual B-series fixes]
+    └──before──> [Manual F841/E741 fixes]
 
-[MCP Server]
-    └──requires──> [Search core (hybrid BM25+vector)]
-                       └──requires──> [Incremental Indexing]
-                       └──requires──> [Embedding generation]
+[mypy overrides config (frontmatter)]
+    └──independent of──> [mypy source fixes]
 
-[Domain tag filter] ──requires──> [Classifier pipeline (existing)]
-[Category filter] ──requires──> [Document type classifier (existing)]
-[Quality score filter] ──requires──> [Quality analyzer (existing)]
+[sqlite-utils cast fixes (database.py)]
+    └──enables──> [no-any-return fixes (database.py)]
+    (fixing union-attr exposes that the cast return is still Any)
 
-[Chunk-level results]
-    └──requires──> [Search core]
-    └──requires──> [Chunk-level embeddings] (new work — chunks must be embedded separately from docs)
+[OllamaClient.db field addition]
+    └──required before──> [rewriter.py type annotations]
 
-[Python API] ──enhances──> [Search core] (thin wrapper, no new deps)
-
-[is_gold_standard filter] ──requires──> [Quality analyzer (existing)]
-[Source-aware search] ──requires──> [Source Management]
+[UP045 auto-fix]
+    └──triggers──> [F401 auto-fix] (Optional imports become unused after UP045 fix)
+    (run ruff --fix twice, or in a single pass — ruff handles chains)
 ```
 
 ### Dependency Notes
 
-- **MCP Server requires Search core:** The MCP tool is a transport layer over the search engine. Search must be complete and tested before MCP is meaningful.
-- **Chunk-level results requires separate chunk embedding:** The existing `Chunk` model and chunks table exist, but embeddings must be generated and stored per chunk, not just per document. This is the highest-complexity differentiator.
-- **Classifier-dependent filters (domain tag, category, quality) are zero-cost:** The classification pipeline already runs. Only change is exposing these as search filter parameters — no new classifier work needed.
-- **Source-aware search requires source tagging at ingest:** Every indexed document must record which named source it came from. This must be built into the indexing pipeline, not added later.
+- **Auto-fix before manual:** Running `ruff check --fix` first eliminates 383 violations and resets the baseline. Manual work on a pre-fix codebase is wasted effort if ruff would have changed the same lines.
+- **per-file-ignores before E501 manual fixes:** Set the `llm/` line-length override first, then run ruff to see the true residual E501 count. Don't manually wrap lines in `llm/` that the config would suppress.
+- **UP045 triggers F401:** After `Optional[X]` is converted to `X | None`, the `from typing import Optional` import becomes unused. Ruff handles this in the same `--fix` pass, but verify with a second `ruff check` to confirm.
+- **sqlite-utils union-attr and no-any-return are coupled:** Casting `db["table"]` to `sqlite_utils.Table` does not automatically fix the `no-any-return` errors. The cursor's `.fetchone()[0]` still returns `Any`. Address union-attr first, then no-any-return separately.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1)
+### Must Fix (Required for Zero-Error Milestone)
 
-Minimum viable product — what validates the core value proposition ("surface relevant agent files instantly").
+All of these must be done. None are optional.
 
-- [ ] **Hybrid search (BM25 + vector, RRF fusion)** — without this, search quality is not good enough to be useful to agents
-- [ ] **Absolute file path + relevance score + snippet in every result** — minimum result shape for agent consumption
-- [ ] **Multi-file-type indexing: `.md`, `.py`, `.json`, `.yaml`** — covers 95%+ of agent library file types
-- [ ] **Incremental indexing with mtime+hash detection** — large repos make full re-index impractical; this is required for the tool to be usable
-- [ ] **MCP server with `search` tool** — this is the primary interface for code agents (Claude Code target user)
-- [ ] **Source directory management** — `corpus add <dir>` + config file; without this, every index call requires manual path specification
-- [ ] **File type and category metadata in results** — agents need these to filter without additional tool calls
-- [ ] **`top_k` parameter (default 5)** — token budget management; non-negotiable for MCP agent consumption
+- [ ] **`ruff check --fix`** — eliminates W293, W291, I001, F401 (most), UP045, F541, W605 in one pass
+- [ ] **`per-file-ignores` for `llm/` at 120 chars** — eliminates bulk of E501 without manual line-wrapping
+- [ ] **Manual E501 fixes in `cli.py`, tests, non-llm source** — residual line-length violations after config change
+- [ ] **Manual B-series fixes** — B905, B007, B017, B006, B023, B904, B008 (14 violations, none auto-fixable)
+- [ ] **Manual F841/E741 fixes** — unused variables and ambiguous names `l` in comprehensions
+- [ ] **Manual E402 fixes** — deferred imports in rewriter.py and test_debug.py
+- [ ] **mypy `[[overrides]]` for `frontmatter` module** — one config block, silences import-untyped
+- [ ] **mypy: sqlite-utils union-attr** — cast to `sqlite_utils.Table` at 8 call sites in `database.py`
+- [ ] **mypy: no-any-return in database.py** — explicit `int()` cast on cursor row access
+- [ ] **mypy: nested function type annotations in chunked_processor.py** — add types to `finalize_atom`, `get_chunk_text`, `chain_lines`
+- [ ] **mypy: utils/ui.py function signatures** — add arg types (`sqlite_utils.Table`) and return types (`None`)
+- [ ] **mypy: generic type params** — `list[str]` and `dict[str, Any]` where bare `list`/`dict` used
+- [ ] **mypy: abstract class instantiation in extractors/__init__.py** — `# type: ignore[abstract]` or typed dict
+- [ ] **mypy: arg-type for float() in database.py** — use `or 0.0` pattern instead of conditional
+- [ ] **mypy: OllamaClient.db attr-defined** — add `db: Optional["CorpusDatabase"] = None` field to class
+- [ ] **mypy: operator error in rewriter.py** — investigate and fix the `str | tuple[str]` ambiguity
+- [ ] **mypy: var-annotated in chunker.py** — annotate `current_lines: list[str] = []`
+- [ ] **mypy: no-any-return in ollama_client.py** — explicit `str(...)` cast on return value
+- [ ] **mypy: rewriter.py untyped arg** — add type annotation to missing argument
 
 ### Add After Validation (v1.x)
 
-Features to add once core search is working and real agent usage observed.
-
-- [ ] **Domain tag filter + category filter in search** — adds agent precision but not required to validate search quality
-- [ ] **Quality score / gold standard filter** — add when agents are observed fetching too many low-quality files
-- [ ] **Python API** — add when developers ask for programmatic access
-- [ ] **Directory scope filter** — add when multi-repo users report cross-repo noise
+- [ ] **Stub generation for python-frontmatter** — if the overrides approach ever becomes insufficient, a proper stub package would be better. Not needed now.
+- [ ] **Refactor OllamaClient.db injection** — the dynamic attribute injection is a design smell. Proper fix would be constructor injection. Defer — not in scope for a quality pass.
 
 ### Future Consideration (v2+)
 
-Features to defer until product-market fit is established.
-
-- [ ] **Chunk-level results** — highest value but highest complexity; validate file-level search first
-- [ ] **Source-aware search (named source filter)** — useful for large multi-org collections; premature without knowing collection sizes
-- [ ] **OpenAI/Cohere embedding providers** — Ollama works for v1; cloud providers deferred until offline constraint is validated
+- [ ] **Full strict mypy on `llm/` module** — the `llm/` module has the most violations and is legacy code. A fuller refactor would be v2 work.
+- [ ] **Proper typing for sqlite-utils rows** — sqlite-utils rows are `dict[str, Any]`; adding row-level TypedDict models would eliminate the `Any` cascade from database reads. High value, high effort.
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Hybrid search (BM25+vector) | HIGH | MEDIUM | P1 |
-| Absolute path + score + snippet | HIGH | LOW | P1 |
-| Multi-file-type indexing (.md, .py, .json, .yaml) | HIGH | MEDIUM | P1 |
-| Incremental indexing (mtime+hash) | HIGH | MEDIUM | P1 |
-| MCP server with search tool | HIGH | MEDIUM | P1 |
-| Source directory management | HIGH | LOW | P1 |
-| top_k parameter | HIGH | LOW | P1 |
-| Category in results | MEDIUM | LOW | P2 |
-| Domain tag filter | MEDIUM | LOW | P2 |
-| File type filter | MEDIUM | LOW | P2 |
-| Quality score / gold standard filter | MEDIUM | LOW | P2 |
-| Directory scope filter | MEDIUM | LOW | P2 |
-| Python API | MEDIUM | LOW | P2 |
-| Chunk-level results | HIGH | HIGH | P3 |
-| Cloud embedding providers | MEDIUM | MEDIUM | P3 |
-| Source-aware named search | LOW | MEDIUM | P3 |
+| Fix Category | Milestone Value | Implementation Cost | Priority |
+|-------------|-----------------|---------------------|----------|
+| ruff auto-fix pass (383 violations) | HIGH | LOW | P1 |
+| per-file-ignores for llm/ E501 | HIGH | LOW | P1 |
+| sqlite-utils union-attr (8 errors) | HIGH | LOW | P1 |
+| mypy overrides for frontmatter | HIGH | LOW | P1 |
+| Nested function type annotations (11 errors) | HIGH | MEDIUM | P1 |
+| utils/ui.py signatures (4 errors) | HIGH | LOW | P1 |
+| Generic type params (6 errors) | HIGH | LOW | P1 |
+| Manual E501 fixes (residual after config) | HIGH | MEDIUM | P1 |
+| B-series fixes (14 violations) | HIGH | LOW-MEDIUM | P1 |
+| F841/E741 fixes (8 violations) | HIGH | LOW | P1 |
+| E402 fixes (5 violations) | HIGH | LOW | P1 |
+| no-any-return in database.py (3 errors) | HIGH | LOW | P1 |
+| arg-type float() fix (2 errors) | HIGH | LOW | P1 |
+| OllamaClient.db field (1 error) | HIGH | LOW | P1 |
+| abstract class fix (1 error) | HIGH | LOW | P1 |
+| operator error rewriter.py (1 error) | HIGH | MEDIUM | P1 |
+| var-annotated chunker.py (1 error) | HIGH | LOW | P1 |
+| no-any-return ollama_client (1 error) | HIGH | LOW | P1 |
+| rewriter.py untyped arg (1 error) | HIGH | LOW | P1 |
 
 **Priority key:**
-- P1: Must have for launch
-- P2: Should have, add when possible
-- P3: Nice to have, future consideration
+- P1: Must have for milestone (zero errors is binary — all are P1)
+- P2: Not applicable — this milestone has no optional fixes
+- P3: Not applicable
 
 ---
 
-## Competitor Feature Analysis
+## Auto-Fix vs Manual Fix Split
 
-| Feature | QMD (tobi/qmd) | DeepContext MCP | files-db MCP | Our Approach |
-|---------|----------------|-----------------|--------------|--------------|
-| Search method | BM25 + vector + LLM rerank | Vector + BM25 + Jina rerank | Vector (semantic) | BM25 + vector + RRF (no LLM rerank in hot path) |
-| Result fields | path, title, score, snippet, context | Snippets only | Not documented | path, score, snippet, category, domain_tags, file_type, quality_score |
-| File type filter | Collection scope only | TypeScript + Python AST | Not documented | Extension-based filter, configurable |
-| Directory filter | `-c` collection flag | Single repo | Not documented | Path prefix filter |
-| Category/domain filter | Context tag | No | No | Yes — from existing classifiers |
-| Incremental indexing | Not documented | mtime + SHA-256 hash | Yes (real-time monitoring) | mtime + SHA-256 (batch, not real-time daemon) |
-| MCP interface | Yes | Yes | Yes | Yes |
-| Offline support | Yes (node-llama-cpp local) | No (Jina API) | Yes | Yes (Ollama) |
-| Agent library awareness | No — generic docs | No — code only | No — generic files | Yes — category + domain tags purpose-built for agent files |
-| Chunk-level results | Not documented | Yes — snippets not whole files | No | P3 (planned) |
-| Quality signal | Score (0–100) | Token efficiency claim | No | is_gold_standard + quality_score fields |
+**Auto-fixable via `ruff check --fix` (383 violations):**
 
-**Key differentiation:** Corpus is the only tool in this comparison that is purpose-built for AI agent library files and exposes agent-specific metadata (document category like `persona`/`howto`/`runbook`, domain tags like `ai`/`backend`/`typescript`) as first-class search filter dimensions.
+| Rule | Count | Notes |
+|------|-------|-------|
+| W293 | 253 | Blank line whitespace (auto-fixable subset) |
+| W291 | 32 | Trailing whitespace (auto-fixable subset) |
+| I001 | 26 | Import sorting |
+| F401 | 33 | Unused imports (all in this codebase) |
+| UP045 | 21 | Optional[X] → X \| None |
+| F541 | 2 | f-string without placeholders |
+| W605 | 1 | Invalid escape sequence |
 
----
+**Manual fix required (146 violations + 42 mypy errors):**
 
-## MCP Tool Interface Design Notes
-
-Based on the official MCP specification (2025-06-18) and observed search MCP implementations:
-
-**Recommended tool shape for `corpus_search`:**
-
-```json
-{
-  "name": "corpus_search",
-  "description": "Search indexed AI agent files (skills, workflows, prompts, code) by semantic query. Returns ranked results with file paths, relevance scores, and content snippets.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "query": {
-        "type": "string",
-        "description": "Natural language or keyword search query"
-      },
-      "top_k": {
-        "type": "integer",
-        "description": "Maximum number of results to return (default: 5, max: 20)",
-        "default": 5
-      },
-      "file_type": {
-        "type": "string",
-        "description": "Filter by file extension (e.g. 'md', 'py', 'json'). Optional.",
-        "enum": ["md", "py", "json", "yaml", "ts", "js"]
-      },
-      "category": {
-        "type": "string",
-        "description": "Filter by document category. Optional.",
-        "enum": ["persona", "howto", "runbook", "architecture", "reference", "tutorial", "adr", "spec"]
-      },
-      "domain": {
-        "type": "string",
-        "description": "Filter by domain tag. Optional.",
-        "enum": ["ai", "backend", "frontend", "testing", "devops", "python", "typescript"]
-      },
-      "min_score": {
-        "type": "number",
-        "description": "Minimum relevance score threshold (0.0–1.0). Default: 0.0. Useful to filter low-confidence matches.",
-        "default": 0.0
-      }
-    },
-    "required": ["query"]
-  },
-  "outputSchema": {
-    "type": "object",
-    "properties": {
-      "results": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "file_path": {"type": "string", "description": "Absolute path to the file"},
-            "score": {"type": "number", "description": "Relevance score 0.0–1.0"},
-            "snippet": {"type": "string", "description": "Matching excerpt from the file"},
-            "category": {"type": "string"},
-            "domain_tags": {"type": "array", "items": {"type": "string"}},
-            "file_type": {"type": "string"},
-            "is_gold_standard": {"type": "boolean"},
-            "last_modified": {"type": "string", "format": "date-time"}
-          },
-          "required": ["file_path", "score", "snippet"]
-        }
-      },
-      "total_indexed": {"type": "integer"},
-      "query_time_ms": {"type": "integer"}
-    }
-  }
-}
-```
-
-**Design rationale:**
-- Tool name is snake_case (per MCP tool naming convention)
-- Description explains what's indexed (agent files) and what's returned — critical because agents use description for tool selection decisions
-- All filters are optional with documented defaults — agents can call with just `query`
-- `outputSchema` is provided for structured content (MCP 2025-06-18 supports this; enables client validation)
-- `query_time_ms` and `total_indexed` give agents context to decide if they should re-index before searching
-- Error responses use `isError: true` with agent-actionable messages ("index is empty — run corpus index first")
-
-**What makes results useful to an agent (vs a human):**
-1. **Absolute paths** — an agent passes the path directly to `read_file`; relative paths require context the agent may not have
-2. **Score, not rank** — an agent can decide "score 0.4 is too low to be relevant" and stop early; rank alone doesn't convey confidence
-3. **Snippet (not full content)** — agents have token budgets; snippets allow relevance judgement without consuming a full read_file call
-4. **Machine-readable category/domain metadata** — agents can branch on `category == "runbook"` without parsing natural language
-5. **Structured output** — JSON over freeform text; avoids agent needing to parse prose (confirmed by MCP spec recommendation for `structuredContent`)
-6. **Minimal result set (top_k=5 default)** — humans browse; agents consume. Five high-quality results beat twenty mediocre ones every time.
+| Category | Count | Effort |
+|----------|-------|--------|
+| E501 line length (after per-file-ignores) | ~20-30 residual | MEDIUM |
+| W293/W291 without [*] marker | 12 | LOW |
+| B-series bugbear | 14 | LOW-MEDIUM |
+| F841/E741 | 8 | LOW |
+| E402 | 5 | LOW |
+| mypy union-attr (database.py) | 8 | LOW |
+| mypy nested function types | 11 | MEDIUM |
+| mypy generic type params | 6 | LOW |
+| mypy no-any-return | 4 | LOW |
+| mypy untyped functions | 6 | LOW |
+| mypy overrides config | 1 | LOW |
+| mypy abstract class | 1 | LOW |
+| mypy arg-type float() | 2 | LOW |
+| mypy attr-defined | 1 | LOW |
+| mypy operator error | 1 | MEDIUM |
+| mypy var-annotated | 1 | LOW |
 
 ---
 
-## Incremental Indexing Patterns
+## Risky Fixes (Require Extra Care)
 
-**Standard pattern (confirmed across DeepContext, files-db, cocoindex):**
+These fixes could break tests or change runtime behaviour if done incorrectly:
 
-1. On `corpus index`: walk all registered source directories
-2. For each file: check stored `mtime` against filesystem `mtime`
-3. If `mtime` unchanged: skip (fast path — no I/O beyond stat)
-4. If `mtime` changed: compute SHA-256 hash of file content
-5. If hash unchanged (mtime changed but content identical): update stored mtime, skip re-embedding (saves expensive embedding call)
-6. If hash changed: re-extract, re-classify, re-embed, update index
-7. For deleted files: detect files in index with no filesystem counterpart, remove from index
+1. **rewriter.py operator error (line 406)** — the `str | tuple[str]` ambiguity is a real code bug. Any fix requires understanding the control flow, not just satisfying the type checker. Test coverage for this path must be confirmed before changing.
 
-**Why two-tier (mtime + hash):**
-- mtime alone has false positives (copy operations, backup tools touching timestamps)
-- hash alone is expensive (must read every file on every index run)
-- Combined: cheap fast path (mtime check) with accurate slow path (hash only when mtime changes)
+2. **B006 mutable defaults** — changing `def f(x=[])` to `def f(x=None)` with an interior `if x is None: x = []` is semantically identical for new callers, but changes behaviour for existing code that relies on shared mutable default (intentional or not). Verify no test depends on the mutation.
 
-**Explicit re-index over file watching (v1 decision):**
-- File watchers require background daemon, OS-specific APIs (inotify, FSEvents, ReadDirectoryChangesW), and complex lifecycle management
-- For agent use: agents call `corpus index --refresh` once before a session; fast incremental makes this under 1 second for typical collections
-- File watching is a v2+ feature if user research confirms the pain
+3. **B017 blind exception** — changing `pytest.raises(Exception)` to a specific exception class tightens the test contract. If the code raises a different exception for a different reason, the test will now fail where before it passed silently. This is the correct outcome but must be verified.
+
+4. **OllamaClient.db field addition** — adding a new field to `OllamaClient` requires checking if `__init__` uses `**kwargs` or has `model_config = ConfigDict(...)` (Pydantic model) vs plain dataclass. If it's a Pydantic model with `extra = "forbid"`, adding the field is required and must be done correctly.
+
+5. **extractors/__init__.py abstract fix** — if the `# type: ignore[abstract]` approach is used, future concrete subclasses added without implementing `extract()` will be silently accepted at this call site. The dict-with-specific-types approach is safer but more verbose.
 
 ---
 
 ## Sources
 
-- [MCP Tools Specification (2025-06-18)](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) — HIGH confidence, official spec
-- [QMD: local hybrid search tool](https://github.com/tobi/qmd) — MEDIUM confidence, real implementation reference
-- [DeepContext MCP Server](https://skywork.ai/skypage/en/deepcontext-mcp-server-ai-engineers/1980841962807820288) — MEDIUM confidence, product documentation
-- [Files-DB MCP Server](https://www.pulsemcp.com/servers/randomm-files-db) — MEDIUM confidence, product documentation
-- [MCP Tool Descriptions Best Practices](https://www.merge.dev/blog/mcp-tool-description) — MEDIUM confidence, community article
-- [MCP Server Best Practices 2026](https://www.cdata.com/blog/mcp-server-best-practices-2026) — MEDIUM confidence, community article
-- [Hybrid Search Explained (Weaviate)](https://weaviate.io/blog/hybrid-search-explained) — HIGH confidence, authoritative vendor docs
-- [Incremental IVF Index Maintenance](https://arxiv.org/abs/2411.00970) — MEDIUM confidence, research paper
-- [CocoIndex: incremental indexing for AI agents](https://medium.com/@cocoindex.io/building-a-real-time-data-substrate-for-ai-agents-the-architecture-behind-cocoindex-729981f0f3a4) — LOW confidence, single vendor blog
+- Live `uv run ruff check .` output — HIGH confidence (direct enumeration, 529 violations)
+- Live `uv run mypy src/` output — HIGH confidence (direct enumeration, 42 errors in 9 files)
+- [ruff rule W293](https://docs.astral.sh/ruff/rules/whitespace-before-comment/) — HIGH confidence
+- [ruff rule E501 per-file-ignores](https://docs.astral.sh/ruff/settings/#lint_per-file-ignores) — HIGH confidence
+- [ruff rule B-series (flake8-bugbear)](https://docs.astral.sh/ruff/rules/#flake8-bugbear-b) — HIGH confidence
+- [mypy union-attr](https://mypy.readthedocs.io/en/stable/error_code_list.html#check-validity-of-types-in-attr-defined-attr-defined) — HIGH confidence
+- [mypy overrides for missing stubs](https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports) — HIGH confidence
+- [sqlite-utils py.typed presence](https://github.com/simonw/sqlite-utils) — HIGH confidence (verified at runtime: `py.typed` present in package)
+- [sqlite-utils Table | View union type](https://github.com/simonw/sqlite-utils/blob/main/sqlite_utils/db.py) — HIGH confidence (verified via `__getitem__` source inspection)
 
 ---
-*Feature research for: Corpus — local semantic search engine for AI agent libraries*
-*Researched: 2026-02-23*
+*Feature research for: v1.3 code quality pass — Python mypy + ruff zero-error baseline*
+*Researched: 2026-02-24*

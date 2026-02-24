@@ -1,535 +1,529 @@
 # Architecture Research
 
-**Domain:** Local semantic search engine for AI agent libraries
-**Researched:** 2026-02-23
-**Confidence:** HIGH (indexing/search/hybrid patterns), HIGH (MCP server pattern), MEDIUM (source config management — standard patterns verified but no single canonical reference)
-
-## Standard Architecture
-
-### System Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Interface Layer                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  CLI (Typer) │  │  MCP Server  │  │    Python API         │  │
-│  │  corpus ...  │  │  (FastMCP)   │  │    SearchEngine()     │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘  │
-│         └─────────────────┴──────────────────────┘              │
-│                            │                                     │
-├────────────────────────────▼────────────────────────────────────┤
-│                    Search Service Layer                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                   SearchEngine                             │  │
-│  │  query() → [embed query] → [parallel retrieve] → [fuse]   │  │
-│  └──────┬────────────────────────────────┬────────────────────┘  │
-│         │                                │                        │
-│  ┌──────▼──────┐                ┌────────▼───────┐               │
-│  │ Vector Leg  │                │   BM25/FTS Leg  │               │
-│  │ sqlite-vec  │                │   SQLite FTS5   │               │
-│  └──────┬──────┘                └────────┬───────┘               │
-│         └────────────────┬───────────────┘                       │
-│                   ┌──────▼──────┐                                 │
-│                   │  RRF Fusion │                                  │
-│                   └─────────────┘                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                    Indexing Pipeline                              │
-│  ┌───────────┐  ┌───────────┐  ┌────────────┐  ┌────────────┐  │
-│  │  Scanner  │→ │ Extractor │→ │  Embedder  │→ │   Indexer  │  │
-│  │(existing) │  │(existing) │  │(new layer) │  │(new layer) │  │
-│  └───────────┘  └───────────┘  └────────────┘  └────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                      Persistence Layer                           │
-│  ┌──────────────────────┐  ┌────────────────────────────────┐  │
-│  │  SQLite (metadata)   │  │  sqlite-vec (vector index)     │  │
-│  │  + FTS5 (BM25 index) │  │  embeddings table              │  │
-│  └──────────────────────┘  └────────────────────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                     Config Layer                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  corpus.toml — source dirs, embedding provider, model    │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| CLI | User-facing commands: `index`, `search`, `add`, `status` | SearchEngine, IndexPipeline, SourceConfig |
-| MCP Server (FastMCP) | Exposes `search` as an MCP tool for Claude Code and agents | SearchEngine (reads only) |
-| Python API | Programmatic interface to SearchEngine | SearchEngine |
-| SearchEngine | Orchestrates hybrid search: embed query, run both legs, fuse results | EmbeddingProvider, sqlite-vec, SQLite FTS5 |
-| IndexPipeline | Orchestrates: scan → extract → embed → write to index | Scanner, Extractor, EmbeddingProvider, VectorStore, FTS index |
-| EmbeddingProvider | Abstraction over embedding backends (Ollama / OpenAI / Cohere) | Ollama client, HTTP clients |
-| VectorStore (sqlite-vec) | KNN search over stored embeddings | SQLite |
-| FTS5 index | BM25 keyword search | SQLite |
-| RRF Fusion | Combines ranked lists from vector and BM25 legs into a single ranking | SearchEngine |
-| SourceConfig | Reads/writes `corpus.toml`; tracks which directories are indexed and their state hashes | Filesystem |
-| IncrementalTracker | Compares file mtime/hash against stored state; decides which files need re-embedding | CorpusDatabase, Filesystem |
+**Domain:** Code quality fix — mypy + ruff across existing Python codebase
+**Researched:** 2026-02-24
+**Confidence:** HIGH (error analysis from live mypy/ruff output), HIGH (sqlite-utils type system),
+HIGH (fix ordering strategy — derived from module dependency graph)
 
 ---
 
-## Indexing Pipeline vs. Search/Query Pipeline
+## Context: What This Research Covers
 
-These are **cleanly separate** pipelines with a shared persistence layer as the boundary.
+This is a SUBSEQUENT MILESTONE research file. The overall system architecture is documented in the
+v1.0–v1.2 research (same file, replaced below). This research focuses on **how to structure the
+v1.3 code quality milestone**: fix ordering, integration points, risk zones, and validation strategy.
 
-### Indexing Pipeline (write path)
-
-```
-SourceConfig.get_sources()
-    ↓
-Scanner.scan(directory)                 ← existing corpus-analyzer code
-    ↓
-Extractor.extract(file_path) → Document ← existing corpus-analyzer code
-    ↓
-IncrementalTracker.needs_reindex(doc)   ← new: compare mtime/hash
-    ↓  (skip if unchanged)
-EmbeddingProvider.embed(text) → vector  ← new layer
-    ↓
-VectorStore.upsert(doc_id, vector)      ← sqlite-vec
-FTS5.upsert(doc_id, text)               ← SQLite FTS5
-CorpusDatabase.upsert_document(doc)     ← existing + extended
-```
-
-The indexing pipeline runs on demand (`corpus index`) or incrementally (`corpus index --changed`). It is **not** in the hot path at query time. Embedding generation only happens here, not at query time for stored documents.
-
-### Search/Query Pipeline (read path)
-
-```
-query_text (string)
-    ↓
-EmbeddingProvider.embed(query_text) → query_vector   ← at query time only
-    ↓
-[Parallel]
-    VectorStore.knn_search(query_vector, k=20)        → [(doc_id, distance)]
-    FTS5.search(query_text, k=20)                     → [(doc_id, bm25_score)]
-    ↓
-RRFusion.fuse(vector_results, fts_results)            → [(doc_id, combined_rank)]
-    ↓
-CorpusDatabase.get_documents(doc_ids)                 → [Document + snippet]
-    ↓
-[SearchResult(path, score, snippet, metadata), ...]
-```
-
-The query pipeline is **stateless** — it never writes. The only write-path operation that touches query time is embedding the user's query string, which is discarded after use.
+The goal: zero `mypy --strict` errors + zero `ruff check` violations across all 53 source files,
+with 281 tests staying green throughout.
 
 ---
 
-## Where Embedding Generation Fits
+## Current Error Inventory
 
-**At index time:** All document embeddings are generated once and stored in `sqlite-vec`. This is the expensive operation and must happen offline/on-demand.
+### mypy errors by file (42 total, 9 files)
 
-**At query time:** Only the user's query string is embedded. This must be fast (sub-100ms for a good embedding model like `nomic-embed-text` via Ollama).
+| File | Count | Primary Error Types |
+|------|-------|---------------------|
+| `core/database.py` | 17 | `Table | View` union-attr (8×), `no-any-return` (3×), `type-arg` (3×), `arg-type` (2×) |
+| `llm/chunked_processor.py` | 12 | `no-untyped-def` (3×), `no-untyped-call` (9×) — nested functions |
+| `ingest/chunker.py` | 1 | `var-annotated` |
+| `utils/ui.py` | 4 | `no-untyped-def` (4×) — missing arg/return types |
+| `extractors/markdown.py` | 3 | `import-untyped` (frontmatter), `type-arg` |
+| `analyzers/shape.py` | 1 | `type-arg` |
+| `extractors/__init__.py` | 1 | `abstract` — cannot instantiate abstract class |
+| `llm/ollama_client.py` | 1 | `no-any-return` — `response["message"]["content"]` |
+| `llm/rewriter.py` | 7 | `no-untyped-def`, `operator` (tuple + str), `attr-defined` (`.db`) |
 
-**Implication:** The `EmbeddingProvider` abstraction is used in both pipelines, but with different performance expectations. Index-time can be batched; query-time cannot.
+### ruff errors by file (529 total)
 
-**Embedding model consistency constraint:** The model used at index time must match the model used at query time. Changing the embedding model requires a full reindex. The model name/version must be stored in `SourceConfig` or the database schema so this is enforced.
+**Auto-fixable (382):** W293 whitespace, W291 trailing space, I001 import sort, UP045/UP006/UP035
+modernisation, F401 unused imports, F541 f-string, W605 escape sequence.
 
----
+**Manual fixes in src/ (101):**
 
-## Hybrid Search Ranking Architecture
-
-**Confidence:** HIGH — verified via sqlite-vec official examples (RRF in SQL) and Elastic documentation.
-
-The standard pattern is **Reciprocal Rank Fusion (RRF)**, which avoids the problem of normalizing incompatible score scales (BM25 is unbounded; cosine similarity is 0–1).
-
-### RRF Formula
-
-```
-combined_rank(doc) = weight_vec / (rrf_k + vec_rank) + weight_fts / (rrf_k + fts_rank)
-```
-
-Where `rrf_k = 60` is standard. Higher combined_rank = more relevant.
-
-A document missing from one leg still gets a score from the other leg (`COALESCE` to 0 for the missing rank component). This means a document that is rank-1 in BM25 but absent from vector results still surfaces.
-
-### Execution Pattern (sqlite-vec verified)
-
-```sql
-WITH vec_matches AS (
-  SELECT article_id,
-         ROW_NUMBER() OVER (ORDER BY distance) AS rank_number
-  FROM vec_articles
-  WHERE headline_embedding MATCH embed(:query) AND k = :k
-),
-fts_matches AS (
-  SELECT rowid,
-         ROW_NUMBER() OVER (ORDER BY rank) AS rank_number
-  FROM fts_articles
-  WHERE headline MATCH :query
-  LIMIT :k
-),
-final AS (
-  SELECT
-    COALESCE(1.0 / (60 + fts_matches.rank_number), 0.0) * :weight_fts
-    + COALESCE(1.0 / (60 + vec_matches.rank_number), 0.0) * :weight_vec AS combined_rank,
-    ...
-  FROM fts_matches
-  FULL OUTER JOIN vec_matches ON vec_matches.article_id = fts_matches.rowid
-)
-SELECT * FROM final ORDER BY combined_rank DESC;
-```
-
-This runs entirely within SQLite — no external fusion service required.
-
-### Why RRF over weighted score normalization
-
-Weighted score normalization requires min-max scaling across the result set, which changes every query. RRF only depends on rank position, which is stable and requires no calibration. It handles the "BM25 favors longer documents" problem automatically.
+| Rule | Count | Files |
+|------|-------|-------|
+| E501 (line too long) | 93 | `cli.py` (45), `classifiers/document_type.py` (13), `generators/advanced_rewriter.py` (9), `llm/` (15), `core/database.py` (4), others |
+| B905 (zip no strict) | 3 | `core/database.py` |
+| B006 (mutable default) | 2 | `cli.py` |
+| E741 (ambiguous var) | 4 | `core/database.py` (2), `llm/chunked_processor.py` (2) |
+| E402 (import not at top) | 2 | `llm/rewriter.py` |
+| B023 (loop var closure) | 1 | `cli.py` |
+| B904 (raise without from) | 1 | `cli.py` |
+| F841 (unused var) | 3 | `classifiers/`, `extractors/` |
+| SIM102 (nested if) | 2 | `core/scanner.py`, `extractors/python.py` |
+| E402 (import not at top) | 2 | `llm/rewriter.py` |
 
 ---
 
-## MCP Server Pattern
+## Module Dependency Graph
 
-**Confidence:** HIGH — verified via FastMCP official docs and MCP specification 2025-06-18.
+Understanding which modules import which is critical for fix ordering.
+Fixing a module that has dependents requires re-checking those dependents after each change.
 
-The standard pattern for an MCP server wrapping a search engine:
+```
+settings.py (leaf — no project imports)
+    ↑
+llm/ollama_client.py
+    ↑
+core/models.py (leaf — stdlib + pydantic only)
+    ↑
+core/database.py          ← central hub, imported by 10 files
+    ↑                           classifiers/document_type.py
+    │                           classifiers/domain_tags.py
+    │                           cli.py
+    │                           core/__init__.py
+    │                           core/samples.py
+    │                           generators/templates.py
+    │                           llm/unified_rewriter.py
+    │                           llm/rewriter.py
+    │                           analyzers/shape.py
+    │                           analyzers/quality.py
+    ↑
+llm/rewriter.py → llm/ollama_client.py, core/database.py, core/models.py
+    ↑
+llm/__init__.py (re-exports from llm/rewriter.py)
+    ↑
+cli.py (terminal — imports almost everything)
 
-1. **Transport:** stdio (for Claude Code integration) or SSE/HTTP for other clients. FastMCP handles both.
-2. **Tools:** One primary `search` tool with `query`, `limit`, and optional filter parameters.
-3. **Resources (optional):** Expose individual indexed files as `file://` resources if the client wants to read full content.
-4. **No state mutation through MCP:** The MCP server is read-only. Indexing is triggered through CLI, not MCP.
+llm/chunked_processor.py (standalone — no project imports, imported by llm/rewriter.py)
+utils/ui.py (standalone — rich only)
+extractors/markdown.py (imports core/models.py, extractors/base.py)
+ingest/chunker.py (standalone section, imports core models)
+analyzers/shape.py (imports core/database.py)
+```
 
-### FastMCP implementation pattern
+**Key observation:** `core/database.py` is the hub. It is imported by 10 modules. Fixing it first
+means all dependents continue to type-check correctly. Any type annotation changes in `database.py`
+propagate to all 10 dependents — those must be re-checked after `database.py` is fixed.
+
+---
+
+## Fix Order Architecture
+
+### Recommended Sequencing
+
+The correct order is **leaves before hubs, hubs before dependents, formatters before type checkers**.
+
+```
+Phase 1 — Auto-fix ruff (all files, one pass)
+    ruff --fix src/ tests/ scripts/
+    Clears 382 errors: whitespace, import sort, modernisation, F401, F541, W605
+    Risk: ZERO — purely mechanical transforms, no semantic change
+    Gate: run tests immediately after
+
+Phase 2 — pyproject.toml config (before manual E501 work)
+    Add per-file-ignores for llm/ (120-char limit)
+    Add per-file-ignores for tests/ (E501 acceptable in test strings)
+    Gate: ruff check re-run to confirm E501 count drops correctly
+
+Phase 3 — Manual ruff fixes, leaf/standalone files first
+    Batch A (standalone, no dependents): utils/ui.py, llm/chunked_processor.py,
+             ingest/chunker.py, extractors/markdown.py, extractors/python.py,
+             core/scanner.py, llm/quality_scorer.py, llm/unified_rewriter.py
+    Batch B (shared module): core/database.py
+    Batch C (dependents of database.py): analyzers/shape.py, analyzers/quality.py,
+             classifiers/document_type.py, generators/advanced_rewriter.py,
+             generators/templates.py
+    Batch D (CLI and llm/rewriter.py — most complex):
+             llm/rewriter.py, cli.py
+    Gate: run tests after each batch
+
+Phase 4 — mypy fixes, same ordering
+    Same leaf-first order. database.py before its dependents.
+    Gate: run mypy after each file, run tests after each batch
+```
+
+**Why ruff auto-fix first:** Whitespace and import sort changes are noise when reading diffs.
+Clean those up unconditionally before any manual work begins. Auto-fixes never break tests.
+
+**Why pyproject.toml config second:** The `llm/` files have 15 E501 violations that disappear
+under a 120-char limit. Setting `per-file-ignores` before touching `llm/` means you never
+manually wrap lines that the config would already excuse. Avoids wasted effort.
+
+**Why database.py before its dependents:** `database.py` fixes introduce proper type annotations
+(e.g. `cast(Table, ...)` instead of `Table | View`). Dependents that use database methods will
+get cleaner type inference once `database.py` is annotated. Fixing dependents before `database.py`
+means potentially fixing them twice.
+
+---
+
+## sqlite-utils Type Problem: The Correct Fix
+
+`database.py` has 8 `union-attr` errors because `self.db["table_name"]` returns `Table | View`
+(per sqlite-utils type stubs), but `View` lacks `insert`, `update`, `delete_where`. The code
+always uses table-name strings that correspond to real tables, not views.
+
+### Option A: `cast(Table, ...)` at each call site — RECOMMENDED
 
 ```python
-from fastmcp import FastMCP
-from corpus_analyzer.search import SearchEngine
+from sqlite_utils.db import Table
+from typing import cast
 
-mcp = FastMCP("corpus")
-
-@mcp.tool
-def search(query: str, limit: int = 10, domain: str | None = None) -> list[dict]:
-    """Search the indexed agent library corpus.
-
-    Returns ranked files with path, score, snippet, category, and domain tags.
-    """
-    engine = SearchEngine.from_config()
-    results = engine.search(query, limit=limit, domain_filter=domain)
-    return [r.model_dump() for r in results]
+cast(Table, self.db["documents"]).insert(data, alter=True)
+cast(Table, self.db["chunks"]).delete_where("document_id = ?", [doc_id])
 ```
 
-The MCP server is a thin wrapper — it instantiates the `SearchEngine` and delegates. All search logic lives in `SearchEngine`, not in the MCP layer.
+**Verdict:** Best option. Narrows the type at the exact call site, documents the invariant,
+no mypy overrides needed, zero runtime cost, immediately obvious to readers why the cast is there.
+Affects only `database.py` — no changes to callers.
 
-### MCP vs CLI relationship
+### Option B: Helper method returning `Table`
 
-The MCP server and CLI both depend on `SearchEngine`. Neither is built on top of the other. Build order: `SearchEngine` → `CLI` → `MCP server` (MCP is just another consumer of `SearchEngine`).
+```python
+def _table(self, name: str) -> Table:
+    result = self.db[name]
+    assert isinstance(result, Table)
+    return result
+```
+
+**Verdict:** Acceptable but heavier. `_table("documents")` at every call site is verbose. Useful
+if you want the assertion to catch real bugs; unnecessary here since table names are all hardcoded
+string literals. Use `cast()` instead.
+
+### Option C: `# type: ignore[union-attr]` — AVOID
+
+**Verdict:** Suppresses the error but provides no documentation and fails `warn_unused_ignores`
+if the stubs ever improve. The point of v1.3 is a clean baseline, not a suppression baseline.
+
+### Option D: `Any` annotation for `self.db` — AVOID
+
+**Verdict:** Loses all sqlite-utils type checking across the entire class. Overly broad.
+
+**Conclusion:** Use `cast(Table, self.db["name"])` for every call site that triggers `union-attr`.
+Add `from sqlite_utils.db import Table` to the import block.
 
 ---
 
-## Source Configuration Management
+## mypy Fix Strategies by Error Type
 
-**Confidence:** MEDIUM — no single canonical Python pattern; derived from multiple systems (CocoIndex, Open Semantic Search, common practice).
+### `no-untyped-def` in `llm/chunked_processor.py` (nested functions)
 
-### Recommended pattern: `corpus.toml` config file
+The three untyped functions are nested closures inside `split_on_headings()`:
+`finalize_atom()`, `get_chunk_text()`, `chain_lines()`. Mypy strict mode requires type annotations
+even for nested functions.
+
+```python
+# Before (triggers no-untyped-def + no-untyped-call)
+def finalize_atom(force_heading=None, force_level=0, is_code_atom=False):
+    ...
+
+# After
+def finalize_atom(
+    force_heading: str | None = None,
+    force_level: int = 0,
+    is_code_atom: bool = False,
+) -> None:
+    ...
+```
+
+Similarly `chain_lines(atoms_list: list[Atom]) -> list[str]` and
+`get_chunk_text(atoms_list: list[Atom]) -> str`.
+
+**Note on `Atom` being a nested dataclass:** `Atom` is defined inside `split_on_headings()`.
+Moving it to module level makes the type annotations cleaner and avoids any forward-reference
+issues with nested class annotations. This is the recommended refactor.
+
+### `no-any-return` in `llm/ollama_client.py`
+
+```python
+# Line 42: response["message"]["content"] returns Any
+return response["message"]["content"]  # triggers no-any-return
+
+# Fix: explicit cast
+from typing import cast
+return cast(str, response["message"]["content"])
+```
+
+### `no-untyped-def` in `utils/ui.py`
+
+Both functions missing annotations. `table_obj` is a `sqlite_utils.db.Table`:
+
+```python
+def print_table_schema(table_name: str, table_obj: Table) -> None:
+def print_sample_data(table_name: str, table_obj: Table, limit: int = 5) -> None:
+```
+
+### `import-untyped` in `extractors/markdown.py` (python-frontmatter)
+
+`python-frontmatter` has no type stubs. Two options:
+
+**Option A:** Add `# type: ignore[import-untyped]` on the import line. Acceptable here because
+the library is well-established and the stubs situation is unlikely to change.
+
+**Option B:** Add `python-frontmatter` to mypy's `[[overrides]]` with `ignore_missing_imports`.
 
 ```toml
-[index]
-database = "corpus.sqlite"
-embedding_model = "nomic-embed-text"
-embedding_provider = "ollama"
-ollama_host = "http://localhost:11434"
-
-[[sources]]
-name = "my-skills"
-path = "/home/user/.claude/skills"
-recursive = true
-extensions = [".md", ".py", ".yaml", ".json"]
-
-[[sources]]
-name = "agent-repos"
-path = "/home/user/ghrepos"
-recursive = true
-extensions = [".md", ".py"]
-exclude = ["node_modules", ".git", "__pycache__"]
+# pyproject.toml
+[[tool.mypy.overrides]]
+module = "frontmatter"
+ignore_missing_imports = true
 ```
 
-`corpus.toml` lives in the current directory (project-local) or `~/.config/corpus/corpus.toml` (global). Config is read at startup; `corpus add <dir>` appends a new `[[sources]]` entry.
+**Recommended:** Option B — centralises the suppression in config rather than scattering
+`# type: ignore` comments in source. If stubs eventually ship, the override becomes redundant
+and `warn_unused_ignores` will flag it cleanly.
 
-### Incremental indexing with change tracking
+### `operator` error in `llm/rewriter.py` line 406
 
-Each source maintains a state table in SQLite:
+`Left operand is of type "str | tuple[str]"` trying to concat a `str`. The variable assignment
+earlier is ambiguous. Fix is to ensure the variable is typed as `str` consistently, or narrow it
+before the concatenation.
 
+### `attr-defined` for `adv_rewriter.client.db` in `llm/rewriter.py` line 414
+
+`OllamaClient` does not have a `db` attribute — it is being monkey-patched at runtime:
+```python
+adv_rewriter.client.db = db
 ```
-file_index_state(path TEXT, mtime REAL, content_hash TEXT, indexed_at DATETIME, embedding_model TEXT)
+
+This is an architectural smell in the legacy `llm/rewriter.py`. The correct fix depends on
+whether this path is tested or exercised:
+
+- If the monkey-patch is the only way to pass `db` to `AdvancedRewriter`, add a `db` attribute
+  to `OllamaClient` typed as `CorpusDatabase | None = None`.
+- Alternatively, refactor `AdvancedRewriter` to accept `db` in its constructor.
+- The `llm/rewriter.py` module is superseded by `llm/unified_rewriter.py` per the CLAUDE.md;
+  minimal invasive fix (add optional attribute) is the pragmatic choice for v1.3.
+
+### `abstract` in `extractors/__init__.py`
+
+Cannot instantiate `BaseExtractor` directly. Likely a stale import or test helper. Inspect the
+call site and replace with a concrete extractor or `MarkdownExtractor`.
+
+### `type-arg` errors (missing generic parameters)
+
+Replace bare `dict` with `dict[str, Any]`, bare `list` with `list[Any]` (or more specific type
+if context makes the element type clear). These are in `core/database.py`, `analyzers/shape.py`,
+`extractors/markdown.py`.
+
+### `arg-type` in `core/database.py` lines 318 and 320
+
+```python
+# Triggers: "Any | float | None" not compatible with float()
+float(row.get("category_confidence") if row.get("category_confidence") is not None else 0.0)
 ```
 
-At index time: compare current mtime and hash against stored state. Only re-embed files that changed. Delete state records for files that no longer exist on disk.
+The `row.get()` returns `Any | None`. `float()` from typeshed expects `str | Buffer |
+SupportsFloat | SupportsIndex`. The `Any` branch causes the error. Fix: use `or` shorthand which
+mypy handles better, or apply a cast:
 
-The embedding model name is stored per file so that a model change triggers selective or full reindex.
+```python
+# Cleaner and type-safe:
+category_confidence: float = row.get("category_confidence") or 0.0
+```
+
+Because `row` is now `dict[str, Any]` after fixing the `type-arg` error, `row.get()` returns
+`Any`, and `Any or float` narrows to `float` acceptably in most mypy versions.
 
 ---
 
-## Recommended Project Structure
+## E501 Handling: llm/ vs rest of codebase
 
-```
-src/corpus_analyzer/
-├── core/
-│   ├── models.py          # Document, Chunk, SearchResult (extend existing)
-│   ├── database.py        # CorpusDatabase (extend for vectors + FTS)
-│   └── scanner.py         # existing — no changes needed
-├── extractors/            # existing — no changes needed
-├── classifiers/           # existing — no changes needed
-├── embeddings/            # NEW
-│   ├── __init__.py
-│   ├── base.py            # EmbeddingProvider abstract class
-│   ├── ollama.py          # OllamaEmbedder
-│   └── openai.py          # OpenAIEmbedder (optional, v1 stretch)
-├── indexing/              # NEW
-│   ├── __init__.py
-│   ├── pipeline.py        # IndexPipeline: orchestrates scan→extract→embed→store
-│   └── tracker.py         # IncrementalTracker: mtime/hash change detection
-├── search/                # NEW
-│   ├── __init__.py
-│   ├── engine.py          # SearchEngine: hybrid search orchestration
-│   ├── fusion.py          # RRFusion: rank combination
-│   └── models.py          # SearchResult, SearchQuery Pydantic models
-├── mcp/                   # NEW
-│   ├── __init__.py
-│   └── server.py          # FastMCP server, exposes search tool
-├── config.py              # extend: add SourceConfig, embedding settings
-└── cli.py                 # extend: add index, search, add, status commands
+### The split
+
+- `llm/` files: 15 E501 violations, mostly in string literals (prompts, docstrings) and long
+  function signatures. These legitimately read better at 120 chars.
+- Non-llm src/ files: 78 E501 violations. `cli.py` has 45 of them — mostly long option help
+  strings and Rich console print calls. `classifiers/document_type.py` has 13.
+
+### pyproject.toml configuration
+
+```toml
+[tool.ruff]
+line-length = 100  # keep global at 100
+
+[tool.ruff.lint.per-file-ignores]
+"src/corpus_analyzer/llm/*.py" = ["E501"]
+# Alternative: set per-file line limit via extend-per-file-config (not supported in ruff)
+# Ruff does NOT support per-file line-length overrides — only global or per-file ignores.
 ```
 
-### Structure Rationale
+**Important:** Ruff does not support per-file `line-length` overrides. The PROJECT.md spec says
+"per-file line limit set to 120 chars in pyproject.toml" but ruff's actual capability is
+`per-file-ignores` on `E501`. The outcome is equivalent (E501 suppressed for `llm/`), but the
+mechanism is ignore-based, not limit-based. This is the correct implementation.
 
-- **embeddings/**: Isolated from search — swappable provider without touching search logic. `EmbeddingProvider` base class enforces `embed(text: str) -> list[float]` and `embed_batch(texts: list[str]) -> list[list[float]]` contract.
-- **indexing/**: Separated from search because indexing is a write-path, scheduled/on-demand operation; search is a read-path, latency-sensitive operation. They share the DB but have no runtime coupling.
-- **search/**: `SearchEngine.search()` is the primary API surface consumed by CLI, MCP, and Python API.
-- **mcp/**: Thin wrapper only. All logic in `search/`. One file sufficient for v1.
+For the 78 E501s outside `llm/`: wrap lines manually. `cli.py` is the bulk — Typer's
+`Annotated[..., typer.Option(help="...")]` patterns can be broken across lines. `_row_to_document`
+in `database.py` has 3 long lines that need wrapping.
+
+### E402 in `llm/rewriter.py`
+
+Lines 233–234 are `import concurrent.futures` and `from typing import NamedTuple, Optional`
+appearing mid-file after a long multi-line string. These were inserted during development without
+moving to the top of the file. Fix: move to the top-level import block and merge with existing
+`typing` import.
 
 ---
 
-## Architectural Patterns
+## Validation Strategy
 
-### Pattern 1: Dual-Index Storage (FTS5 + sqlite-vec in same database)
+### After each phase gate
 
-**What:** Store BM25 index (FTS5) and vector index (sqlite-vec) in the same SQLite database file. Hybrid query runs as a single SQL statement using CTEs.
+```bash
+# Always run full test suite — never skip
+uv run pytest -v
 
-**When to use:** Local deployment, single-user, no concurrent write pressure. This is the right choice for Corpus.
-
-**Trade-offs:** Simplicity wins — no separate vector database process, no network calls, single file to back up. Trade-off is SQLite's write-lock (one writer at a time) which is acceptable for local use.
-
-**Example schema addition:**
-```sql
--- FTS5 for BM25
-CREATE VIRTUAL TABLE corpus_fts USING fts5(
-    content,
-    path UNINDEXED,
-    content='documents',
-    content_rowid='rowid'
-);
-
--- sqlite-vec for KNN
-CREATE VIRTUAL TABLE corpus_vec USING vec0(
-    doc_id INTEGER PRIMARY KEY,
-    embedding FLOAT[768]  -- dimension matches chosen model
-);
+# Run both linters — check for regression in already-fixed areas
+uv run ruff check .
+uv run mypy src/
 ```
 
-### Pattern 2: Provider Abstraction for Embeddings
+### Recommended batch gates
 
-**What:** `EmbeddingProvider` abstract base class with `embed()` and `embed_batch()`. Concrete implementations for Ollama, OpenAI, and possibly Cohere. Config selects provider at startup.
+| After | Command | Expected outcome |
+|-------|---------|-----------------|
+| Phase 1 (ruff auto-fix) | `pytest && ruff check .` | 382 fewer errors; 281 tests green |
+| Phase 2 (pyproject.toml) | `ruff check src/corpus_analyzer/llm/` | E501 count drops to 0 for llm/ |
+| Phase 3 Batch A | `pytest && ruff check . && mypy src/` | Standalone files clean |
+| Phase 3 Batch B (database.py) | `pytest && mypy src/corpus_analyzer/core/` | database.py clean; dependents still pass |
+| Phase 3 Batch C (dependents) | `pytest && mypy src/` | All hub dependents clean |
+| Phase 3 Batch D (CLI + rewriter) | `pytest && ruff check . && mypy src/` | Zero errors |
 
-**When to use:** Always — the embedding provider is the most likely thing to change (offline vs. online, model upgrades).
+### Why run tests at every gate
 
-**Trade-offs:** Minor abstraction overhead; pays for itself the first time you want to test with a different model.
-
-### Pattern 3: SearchEngine as the Core API
-
-**What:** `SearchEngine` class is the single entry point for all search operations. CLI and MCP are both thin consumers. Python API is just `SearchEngine` exposed.
-
-**When to use:** Always — prevents logic duplication between CLI and MCP, ensures consistent results.
-
-**Trade-offs:** None meaningful. This is the correct factoring.
-
----
-
-## Data Flow
-
-### Indexing Flow
-
-```
-corpus index [--changed]
-    ↓
-SourceConfig.get_sources() → list[SourceDir]
-    ↓
-for each source:
-    Scanner.scan(source.path) → Iterable[Path]
-    ↓
-    for each file:
-        IncrementalTracker.needs_reindex(path) → bool
-        ↓ (skip if False)
-        Extractor.extract(path) → Document
-        EmbeddingProvider.embed_batch([doc.content]) → [vector]
-        CorpusDatabase.upsert_document(doc)
-        VectorStore.upsert(doc.id, vector)
-        FTS5.upsert(doc.id, doc.content)
-        IncrementalTracker.mark_indexed(path, mtime, hash, model)
-```
-
-### Search Flow
-
-```
-corpus search "query text" --limit 10
-    ↓
-SearchEngine.search(query="query text", limit=10)
-    ↓
-EmbeddingProvider.embed(query) → query_vector    [~50-100ms with Ollama local]
-    ↓
-[Parallel SQL CTEs in one query]
-    VectorStore.knn(query_vector, k=20)          → [(doc_id, rank)]
-    FTS5.search(query_text, k=20)                → [(doc_id, rank)]
-    ↓
-RRFusion.fuse(vec_results, fts_results)          → [(doc_id, combined_rank)]
-    ↓
-CorpusDatabase.get_documents(top_N_ids)          → [Document]
-    ↓
-[Build SearchResult with snippet extraction]     → [SearchResult]
-    ↓
-CLI: rich table display  OR  MCP: JSON tool response  OR  API: list[SearchResult]
-```
-
-### Source Add Flow
-
-```
-corpus add /path/to/directory
-    ↓
-SourceConfig.load_or_create()
-    ↓
-SourceConfig.add_source(path, name, extensions)
-    ↓
-SourceConfig.save()  → writes corpus.toml
-    ↓
-[Optional: corpus index --source <name> to index immediately]
-```
-
----
-
-## Build Order
-
-**Dependency graph:**
-
-```
-EmbeddingProvider (base + Ollama)
-    ↓
-VectorStore (sqlite-vec integration in CorpusDatabase)
-FTS5 (extend CorpusDatabase schema)
-    ↓
-IndexPipeline (Scanner + Extractor already exist; add Embedder + Tracker)
-    ↓
-SearchEngine (depends on VectorStore + FTS5 + RRFusion + EmbeddingProvider)
-    ↓
-SourceConfig (depends on SearchEngine knowing what sources exist)
-    ↓
-CLI search + index commands (depends on SearchEngine + IndexPipeline + SourceConfig)
-    ↓
-Python API (thin wrapper over SearchEngine — trivially added)
-    ↓
-MCP Server (thin wrapper over SearchEngine — can be added any time after SearchEngine exists)
-```
-
-### Milestones that unlock further work
-
-| Milestone | What it unlocks |
-|-----------|----------------|
-| EmbeddingProvider + sqlite-vec schema | Everything downstream |
-| IndexPipeline working | Can index and store; search not yet possible |
-| SearchEngine (vector-only first) | First searchable state; can validate recall before adding BM25 |
-| Add FTS5 + RRF | Hybrid search; better recall for exact name matches |
-| CLI search command | End-to-end user experience; validates the full pipeline |
-| MCP Server | Agent integration; can be added after CLI search is working |
-| SourceConfig | Source management; can be stubbed initially (hardcode a path) |
-
-**Key insight: You can search before you have hybrid.** Build vector-only search first, validate recall, then layer in FTS5 + RRF. This keeps each phase shippable.
-
-**Key insight: MCP can be added any time after SearchEngine exists.** MCP is not a prerequisite for CLI, and CLI is not a prerequisite for MCP. Both are thin consumers of `SearchEngine`.
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Embedding at Query Time for Stored Documents
-
-**What people do:** Recompute document embeddings on every search query because they skipped the indexing step.
-**Why it's wrong:** Embedding 10,000 documents at query time takes minutes. The entire point of an index is to precompute.
-**Do this instead:** Index-time embedding only. Query-time embedding for the query string only.
-
-### Anti-Pattern 2: Putting Search Logic in the MCP Layer
-
-**What people do:** Build the hybrid search directly inside `mcp/server.py` because that is where queries arrive first.
-**Why it's wrong:** Logic cannot be tested without an MCP client. CLI and API diverge. Logic is duplicated.
-**Do this instead:** All search logic in `SearchEngine`. MCP is one line: `return engine.search(query)`.
-
-### Anti-Pattern 3: Separate Vector Database Process
-
-**What people do:** Add ChromaDB or Qdrant as a standalone server because it is what they know from cloud RAG tutorials.
-**Why it's wrong:** Local single-user tool does not need a separate process. sqlite-vec runs in-process, zero infra overhead.
-**Do this instead:** sqlite-vec in the existing SQLite database. Revisit if multi-user or scale demands it.
-
-### Anti-Pattern 4: Full Reindex on Every Run
-
-**What people do:** Skip incremental tracking and reindex everything each time `corpus index` runs.
-**Why it's wrong:** For large corpora (1000+ files), this is slow. Re-embedding unchanged files wastes Ollama calls.
-**Do this instead:** mtime + content hash tracking per file. Only reindex changed/new files. Full reindex is a `--force` option.
-
-### Anti-Pattern 5: Storing Embeddings in the Document Table
-
-**What people do:** Add an `embedding BLOB` column to the existing `documents` table.
-**Why it's wrong:** sqlite-vec requires its own virtual table structure for KNN queries. Blobs in regular columns cannot be searched with ANN indexing.
-**Do this instead:** Separate `corpus_vec` virtual table via `CREATE VIRTUAL TABLE ... USING vec0(...)`, linked to `documents` by `doc_id`.
+- Ruff auto-fixes change imports and syntax. An unused import that is removed might be needed
+  elsewhere (rare but possible with `# noqa: F401` suppressions currently absent).
+- mypy fixes involving `cast()` are mechanical but can introduce `ImportError` if the import
+  is forgotten.
+- B006 fix (mutable default arg `[]` → `None`, with `if exclude is None: exclude = []`) is the
+  most likely to introduce a subtle runtime change. Test immediately after.
 
 ---
 
 ## Integration Points
 
-### External Services
+### What changes in each file and its downstream impact
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Ollama (embeddings) | HTTP client to `http://localhost:11434/api/embeddings` | Existing OllamaClient can be extended; use `nomic-embed-text` model |
-| OpenAI Embeddings | HTTP via `openai` Python SDK | Optional v1 stretch goal; use `text-embedding-3-small` |
-| Claude Code (MCP) | FastMCP stdio transport | Claude Code reads MCP server config from `mcp.json` |
+| File | Change Type | Downstream Impact |
+|------|-------------|-------------------|
+| `pyproject.toml` | Config only | All ruff/mypy runs |
+| `core/database.py` | Add `cast(Table, ...)`, fix type annotations, rename `l` vars | 10 importing modules re-check cleanly; no runtime change |
+| `llm/chunked_processor.py` | Add type annotations to nested functions; promote `Atom` to module level | `llm/rewriter.py` (only importer); no runtime change |
+| `utils/ui.py` | Add type annotations | `cli.py` (only importer); no runtime change |
+| `extractors/markdown.py` | Add frontmatter override in mypy config; fix `dict` → `dict[str, Any]` | No dependents affected |
+| `llm/ollama_client.py` | Add `cast(str, ...)` on response access; add optional `db` attr | `llm/rewriter.py`, `llm/unified_rewriter.py` re-check |
+| `llm/rewriter.py` | Move imports to top; fix operator type; fix process_document annotation | `llm/__init__.py` re-check |
+| `cli.py` | Fix B006 mutable defaults, B023 loop closure, B904 raise-from, wrap E501 | Terminal node — no dependents |
+| `classifiers/document_type.py` | Remove unused var, wrap E501 | `classifiers/__init__.py`, `cli.py` |
+| `ingest/chunker.py` | Annotate `current_lines: list[str]` | `ingest/indexer.py` |
+| `analyzers/shape.py` | Fix `dict` type arg | `cli.py` |
+| `core/scanner.py` | SIM102 collapse nested if | `cli.py`, `ingest/indexer.py` |
 
-### Internal Boundaries
+### New vs Modified
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| IndexPipeline ↔ CorpusDatabase | Direct Python call, passes Document and vector | Write path only |
-| SearchEngine ↔ CorpusDatabase | Direct Python call, SQL query via sqlite-utils | Read path only |
-| CLI ↔ SearchEngine | Direct Python instantiation | CLI creates SearchEngine with config |
-| MCP Server ↔ SearchEngine | Direct Python instantiation | MCP creates SearchEngine with config, same as CLI |
-| Python API ↔ SearchEngine | SearchEngine is the API | No additional wrapper needed |
+**Modified files only — no new files required.**
+
+The pyproject.toml config addition and the mypy `[[overrides]]` for `frontmatter` are the only
+structural changes to project config. All other changes are in-place annotation/fix work.
 
 ---
 
-## Scalability Considerations
+## Anti-Patterns for This Milestone
 
-This is a local single-user tool. Scalability considerations are about corpus size, not concurrent users.
+### Anti-Pattern 1: Fix mypy before ruff auto-fix
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 0–1K files | sqlite-vec default settings sufficient; all indexing in seconds |
-| 1K–10K files | Batch embedding calls (embed_batch); incremental indexing critical at this scale |
-| 10K–50K files | Consider chunking large files rather than whole-file embedding; chunk table already exists |
-| 50K+ files | sqlite-vec ANN index tuning; potentially consider external vector store; unlikely for local agent libraries |
+**What people do:** Start manually annotating types while whitespace noise still exists.
+**Why it's wrong:** Every diff review mixes meaningful type changes with whitespace churn.
+**Do this instead:** `ruff --fix` first, commit, then annotate.
 
-### Scaling Priorities
+### Anti-Pattern 2: Fix dependents before database.py
 
-1. **First bottleneck:** Embedding generation speed — mitigated by incremental indexing and batching.
-2. **Second bottleneck:** Vector index memory — sqlite-vec loads index into memory for search; for 50K+ files with 768-dim embeddings, this is ~150MB+ which is fine for local use.
+**What people do:** Fix `analyzers/shape.py` E501 and then discover the `dict` type-arg
+propagated from `database.py` still causes a mypy error because `database.py` is not yet fixed.
+**Why it's wrong:** Wasted effort; may need re-fixing after `database.py` lands.
+**Do this instead:** Fix `database.py` first, then its 10 dependents.
+
+### Anti-Pattern 3: Use `# type: ignore` for sqlite-utils union-attr
+
+**What people do:** Stamp `# type: ignore[union-attr]` on each call site to silence the errors
+without understanding the cause.
+**Why it's wrong:** Leaves the type model wrong; `warn_unused_ignores` will break if sqlite-utils
+ships improved stubs. Gives future readers no information about why the cast is needed.
+**Do this instead:** `cast(Table, self.db["name"])` — documents the invariant explicitly.
+
+### Anti-Pattern 4: Set pyproject.toml E501 ignore after already wrapping llm/ lines
+
+**What people do:** Manually wrap all the long lines in `llm/rewriter.py` and `llm/unified_rewriter.py`,
+then later add the `per-file-ignores` config.
+**Why it's wrong:** All that wrapping work is irreversible without a separate cleanup pass.
+Long LLM prompts read worse when wrapped at 100 chars.
+**Do this instead:** Set the config first, then only wrap lines that still exceed it.
+
+### Anti-Pattern 5: Running `ruff --fix` without running tests immediately after
+
+**What people do:** Apply all auto-fixes and then do several hours of manual work before running
+the test suite.
+**Why it's wrong:** If an auto-fix removed an import that was used (e.g., re-exported via `__all__`),
+the failure is hard to attribute.
+**Do this instead:** `ruff --fix` → `pytest` as a single unit. If tests fail, the auto-fix is
+the culprit. Revert and inspect.
+
+---
+
+## Build Order for Phases
+
+Based on the dependency graph and error distribution, the suggested phase breakdown for the roadmap:
+
+```
+Phase 1 (30 min): ruff auto-fix + test gate
+    - ruff --fix src/ tests/ scripts/
+    - pytest (must stay green)
+    - Clears 382/529 errors = 72% of total volume gone
+
+Phase 2 (15 min): pyproject.toml ruff config
+    - Add [tool.ruff.lint.per-file-ignores] for llm/ and tests/
+    - Add [[tool.mypy.overrides]] for frontmatter
+    - ruff check to verify E501 drop in llm/
+
+Phase 3 (90–120 min): manual ruff fixes
+    - Batch A: standalone/leaf files (chunked_processor, ui, scanner, extractors)
+    - Batch B: core/database.py E501 + B905 + E741
+    - Batch C: dependents (classifiers, analyzers, generators)
+    - Batch D: cli.py (45 E501s, B006, B023, B904) and llm/rewriter.py (E402)
+    - Test gate after each batch
+
+Phase 4 (60–90 min): mypy fixes
+    - Same leaf-first order
+    - database.py cast(Table, ...) — 8 union-attr errors cleared
+    - chunked_processor.py nested function annotations — 12 errors cleared
+    - Remaining 1-error files (quick wins first): ingest/chunker.py, utils/ui.py,
+      analyzers/shape.py, extractors/__init__.py, extractors/markdown.py
+    - llm/ollama_client.py (1 error — cast)
+    - llm/rewriter.py (7 errors — most complex, save for last)
+    - Test gate + mypy gate after each file
+
+Phase 5 (10 min): final validation
+    - uv run ruff check . (must show 0 errors)
+    - uv run mypy src/ (must show 0 errors)
+    - uv run pytest -v (must show 281 green)
+```
+
+**Total estimated effort:** 3.5–4.5 hours of focused work.
+
+**Highest risk items:**
+1. `cli.py` B006 mutable default fix — functional change, test immediately
+2. `llm/rewriter.py` operator/attr-defined errors — legacy code with architectural smells
+3. `extractors/__init__.py` abstract class error — may require understanding test fixture setup
 
 ---
 
 ## Sources
 
-- sqlite-vec RRF and hybrid search examples (HIGH confidence): https://github.com/asg017/sqlite-vec/blob/main/examples/nbc-headlines/3_search.ipynb
-- Elastic hybrid search guide (MEDIUM confidence — cloud system, but fusion patterns apply): https://www.elastic.co/what-is/hybrid-search
-- MCP Tools specification 2025-06-18 (HIGH confidence): https://modelcontextprotocol.io/specification/2025-06-18/server/tools
-- FastMCP documentation (HIGH confidence): https://github.com/jlowin/fastmcp
-- Hypermode embedding pipeline guide (MEDIUM confidence): https://hypermode.com/blog/build-embedding-pipelines-for-ai-retrieval
-- CocoIndex incremental indexing architecture (MEDIUM confidence): https://medium.com/@cocoindex.io/building-intelligent-codebase-indexing-with-cocoindex-a-deep-dive-into-semantic-code-search-e93ae28519c5
+- Live `uv run mypy src/` output — 42 errors in 9 files (HIGH confidence)
+- Live `uv run ruff check . --statistics` output — 529 errors, 382 auto-fixable (HIGH confidence)
+- sqlite-utils source: `Database.__getitem__` returns `Union[Table, View]` — confirmed via
+  runtime `inspect.signature()` (HIGH confidence)
+- sqlite-utils `Table.insert`, `.update`, `.delete_where` — confirmed via runtime inspection,
+  all exist on `Table` but not `View` (HIGH confidence)
+- Ruff documentation: `per-file-ignores` syntax, no per-file line-length support
+  (MEDIUM confidence — derived from ruff docs structure; ruff does not document per-file
+  line-length as a feature)
+- pyproject.toml `[[tool.mypy.overrides]]` for `ignore_missing_imports`
+  (HIGH confidence — standard mypy pattern)
 
 ---
-*Architecture research for: local semantic search engine for AI agent libraries (Corpus)*
-*Researched: 2026-02-23*
+
+*Architecture research for: v1.3 code quality milestone — mypy + ruff zero-error baseline*
+*Researched: 2026-02-24*

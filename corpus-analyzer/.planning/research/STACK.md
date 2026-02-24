@@ -1,208 +1,247 @@
 # Stack Research
 
-**Domain:** Local semantic search engine (Python, embedded, no server)
-**Researched:** 2026-02-23
-**Confidence:** HIGH (all critical choices verified via Context7, official docs, or live PyPI)
+**Domain:** Code quality tooling — zero-error mypy + ruff baseline for existing Python codebase
+**Researched:** 2026-02-24
+**Confidence:** HIGH (all findings verified against installed packages, official docs, and live tool output)
+
+---
+
+## Context: v1.3 Linting Baseline
+
+This research covers only what is NEW or CHANGED for v1.3. The core application stack (LanceDB,
+FastMCP, Typer, Pydantic, SQLite graph store) is validated and unchanged. The goal is: `uv run ruff
+check .` and `uv run mypy src/` both pass with zero errors.
+
+**Current state (verified by running tools against the codebase):**
+- mypy: 42 errors across 9 files
+- ruff: 396 errors across src/ (270 auto-fixable, 126 manual)
+- ruff has a separate 93 E501 violations in src/ (15 in llm/, 78 elsewhere)
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies
+### Core Technologies (existing — no version changes needed)
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Python | 3.12 | Runtime | Already in use; asyncio support needed for MCP server |
-| uv | latest | Package manager | Already in use; mandatory per project constraints |
-| LanceDB | 0.29.x | Vector store + hybrid search | Embedded (no server), built-in BM25 FTS via tantivy, built-in RRF reranker, native Python + Arrow; designed as "SQLite for AI" |
-| mcp | 1.26.x | MCP server (FastMCP) | Official Anthropic Python SDK; FastMCP became part of this package in v1.x; FastMCP 2.0 builds on top |
-| bm25s | 0.3.x | Standalone BM25 (if needed outside LanceDB) | Pure Python + scipy/numpy, 500x faster than rank-bm25, no native dependencies, handles in-memory index |
-| sentence-transformers | 5.2.x | Local embedding generation (non-Ollama path) | Official SBERT library; all-MiniLM-L6-v2 runs fast on CPU; static embedding variants 100-400x faster still |
+| mypy | 1.19.1 (installed) | Static type checking | Already configured with `--strict`; current version; no upgrade needed |
+| ruff | 0.14.13 (installed) | Lint + format | Already configured; current version; no upgrade needed |
+| uv | latest | Package manager | Manages dev dependencies including mypy extras |
 
-### Supporting Libraries
+### Type Stubs — What is Needed
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| tantivy | 0.25.x | BM25/FTS index (LanceDB dependency) | Automatically pulled in by LanceDB FTS; install explicitly to pin version |
-| openai | 1.109.x | OpenAI embeddings provider | When user configures `text-embedding-3-small` or `text-embedding-3-large` as provider |
-| httpx | 0.27.x | HTTP client | Already transitive dep via ollama; used for Ollama embed API calls |
-| pyarrow | latest | Arrow in-memory tables | Transitive via LanceDB; needed for data interchange |
-| pydantic | 2.6.x | Embedding provider config models | Already in use; models for provider config (OllamaProvider, OpenAIProvider) |
+| Library | Stub Status | Action Required | Confidence |
+|---------|------------|-----------------|------------|
+| `sqlite-utils 3.39` | Has `py.typed` marker (confirmed in `.venv`) | None — mypy reads types natively | HIGH |
+| `python-frontmatter 1.1.0` | No `py.typed`, no stubs on PyPI | Add `# type: ignore[import-untyped]` to the import line, OR add mypy override | HIGH |
+| `lancedb 0.29.2` | Has `_lancedb.pyi` stub file (confirmed in `.venv`) | None — mypy resolves types natively | HIGH |
+| `fastmcp 3.0.2` | Has `py.typed` marker (confirmed in `.venv`) | None — mypy reads types natively | HIGH |
+| `ollama 0.6.1` | Has `py.typed` marker (confirmed in `.venv`) | None — mypy reads types natively | HIGH |
+| `typer 0.21.1` | Ships `py.typed` (well-typed library) | None | HIGH |
+| `pydantic 2.x` | Ships `py.typed` (fully typed) | None | HIGH |
 
-### Development Tools
+**Summary:** Only `python-frontmatter` requires any stub action. No stub packages need to be
+installed. Do NOT install `types-*` stubs for libraries that already ship `py.typed` — doing so
+causes conflicts and duplicate type information.
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| ruff | Lint + format | Already configured; line length 100 |
-| mypy --strict | Type checking | Already configured |
-| pytest | Test runner | Already configured |
-| pytest-cov | Coverage | Already configured |
+### pyproject.toml Config Changes Required
+
+#### 1. mypy: Per-module override for python-frontmatter
+
+The `frontmatter` package does not ship type annotations. The one import in
+`extractors/markdown.py` triggers `[import-untyped]`. Use a mypy override rather than an inline
+`# type: ignore` to keep the source file clean:
+
+```toml
+[[tool.mypy.overrides]]
+module = ["frontmatter"]
+ignore_missing_imports = true
+```
+
+This is the correct approach per mypy docs. The `module` key names the imported package
+(`frontmatter`), not the file containing the import.
+
+#### 2. mypy: Override for llm/ module (legacy untyped code)
+
+The `llm/` module has legacy code with missing type annotations (no-untyped-def, no-untyped-call).
+These require code fixes, not config. However, if any functions in `llm/chunked_processor.py` or
+`llm/rewriter.py` are internal helpers that cannot be cleanly typed (e.g., nested functions), use
+inline `# type: ignore[no-untyped-def]` on those specific lines rather than a blanket module
+override. Blanket overrides for entire modules hide real errors in new code.
+
+#### 3. ruff: E501 handling for llm/ module
+
+Ruff does NOT support per-file line-length settings. The only per-file mechanism is
+`per-file-ignores` in `[tool.ruff.lint]`, which suppresses specific rule codes for file
+patterns. The correct approach for `llm/` files with long prompt strings is:
+
+```toml
+[tool.ruff.lint.per-file-ignores]
+"src/corpus_analyzer/llm/*.py" = ["E501"]
+```
+
+This ignores E501 (line-too-long) only for `llm/` files. All other rules still apply.
+
+**Why not set `line-length = 120` in ruff?** There is no per-file line-length config in ruff
+(verified with official docs). A global increase to 120 would mask real style drift in new code.
+Suppressing E501 in `llm/` is more surgical and better reflects that these are legacy prompt
+strings, not production code style.
+
+**E501 violations in non-llm/ files (78 violations):** These are in `cli.py` (45),
+`classifiers/document_type.py` (11), `generators/advanced_rewriter.py` (9), and others. These
+must be manually fixed by breaking long lines — they cannot be ignored without degrading style
+enforcement on the active codebase.
+
+#### 4. ruff: Exclude .windsurf/ and other non-project directories
+
+If ruff is currently checking files outside `src/` (e.g., `.windsurf/skills/`), add an exclude:
+
+```toml
+[tool.ruff]
+exclude = [".windsurf", ".planning", "*.windsurf"]
+```
+
+The current `ruff check .` run surfaces violations in `.windsurf/skills/api-design-principles/`.
+These are not project code. Excluding them keeps CI output clean and focused on `src/`.
+
+### mypy Error Categories and Required Fixes
+
+All 42 mypy errors require code changes (not config). Here is the breakdown with fix strategy:
+
+| Error Type | Count | Files | Fix |
+|-----------|-------|-------|-----|
+| `[union-attr]` — `db["table"]` returns `Table \| View` | 7 | `core/database.py` | Cast: `cast(Table, self.db["tablename"])` after importing `from sqlite_utils.db import Table` and `from typing import cast` |
+| `[no-any-return]` — returning `Any` from typed function | 6 | `core/database.py`, `llm/ollama_client.py` | Add explicit return type cast or assert |
+| `[type-arg]` — missing type params on `dict`/`list` | 6 | `core/database.py`, `extractors/markdown.py`, `analyzers/shape.py` | Change `dict` → `dict[str, Any]`, `list` → `list[str]` etc. |
+| `[no-untyped-def]` — missing annotations | 5 | `llm/chunked_processor.py`, `utils/ui.py`, `llm/rewriter.py` | Add full type annotations to affected functions |
+| `[no-untyped-call]` — calling untyped function | 8 | `llm/chunked_processor.py` | Fix by annotating `finalize_atom`, `chain_lines`, `get_chunk_text` |
+| `[import-untyped]` — frontmatter has no stubs | 1 | `extractors/markdown.py` | mypy override (see config above) |
+| `[abstract]` — instantiating abstract class | 1 | `extractors/__init__.py` | Fix BaseExtractor instantiation |
+| `[operator]` — bad tuple + str operation | 1 | `llm/rewriter.py` | Fix type mismatch |
+| `[attr-defined]` — OllamaClient has no .db | 1 | `llm/rewriter.py` | Fix incorrect attribute access |
+| `[var-annotated]` — untyped variable | 1 | `ingest/chunker.py` | Add type annotation |
+| `[arg-type]` — float() arg type mismatch | 2 | `core/database.py` | Cast or guard with `assert` |
+
+**The `[union-attr]` errors in database.py** are all caused by `sqlite_utils.Database.__getitem__`
+returning `Table | View`. The fix is to cast the result to `Table`:
+
+```python
+from sqlite_utils.db import Table
+from typing import cast
+
+cast(Table, self.db["documents"]).update(doc_id, data, alter=True)
+```
+
+Or use a helper property that casts once per table.
 
 ---
 
-## Installation
+## Installation Changes
 
-```bash
-# Vector store + hybrid search (pulls tantivy transitively)
-uv add "lancedb>=0.29.0"
-uv add "tantivy>=0.25.0"  # pin explicitly to avoid breakage
+No new packages required. All needed type stubs either ship with existing packages or are handled
+via config. The only `pyproject.toml` dev dependency change is ensuring mypy version is current:
 
-# MCP server (includes FastMCP)
-uv add "mcp>=1.26.0"
-
-# Embedding providers
-uv add "sentence-transformers>=5.2.0"  # local non-Ollama path
-uv add "openai>=1.109.0"               # optional, for OpenAI embedding provider
-
-# BM25 standalone (only if doing search outside LanceDB)
-uv add "bm25s>=0.3.0"
+```toml
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+    "mypy>=1.9.0",
+]
 ```
+
+Current installed versions (mypy 1.19.1, ruff 0.14.13) are both current as of 2026-02-24. No
+version bumps needed.
+
+**Do NOT install:**
+- `types-python-frontmatter` — does not exist on PyPI (verified)
+- `types-sqlite-utils` — does not exist on PyPI; sqlite-utils ships `py.typed` natively
+- Any other `types-*` stub package for this project's dependencies — all other deps are typed
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| LanceDB | ChromaDB 1.5.x | ChromaDB's embedded (persistent) mode works but its FTS is not built-in — you'd add a separate BM25 library and wire them manually. LanceDB ships hybrid search natively with RRF. ChromaDB also has a history of breaking API changes between versions. Use ChromaDB if you need a simpler collection/document API without joining on row IDs. |
-| LanceDB | sqlite-vec 0.1.x | sqlite-vec stores and queries vectors inside SQLite — perfect fit with the existing sqlite-utils stack. BUT: no built-in BM25/FTS (you'd wire rank_bm25 or bm25s separately), no built-in hybrid search or reranking, and the library is still alpha (v0.1.6). Choose sqlite-vec only if you want zero new storage backends and can implement hybrid fusion yourself. |
-| LanceDB | hnswlib | hnswlib is an in-memory HNSW index library only. No persistence, no FTS, no hybrid search. You'd need to serialize/deserialize yourself. Not suitable unless ultra-low latency ANN on a fixed in-memory corpus is the only requirement. |
-| LanceDB | Faiss | Same story as hnswlib: index only, no persistence layer, no FTS. Faiss requires a C++ build toolchain and has non-trivial Python packaging. Overkill for a local corpus of <1M docs. |
-| bm25s | rank-bm25 | rank-bm25 is a pure Python BM25 with no sparse matrix optimisation; 500x slower than bm25s at query time. Fine for <10K docs; unacceptable for larger corpora. |
-| bm25s | whoosh | Whoosh is unmaintained (last release 2013-era, no Python 3.12 guarantee). Avoid. |
-| mcp (FastMCP) | Building raw MCP protocol by hand | FastMCP provides decorator-based registration identical to Flask/FastAPI; the underlying low-level SDK handles JSON-RPC lifecycle. No reason to build raw. |
-| sentence-transformers | Cohere embed API | Cohere requires network access — violates offline-first constraint for default config. Make it an optional provider, not the default. |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| mypy `[[overrides]]` for frontmatter | Inline `# type: ignore[import-untyped]` | Use inline if the import is in only one place and the override feels heavy; either is valid |
+| `per-file-ignores = ["E501"]` for llm/ | Rewrite all long prompt strings to wrap at 100 chars | Acceptable if you want strict consistency; but multi-line f-strings for LLM prompts are harder to read when force-wrapped |
+| Cast to `Table` explicitly | Per-method `# type: ignore[union-attr]` on each db call | Use inline ignores only if cast is impractical (e.g., dynamic table name); cast is cleaner |
+| Exclude `.windsurf/` via ruff config | Run `ruff check src/` instead of `ruff check .` | Running on `src/` only works but IDE tooling usually runs on `.`; config exclude is more robust |
 
 ---
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| whoosh | Unmaintained since ~2013; no support for Python 3.12+ ecosystem; BM25 implementation is suboptimal | bm25s (in-memory) or LanceDB FTS (persistent) |
-| rank-bm25 | 500x slower than bm25s on large corpora; no sparse matrix storage; blocks query path | bm25s |
-| sqlite-vss | Superseded by sqlite-vec by the same author; archived/not maintained | sqlite-vec (if you want SQLite-only vector search) |
-| Faiss (standalone) | Complex C++ build; no persistence; no FTS; significant binary size | LanceDB (wraps efficient vector search with full data lifecycle) |
-| hnswlib (standalone) | Memory-only; no persistence; no FTS; manual save/load | LanceDB |
-| ChromaDB for hybrid search | No native BM25; hybrid requires external library + manual fusion; API instability history | LanceDB |
-| fastembed (as default) | Good library but adds another embedding runtime alongside Ollama already present; redundant | sentence-transformers (for local non-Ollama) or Ollama directly |
+| `mypy --ignore-missing-imports` globally | Hides real import errors across entire codebase; defeats purpose of strict mode | `[[tool.mypy.overrides]]` per-module |
+| `disallow_untyped_defs = false` in mypy overrides for llm/ | Hides future type errors in new code added to llm/ | Fix the specific untyped functions individually |
+| Global `ignore = ["E501"]` in ruff | Turns off line-length checking for all new code | `per-file-ignores` scoped to `llm/` only |
+| `types-*` stub packages for typed libraries | Conflicts with `py.typed` in the library itself; mypy warns about duplicate stubs | Nothing — let mypy use the library's own types |
+| Upgrading mypy or ruff versions as part of this milestone | Risk of new errors being introduced; current versions already surface all 42 errors | Pin current versions; upgrade is a separate milestone |
 
 ---
 
-## Stack Patterns by Variant
+## Pyproject.toml Target State
 
-**If user is fully offline (default, Ollama-only):**
-- Use `ollama.embed()` (via existing ollama==0.6.x dep) with `nomic-embed-text` or `mxbai-embed-large`
-- Store vectors in LanceDB
-- LanceDB FTS handles BM25 via tantivy
-- Because: zero new network dependencies, works day-1 without cloud accounts
+Complete `[tool.mypy]` and `[tool.ruff]` sections after v1.3:
 
-**If user wants higher quality embeddings (cloud provider):**
-- Add `openai>=1.109.0` as optional dep
-- Default to `text-embedding-3-small` (1536-dim, fast, cheap)
-- Provide `text-embedding-3-large` as upgrade option
-- Because: best MTEB benchmark scores for English retrieval at reasonable cost
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+exclude = [".windsurf", ".planning"]
 
-**If user wants local embeddings without Ollama:**
-- `sentence-transformers>=5.2.0` with `all-MiniLM-L6-v2` (384-dim, fast on CPU)
-- Or `static-retrieval-mrl-en-v1` for 100-400x faster CPU inference at 85% quality
-- Because: no Ollama server required; runs in-process
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 
-**For MCP server (Claude Code integration):**
-- Use `mcp>=1.26.0` with FastMCP
-- Transport: stdio for local (Claude Code default); streamable-http for remote
-- Register `search` as an MCP tool with structured input/output
-- Because: FastMCP is now part of the official SDK (no separate package needed); Claude Code expects stdio transport for local tools
+[tool.ruff.lint.per-file-ignores]
+"src/corpus_analyzer/llm/*.py" = ["E501"]
 
-**For hybrid search ranking:**
-- Use LanceDB's built-in `RRFReranker` (Reciprocal Rank Fusion, k=60 default)
-- Formula: `score = sum(1 / (k + rank))` across vector and FTS result lists
-- Because: RRF requires no score normalization, no tuning, works well out of the box; LanceDB implements it natively so no manual merge code needed
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
 
----
-
-## Embedding Provider Architecture Pattern
-
-Design a pluggable provider interface using a Protocol/ABC:
-
-```python
-from typing import Protocol
-import numpy as np
-
-class EmbeddingProvider(Protocol):
-    """Pluggable embedding provider interface."""
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts, returning float vectors."""
-        ...
-
-    @property
-    def dimensions(self) -> int:
-        """Vector dimension for this provider."""
-        ...
-```
-
-Concrete providers:
-- `OllamaEmbeddingProvider` — calls `ollama.embed(model=..., input=texts)` via existing ollama dep
-- `OpenAIEmbeddingProvider` — calls `openai.embeddings.create(model=..., input=texts)`
-- `SentenceTransformerProvider` — wraps `SentenceTransformer(model_name).encode(texts)`
-
-Configure via Pydantic Settings:
-```
-CORPUS_EMBEDDING_PROVIDER=ollama         # or: openai, sentence-transformers
-CORPUS_EMBEDDING_MODEL=nomic-embed-text  # provider-specific model name
-CORPUS_OLLAMA_HOST=http://localhost:11434
-CORPUS_OPENAI_API_KEY=...               # only needed when provider=openai
+[[tool.mypy.overrides]]
+module = ["frontmatter"]
+ignore_missing_imports = true
 ```
 
 ---
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| lancedb>=0.29.0 | tantivy>=0.22.0 | LanceDB docs pin tantivy==0.20.1 for older versions; test with 0.25.x and pin if issues arise |
-| lancedb>=0.29.0 | pyarrow>=14.0 | LanceDB requires Arrow; transitive but must not conflict with other Arrow consumers |
-| mcp>=1.26.0 | Python>=3.10 | FastMCP uses asyncio features available in 3.10+; 3.12 is fine |
-| sentence-transformers>=5.2.0 | torch>=2.0 | Pulls in PyTorch; large binary (~1GB); add as optional dependency group |
-| bm25s>=0.3.0 | numpy>=1.24, scipy>=1.10 | Pure Python; no native code; no known conflicts |
-| ollama>=0.6.1 | httpx>=0.25 | Already pinned in project; embed() added in ~0.4.x |
-
----
-
-## Recommended Embedding Models
-
-| Provider | Model | Dimensions | Notes |
-|----------|-------|-----------|-------|
-| Ollama (default) | `nomic-embed-text` | 768 | Outperforms OpenAI ada-002; fast; recommended default |
-| Ollama (quality) | `mxbai-embed-large` | 1024 | Better on context-heavy queries; slower |
-| OpenAI | `text-embedding-3-small` | 1536 | Best price/performance; ~$0.02/1M tokens |
-| OpenAI (quality) | `text-embedding-3-large` | 3072 | Highest quality; ~$0.13/1M tokens |
-| sentence-transformers | `all-MiniLM-L6-v2` | 384 | Fast CPU; good for dev/CI with no Ollama |
-| sentence-transformers | `static-retrieval-mrl-en-v1` | 1024 | 100-400x faster than MiniLM on CPU; 85% quality |
+| Package | Installed | Status | Notes |
+|---------|-----------|--------|-------|
+| mypy | 1.19.1 | Current | No upgrade needed |
+| ruff | 0.14.13 | Current | No upgrade needed |
+| sqlite-utils | 3.39 | Current, has `py.typed` | `[union-attr]` errors are code issues, not missing stubs |
+| python-frontmatter | 1.1.0 | Current, no stubs | Handle via mypy override |
+| lancedb | 0.29.2 | Has `_lancedb.pyi` | No stub action needed |
+| fastmcp | 3.0.2 | Has `py.typed` | No stub action needed |
+| ollama | 0.6.1 | Has `py.typed` | No stub action needed |
 
 ---
 
 ## Sources
 
-- `/lancedb/lancedb` (Context7, HIGH) — hybrid search, FTS, RRF reranker, sentence-transformer integration verified
-- `/asg017/sqlite-vec` (Context7, HIGH) — installation, KNN API, alpha status confirmed
-- `/modelcontextprotocol/python-sdk` (Context7, HIGH) — FastMCP API, transports, stdio integration verified
-- `/chroma-core/chroma` (Context7, HIGH) — PersistentClient mode, embedding functions verified
-- https://pypi.org/project/lancedb/ — v0.29.2 confirmed as latest (HIGH)
-- https://pypi.org/project/mcp/ — v1.26.0 confirmed as latest (HIGH)
-- https://pypi.org/project/bm25s/ — v0.3.0 confirmed as latest (HIGH)
-- https://pypi.org/project/sentence-transformers/ — v5.2.3 confirmed as latest (HIGH)
-- https://pypi.org/project/sqlite-vec/ — v0.1.6 confirmed as latest; alpha status (HIGH)
-- https://pypi.org/project/tantivy/ — v0.25.1 confirmed as latest (HIGH)
-- https://github.com/lancedb/lancedb/blob/main/docs/src/fts_tantivy.md — tantivy dependency for LanceDB FTS confirmed (MEDIUM, GitHub source)
-- https://gofastmcp.com/integrations/claude-code — stdio transport for Claude Code confirmed (MEDIUM, official FastMCP site)
-- https://ollama.com/blog/embedding-models — nomic-embed-text, mxbai-embed-large models confirmed (HIGH, official Ollama)
-- https://huggingface.co/blog/xhluca/bm25s — BM25S performance claims (500x vs rank-bm25) (MEDIUM, HuggingFace blog)
-- https://bm25s.github.io/ — bm25s capabilities (MEDIUM, project site)
-- https://www.sbert.net/ — sentence-transformers models and CPU performance (HIGH, official SBERT docs)
+- Live tool output: `uv run mypy src/` — 42 errors in 9 files (HIGH, direct measurement)
+- Live tool output: `uv run ruff check src/` — 396 errors, 270 auto-fixable (HIGH, direct measurement)
+- Installed package inspection: `.venv/lib/python3.12/site-packages/` — confirmed `py.typed` presence in sqlite_utils, fastmcp, ollama; confirmed `_lancedb.pyi` in lancedb; confirmed absence in frontmatter (HIGH)
+- PyPI check: `types-python-frontmatter` — package does not exist (HIGH, verified via uv pip install --dry-run)
+- PyPI check: `types-sqlite-utils` — package does not exist; sqlite-utils ships own types (HIGH, verified)
+- https://github.com/simonw/sqlite-utils/issues/331 — py.typed added to sqlite-utils; resolves mypy import errors (HIGH)
+- https://docs.astral.sh/ruff/settings/#lint_per-file-ignores — per-file-ignores syntax; confirmed no per-file line-length setting exists (HIGH)
+- https://mypy.readthedocs.io/en/stable/config_file.html — `[[tool.mypy.overrides]]` TOML syntax confirmed (HIGH)
+- sqlite_utils source: `.venv/.../sqlite_utils/db.py:425` — `__getitem__` returns `Union["Table", "View"]`; confirms cast strategy (HIGH)
 
 ---
 
-*Stack research for: Corpus — local semantic search engine for AI agent libraries*
-*Researched: 2026-02-23*
+*Stack research for: Corpus v1.3 — zero-error mypy + ruff linting baseline*
+*Researched: 2026-02-24*

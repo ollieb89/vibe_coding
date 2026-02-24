@@ -1,156 +1,285 @@
 # Pitfalls Research
 
-**Domain:** Local semantic search engine for AI agent libraries (hybrid vector + BM25, MCP server, Python API)
-**Researched:** 2026-02-23
-**Confidence:** HIGH (embedding/BM25 fusion, SQLite concurrency) | MEDIUM (MCP lifecycle, chunking) | LOW (sqlite-vec ANN specifics)
+**Domain:** Adding strict mypy + ruff compliance to an existing Python codebase (v1.3 code quality milestone)
+**Researched:** 2026-02-24
+**Confidence:** HIGH (verified against actual codebase errors and tool behavior)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Embedding Model Mismatch Between Index and Query Time
+### Pitfall 1: B006 Fix Breaks Typer List Defaults
 
 **What goes wrong:**
-If the embedding model used to index documents differs from the model used at query time — whether due to a config change, a model update, or provider swap (Ollama local vs OpenAI) — the vector space is semantically incompatible. The cosine similarities returned become meaningless. The index appears to work (no crash) but returns irrelevant results consistently. This is a silent failure.
+Ruff flags `B006` on Typer CLI commands that use list literals as default argument values. The auto-fix suggestion ("Replace with `None`; initialize within function") changes CLI behavior: the `--help` output loses the default value display, and the type annotation must change from `list[str]` to `list[str] | None`, forcing callers to handle `None` explicitly. If the function body doesn't guard for `None`, it crashes at runtime.
+
+**The actual violation in this codebase (`cli.py` lines 60-61):**
+```python
+include: Annotated[list[str], typer.Option("--include")] = ["**/*"],
+exclude: Annotated[list[str], typer.Option("--exclude")] = [],
+```
+Ruff says: "Replace with `None`; initialize within function." But Typer reads the default value to populate `--help` output. Switching to `None` removes the default display.
 
 **Why it happens:**
-The model used for indexing is not stored alongside the index. Developers change the model in config (e.g., switch from `all-minilm` to `nomic-embed-text`) without rebuilding the index, not realizing the vector spaces are incompatible. Dimension mismatches at least throw an error (`Index query vector has 1024 dimensions, but indexed vectors have 384`); same-dimension-different-model mismatches silently degrade quality.
+B006 is correct for general Python (mutable default = shared state bug). But Typer is a special case: it reads the default at function-definition time for metadata purposes (help text, type inference), and Typer's `Option` and `Argument` wrappers handle the actual call-time default correctly — the mutable default is read once at parse time, not mutated.
 
 **How to avoid:**
-- Store the embedding model name AND its version in the database at index creation time (e.g., in a `corpus_meta` table).
-- On every query, check the stored model against the current configured model and raise an error if they differ.
-- Provide an explicit `corpus reindex --force` command; never allow silent re-use of a stale index with a new model.
-- Log which model produced each batch of embeddings at row level in the `documents` table.
+Use `# noqa: B006` on the specific lines, with a comment explaining why:
+```python
+include: Annotated[list[str], typer.Option("--include")] = ["**/*"],  # noqa: B006 — Typer reads default for --help
+exclude: Annotated[list[str], typer.Option("--exclude")] = [],          # noqa: B006 — Typer reads default for --help
+```
+Alternative: use `per-file-ignores` in `pyproject.toml` for `cli.py`:
+```toml
+[tool.ruff.lint.per-file-ignores]
+"src/corpus_analyzer/cli.py" = ["B006"]
+```
+Do NOT apply the naive fix of replacing with `None` — this requires changing the type annotation, adding a guard `if include is None: include = ["**/*"]`, and the `--help` output no longer shows the default. Verified: Typer renders `["**/*"]` in `--help` when the list literal is the default; it renders nothing useful when `None` is the default.
 
 **Warning signs:**
-- All queries return the same set of "vaguely similar" documents regardless of query content.
-- Search results include documents with no apparent relevance to query terms.
-- Similarity scores cluster tightly (e.g., all between 0.45 and 0.55) — this indicates the vectors live in different spaces.
-- Dimension mismatch error on first query after changing config.
+- Ruff suggests "Replace with `None`; initialize within function" on a Typer command parameter.
+- The parameter has type `list[str]` (not `list[str] | None`).
 
 **Phase to address:**
-Phase 1 (Embedding pipeline) — the model-name storage and validation must be designed in before any indexing code is written. Retrofitting this is painful.
+Phase 1 (ruff auto-fix pass) — apply `# noqa: B006` before running `--fix`, or handle these manually after the auto-fix pass.
 
 ---
 
-### Pitfall 2: BM25 + Vector Score Fusion Using Raw Score Combination
+### Pitfall 2: sqlite-utils `Table | View` Union Causes Cascading mypy Errors
 
 **What goes wrong:**
-Directly combining BM25 scores with cosine similarity scores produces broken rankings. BM25 scores are unbounded (can be 0, 10, 100+) while cosine similarity is bounded [0, 1]. The BM25 score dominates, making the vector component irrelevant. The result feels like pure keyword search — exact filename matches always win, semantic similarity is ignored.
+`sqlite_utils.Database.__getitem__` is typed to return `Table | View` (as confirmed from the sqlite-utils source). `View` does not have `delete_where`, `update`, or `insert` methods — only `Table` does. mypy correctly rejects any call to these methods on the `Table | View` union type. This generates 9 errors from `core/database.py` alone, all from `self.db["table_name"].some_method(...)`.
 
 **Why it happens:**
-Score normalization seems like an obvious fix: normalize both to [0, 1] and add. But normalized scores are relative to the current result set, not absolute. If BM25 returns one strong match and nine weak ones, normalization artificially inflates the weak ones. If all vector results are equally mediocre, normalization can't distinguish them.
+sqlite-utils' own type annotations are correct: `db["name"]` can return a View if that name corresponds to a view. The code never creates views, but mypy doesn't know that from the type alone. The pattern `self.db["documents"].insert(...)` is perfectly valid at runtime but fails type checking.
 
 **How to avoid:**
-Use **Reciprocal Rank Fusion (RRF)** instead of score fusion. RRF combines rank positions, not raw scores: `score = 1/(k + rank_bm25) + 1/(k + rank_vector)` where `k=60` is the standard constant. This is stable regardless of score scale, handles empty results on one side gracefully (that side contributes 0), and is the approach used by Weaviate, Qdrant, and OpenSearch in 2025.
+Cast the result to `Table` at the access point. The cleanest approach is a private helper method:
+```python
+from sqlite_utils.db import Table
+
+def _table(self, name: str) -> Table:
+    """Return a Table reference, narrowing away the View union type."""
+    result = self.db[name]
+    assert isinstance(result, Table)  # always true — we never create Views
+    return result
+```
+Then replace `self.db["documents"].insert(...)` with `self._table("documents").insert(...)` throughout. This is cleaner than sprinkling `# type: ignore[union-attr]` on every call site (9 occurrences). The `assert isinstance` is transparent to mypy and costs nothing at runtime for a local tool.
+
+Alternative (if you want zero runtime assertions): use `cast(Table, self.db[name])` from `typing`. This is less safe but avoids the runtime check.
+
+Do NOT use `# type: ignore[union-attr]` on every individual call — this defeats the purpose of type checking and leaves a mess.
 
 **Warning signs:**
-- Exact filename matches always appear at rank 1 regardless of query meaning.
-- Semantic queries ("find authentication helpers") return lexically matching but semantically irrelevant results.
-- Changing vector weight in a linear formula has no visible effect on ranking.
-- All query results are the same as pure BM25 results.
+- Multiple `error: Item "View" of "Table | View" has no attribute X [union-attr]` errors in the same file.
+- All originate from `self.db["tablename"].method(...)` patterns.
 
 **Phase to address:**
-Phase 2 (Hybrid search) — build RRF from day one; never implement raw score combination even as a prototype.
+Phase 2 (mypy fixes — database layer) — address all sqlite-utils union errors together using the helper method pattern.
 
 ---
 
-### Pitfall 3: SQLite "Database is Locked" During Concurrent Index + Query
+### Pitfall 3: `# type: ignore` Over-Use Defeats the Baseline Goal
 
 **What goes wrong:**
-Running `corpus index` in one terminal while querying from the MCP server or CLI in another produces `sqlite3.OperationalError: database is locked`. The indexing process holds a write lock; the query process times out. In WAL mode this is less common for reads-during-writes, but it still occurs if the indexer opens a long write transaction (e.g., batch inserting 10k embeddings in one transaction).
+Under time pressure, developers silence mypy errors with `# type: ignore` comments rather than fixing the underlying issue. The zero-error baseline is achieved numerically but the type safety is gone. Future code that builds on the `# type: ignore`'d function gets no type checking. `mypy --strict` with `warn_unused_ignores = true` (already set in `pyproject.toml`) will flag unnecessary ignores later, but only if the underlying code is fixed — until then, the ignores accumulate silently.
 
 **Why it happens:**
-SQLite with WAL mode allows concurrent reads during writes, but only one writer at a time. If the indexer wraps the entire corpus in a single `BEGIN` transaction (for speed), any other write — including MCP server tool logging or stats writes — is blocked for the duration of the transaction. The default `busy_timeout` is 0ms, meaning queries fail immediately on contention.
+Some mypy errors are genuinely hard to fix (especially `no-any-return` from third-party libraries without stubs). The path of least resistance is `# type: ignore`. A milestone that counts "zero mypy errors" as success creates incentive to suppress rather than fix.
 
 **How to avoid:**
-- Set `PRAGMA busy_timeout = 5000` on all connections (5 seconds). This alone eliminates most production lock errors.
-- Use WAL mode: `PRAGMA journal_mode = WAL`.
-- Break indexing into smaller transactions: commit every 100-500 documents, not every 10,000.
-- Keep the query path read-only; never write stats or logs during a query if they share the indexer's write window.
-- Open separate connections for reading (MCP server) vs writing (indexer) with appropriate timeout settings.
+Establish a hierarchy for resolving mypy errors:
+1. **Fix the code** — add the annotation, narrow the type, add an `isinstance` guard.
+2. **Use a typed alternative** — e.g., `cast()`, a helper method that narrows the type (see sqlite-utils pitfall above).
+3. **Install a stub package** — `pip install types-X` if one exists (check typeshed).
+4. **Add `ignore_missing_imports = true` for a specific module** — better than `# type: ignore` at every call site.
+5. **Use `# type: ignore[specific-code]`** — narrow ignores are better than bare `# type: ignore`.
+6. **Never use bare `# type: ignore`** — always specify the error code.
+
+Track every `# type: ignore` comment added during the pass with a `# TODO: remove when stubs available` annotation.
 
 **Warning signs:**
-- Intermittent `database is locked` errors in logs.
-- MCP tool calls timeout during indexing runs.
-- Indexing jobs fail if the CLI is used simultaneously.
+- More than 2-3 `# type: ignore` comments added per file.
+- Bare `# type: ignore` without an error code.
+- `# type: ignore` on a function return statement (usually indicates `no-any-return` that should be fixed with a cast or annotation).
 
 **Phase to address:**
-Phase 1 (Database setup) — WAL mode and busy_timeout must be set at database initialization. Phase 3 (MCP server) — connection handling strategy must account for concurrent access.
+All phases — establish the hierarchy as a rule before starting. Review all added `# type: ignore` comments in a final pass.
 
 ---
 
-### Pitfall 4: MCP Server Spawned as a New Process Per Call
+### Pitfall 4: `python-frontmatter` Has No Type Stubs — Wrong Fix Applied
 
 **What goes wrong:**
-If the MCP server is configured as a stdio transport and the host (Claude Code) spawns a new process per session, every search tool call incurs: Python startup (~200ms) + Ollama model load (1-10 seconds cold, ~200ms warm) + SQLite open. The first search after a 5-minute idle feels broken — 10+ second response time. Agents time out or retry, producing duplicate results.
+mypy reports `error: Skipping analyzing "frontmatter": module is installed, but missing library stubs or py.typed marker [import-untyped]`. The naive fix is `# type: ignore[import-untyped]` at the import site. This silences the error but leaves the entire `frontmatter` module typed as `Any`, so any attribute access on `frontmatter` objects is untyped. The second option — adding `ignore_missing_imports = true` globally — suppresses the error for all untyped modules, not just frontmatter.
 
 **Why it happens:**
-The MCP Python SDK defaults to stdio transport, which spawns a new process per client session. Developers test with a warm Ollama instance and miss the cold-start penalty. Ollama's default `KEEP_ALIVE` is 5 minutes — after idle, the embedding model unloads from VRAM.
+`python-frontmatter` does not ship a `py.typed` marker and there is no `types-python-frontmatter` stub package on PyPI (verified 2026-02-24). The library is small and its interface is stable, making inline type stubs a viable option.
 
 **How to avoid:**
-- Design the MCP server to be long-lived (persistent process), not per-call.
-- For Claude Code's stdio transport, the server process lives for the duration of the Claude Code session — this is acceptable if startup is fast. Ensure Python startup is fast: lazy-import heavy dependencies (`sqlite_vec`, embedding client) after the server is listening.
-- Set `OLLAMA_KEEP_ALIVE=-1` in the user's environment when Corpus is running; document this requirement prominently.
-- Pre-warm the embedding model at MCP server startup with a no-op embed call so the first real query is fast.
-- Implement a health-check that logs the model load time at startup so users can diagnose slowness.
+Use a `mypy` config section to suppress just this module, not globally:
+```toml
+[[tool.mypy.overrides]]
+module = "frontmatter"
+ignore_missing_imports = true
+```
+This is cleaner than `# type: ignore` at the import line and scoped to only the frontmatter module. In the file that uses frontmatter, annotate the return type explicitly based on known behavior:
+```python
+import frontmatter  # type: ignore[import-untyped]
+post: frontmatter.Post = frontmatter.load(str(file_path))
+```
+Do NOT add `ignore_missing_imports = true` to the global `[tool.mypy]` section — this would suppress errors for all untyped third-party modules.
 
 **Warning signs:**
-- First search after idle takes >5 seconds.
-- Claude Code shows "tool call timed out" intermittently.
-- Search responses are fast sometimes and slow other times (correlates with Ollama model unload cycle).
+- `ignore_missing_imports = true` added globally.
+- Any module other than `frontmatter` getting a bare `# type: ignore[import-untyped]`.
 
 **Phase to address:**
-Phase 3 (MCP server) — startup sequence and warm-up must be designed before the server is written.
+Phase 2 (mypy fixes — extractors) — handle the frontmatter import as a module-level override in `pyproject.toml`.
 
 ---
 
-### Pitfall 5: Code Chunked Like Prose — Splitting at Character Boundaries
+### Pitfall 5: F401 Auto-Fix Removes Re-Exported Symbols from `__init__.py`
 
 **What goes wrong:**
-Using a fixed-size character splitter (e.g., 500 characters with 50-character overlap) on Python and TypeScript files breaks function definitions across chunks. A function's signature lands in chunk N, its body in chunk N+1, its docstring in chunk N-1. Embedding each chunk independently produces fragments that embed poorly and match no real query. A search for "async HTTP request handler" misses the function because no single chunk contains both the signature and the implementation.
+Ruff's `--fix` for F401 removes "unused" imports from `__init__.py` files. But imports in `__init__.py` that are listed in `__all__` are intentional re-exports — they form the public API surface. If ruff removes them, external code doing `from corpus_analyzer.ingest import chunk_file` breaks at runtime with `ImportError`.
+
+**The actual pattern in this codebase:**
+```python
+# ingest/__init__.py — re-exports chunk_file as public API
+from corpus_analyzer.ingest.chunker import chunk_file, chunk_lines, chunk_markdown, chunk_python
+__all__ = ["chunk_file", "chunk_lines", "chunk_markdown", "chunk_python"]
+```
+If nothing in `ingest/__init__.py` itself calls `chunk_file`, ruff F401 sees it as "unused" and removes it.
 
 **Why it happens:**
-Character splitting works well enough for prose/markdown and is the default in most RAG tutorials. Developers reuse the same strategy for code without recognizing that code has structural boundaries (functions, classes, methods) that prose doesn't. The corpus-analyzer codebase already uses Python AST extraction (`symbols`) — this capability exists but isn't wired to chunking.
+Ruff F401 follows the letter of Python's "unused import" rule. It has an exemption: `__all__` mentions suppress F401. But this only works if the import and `__all__` entry are in the same file, and ruff correctly detects the `__all__` reference. In practice, ruff does correctly handle `__all__` — but only if `--fix` is run; the `--select F401` output may still flag them. Verify before auto-fixing.
 
 **How to avoid:**
-- Use **AST-aware chunking** for Python and TypeScript: split at function/class/method boundaries using Python's built-in `ast` module (already used in `extractors/`) and tree-sitter for TypeScript/JavaScript.
-- For Markdown: split at heading boundaries (H2/H3), not character count. The existing markdown extractor already extracts headings — use them as split points.
-- Target ~400-600 tokens per chunk (not characters), since embedding models have token budgets.
-- Prepend context to each chunk: `# file.py\n## ClassName.method_name\n` before the code body. This anchors the embedding in the file/class namespace.
-- Overlap strategy: for code, include the function signature in the previous chunk's tail (not random character overlap).
+Before running `ruff --fix`, audit every F401 in `__init__.py` files manually:
+```bash
+uv run ruff check . --select F401 2>&1 | grep "__init__"
+```
+For any `__init__.py` that has F401 violations, verify whether the import is listed in `__all__`. If it is: the symbol is a re-export; add `# noqa: F401` or verify ruff handles it automatically. If it is not in `__all__` and not used: safe to remove.
+
+The existing `__init__.py` files in this codebase (`ingest/`, `config/`, `llm/`, `analyzers/`, `classifiers/`, `core/`, `extractors/`) all use `__all__` re-exports. Ruff correctly exempts them — but verify after `--fix` that the re-exports are still present and `python -c "from corpus_analyzer.ingest import chunk_file"` still works.
 
 **Warning signs:**
-- Search for a known function name returns no results.
-- Chunks in the database contain half a function definition.
-- Embedding quality improves dramatically when testing with full-function content vs. truncated content.
+- F401 violation on an import that appears in `__all__` in the same file.
+- After `--fix`, `ImportError` when importing from a package-level `__init__.py`.
 
 **Phase to address:**
-Phase 1 (Extraction pipeline extension) — chunking strategy must be defined before any embeddings are generated. Changing chunking strategy requires a full reindex.
+Phase 1 (ruff auto-fix pass) — run F401 audit on `__init__.py` files before applying fixes.
 
 ---
 
-### Pitfall 6: Vector Index Rebuild Required After Chunking Strategy Change
+### Pitfall 6: mypy ABC + `dict.get()` Pattern Produces False "Cannot Instantiate Abstract Class" Error
 
 **What goes wrong:**
-After indexing 50,000 chunks with strategy A (character split), the team decides to switch to strategy B (AST-aware). The metadata and FTS5 index update correctly, but the vector index now contains embeddings computed from different chunk boundaries than the stored chunk text. Results are inconsistent: BM25 returns the correct text chunk, but the vector component returns the old chunk's embedding. The index is silently corrupted.
+`extractors/__init__.py` uses a dict-dispatch pattern:
+```python
+extractors = {
+    ".md": MarkdownExtractor,
+    ".py": PythonExtractor,
+}
+extractor_class = extractors.get(suffix)
+if extractor_class:
+    extractor = extractor_class()  # line 34 — mypy error here
+```
+mypy reports `error: Cannot instantiate abstract class "BaseExtractor" with abstract attribute "extract" [abstract]`. This is a mypy false positive: `MarkdownExtractor` and `PythonExtractor` both implement `extract` — they are not abstract. But mypy infers the dict values as `type[BaseExtractor]` (the common base type) and then refuses to call it because `BaseExtractor` is abstract.
 
 **Why it happens:**
-Incremental indexing adds new vectors for new files, but doesn't detect when existing chunks need re-embedding due to a strategy change. There's no version stored for "how was this chunk created."
+mypy resolves dict value types to their common base. `dict[str, type[MarkdownExtractor] | type[PythonExtractor]]` — the union of these two concrete types is `type[BaseExtractor]` when mypy computes the dict's value type. When `.get()` returns `type[BaseExtractor] | None`, the `if extractor_class:` guard narrows away `None` but leaves `type[BaseExtractor]`, which mypy refuses to instantiate because `BaseExtractor` has abstract methods.
 
 **How to avoid:**
-- Store a `chunk_strategy_version` field in the chunks table. When the strategy changes, bump the version.
-- On index startup, compare the current strategy version against the stored version; if different, require `corpus reindex --force` or trigger an automatic full reindex.
-- Document clearly: **changing chunking strategy requires a full reindex**. Make this prominent in CLI output.
-- Implement `corpus status` that shows: total files indexed, total chunks, embedding model, chunk strategy version, index age.
+The cleanest fix is to annotate the dict explicitly with a concrete type alias:
+```python
+from typing import type
+
+ExtractorType = type[MarkdownExtractor] | type[PythonExtractor]
+extractors: dict[str, ExtractorType] = {
+    ".md": MarkdownExtractor,
+    ".py": PythonExtractor,
+}
+extractor_class: ExtractorType | None = extractors.get(suffix)
+if extractor_class:
+    extractor = extractor_class()  # mypy now knows it's a concrete type
+```
+Alternatively, restructure as a chain of `if/elif` checks — mypy narrows each branch correctly. The `# type: ignore[abstract]` approach works but is a last resort — it silences the error without communicating intent.
 
 **Warning signs:**
-- Search quality degrades after a config change without an obvious reason.
-- BM25 and vector results diverge (one returns relevant chunks, the other doesn't).
-- Chunks in the database have different average lengths than expected.
+- `error: Cannot instantiate abstract class "BaseExtractor" [abstract]` on a line that is actually calling a concrete subclass.
+- The pattern involves a dict with ABC subclasses as values and `.get()` followed by a call.
 
 **Phase to address:**
-Phase 1 (Data model) — version fields must exist in the schema before any indexing occurs. Phase 2 (Incremental indexing) — version comparison logic.
+Phase 2 (mypy fixes — extractors) — fix the dict type annotation before addressing other extractor errors.
+
+---
+
+### Pitfall 7: `no-any-return` from sqlite-utils Row Access
+
+**What goes wrong:**
+sqlite-utils `execute().fetchone()` returns `Any`. When the result is used to return an `int` (e.g., `return self.db.execute("SELECT last_insert_rowid()").fetchone()[0]`), mypy reports `error: Returning Any from function declared to return "int" [no-any-return]`. Suppressing this with `# type: ignore` is tempting but incorrect — the real fix is a cast.
+
+**Why it happens:**
+`sqlite_utils.Database.execute()` returns `sqlite3.Cursor`, and `cursor.fetchone()` returns `tuple[Any, ...] | None`. The `[0]` index gives `Any`. mypy's `no-any-return` rule (part of `--strict`) catches this.
+
+**How to avoid:**
+Use `cast` from `typing` at the return site:
+```python
+from typing import cast
+
+row = self.db.execute("SELECT last_insert_rowid()").fetchone()
+return cast(int, row[0])
+```
+Or add a guard for the `None` case (which can happen if the table is empty):
+```python
+row = self.db.execute("SELECT last_insert_rowid()").fetchone()
+if row is None:
+    raise RuntimeError("Insert failed: no row ID returned")
+return int(row[0])
+```
+The `int(row[0])` call also satisfies mypy because `int()` is typed to return `int` regardless of the argument type (it accepts `Any`). This pattern is already partially used in `database.py` line 318 — extend it consistently.
+
+**Warning signs:**
+- Multiple `Returning Any from function declared to return "int" [no-any-return]` errors in database layer code.
+- `fetchone()[0]` used as a direct return value.
+
+**Phase to address:**
+Phase 2 (mypy fixes — database layer) — address alongside the `union-attr` sqlite-utils errors.
+
+---
+
+### Pitfall 8: Ruff `--fix` on E501 (Line Too Long) Breaks Code
+
+**What goes wrong:**
+E501 is not auto-fixable (confirmed: `[ ]` marker in `ruff --statistics`). If someone manually wraps lines to fix E501, breaking a string literal or a chained method call incorrectly introduces a syntax error or changes the string value.
+
+**Why it happens:**
+E501 requires human judgment to fix — wrapping options depend on whether the content is a string (needs explicit concatenation or parentheses), a function call (needs parentheses around args), a comment (just wrap), or an import (use `(` multiline `)`). Auto-wrapping tools like Black do this correctly, but ruff's formatter (not linter) would need to be enabled.
+
+**Specific risk in this codebase:**
+`cli.py` has Typer-annotated parameters with long lines (the Annotated type + typer.Option + help string together exceed 100 chars frequently — the B006 violation was on line 60 which is 105+ chars). Breaking these lines requires care to keep the `Annotated[...]` and `typer.Option(...)` readable.
+
+**How to avoid:**
+Fix E501 manually, file by file. Use parentheses for implicit string concatenation in long strings, and parentheses around multi-argument function calls. For the `llm/` module: the PROJECT.md specifies a 120-char override — add this to `pyproject.toml` as a per-file override before fixing, to avoid having to re-fix those lines later:
+```toml
+[tool.ruff.lint.per-file-ignores]
+"src/corpus_analyzer/llm/*.py" = ["E501"]
+```
+Or configure a per-directory line length:
+```toml
+[[tool.ruff.per-file-target]]  # not supported — use per-file-ignores E501 instead
+```
+Verify: `ruff` supports `per-file-ignores` for E501. Use `# noqa: E501` on lines in `llm/` that exceed 100 but are within 120 chars.
+
+**Warning signs:**
+- Someone runs `ruff --fix` and E501 count doesn't decrease (correct behavior).
+- Manual line wraps in string literals change the actual string content.
+- 104 E501 violations in total — none in `src/` (all in non-src files based on current output), but the `cli.py` Annotated parameters are close to the limit.
+
+**Phase to address:**
+Phase 1 (ruff auto-fix pass) — set up `llm/` per-file config before any manual E501 fixes begin.
 
 ---
 
@@ -158,12 +287,11 @@ Phase 1 (Data model) — version fields must exist in the schema before any inde
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Fixed-size character chunking for all file types | Fast to implement, works for markdown | Broken code search; requires full reindex to fix | Never for code files; acceptable for markdown-only MVP |
-| Single transaction for entire corpus index | 2-5x faster indexing | Database locked for all queries during indexing | Never; batch-commit every 100-500 documents |
-| No embedding model version stored in DB | Simpler schema | Silent search quality degradation on model change; no way to detect | Never |
-| Linear score combination instead of RRF | Easy math, one line of code | BM25 dominates; vector component wasted | Never |
-| Skipping pre-warm on MCP server startup | Slightly faster startup | First query after idle takes 5-15 seconds; agent timeouts | Only acceptable if Ollama keep-alive is guaranteed configured |
-| No `corpus status` / health command | Save one phase's worth of work | Users can't diagnose stale index, wrong model, or schema issues | Defer past MVP, but add in Phase 2 |
+| Bare `# type: ignore` without error code | Silences mypy instantly | Hides which error was suppressed; `warn_unused_ignores` won't work when code changes | Never — always use `# type: ignore[specific-code]` |
+| Global `ignore_missing_imports = true` in mypy config | Silences all untyped import warnings | Hides future import errors for typed packages; defeats strict mode | Never — use `[[tool.mypy.overrides]]` per module instead |
+| Running `ruff --fix --unsafe-fixes` without reviewing output | Fixes 26 additional violations automatically | Unsafe fixes can change semantics (e.g., `B006` → `None` default breaking Typer) | Never on Typer CLI files; review unsafe fixes one at a time |
+| Using `cast(Any, value)` to silence `no-any-return` | One line instead of a real fix | `Any` propagates; downstream code loses type safety | Never — use `cast(int, value)` with the actual expected type |
+| Adding `# noqa: ALL` to a file | Silences everything in a file | Completely removes linting from that file; future violations go unnoticed | Never — suppress specific rules only |
 
 ---
 
@@ -171,62 +299,33 @@ Phase 1 (Data model) — version fields must exist in the schema before any inde
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Ollama embeddings API | Calling embed one document at a time | Batch embed 32-128 documents per API call; single-call latency is 200-2000ms |
-| Ollama embeddings API | Assuming model is loaded | Pre-warm with a no-op call at startup; set `OLLAMA_KEEP_ALIVE=-1` for search workloads |
-| sqlite-vec | Using brute-force KNN on 500k+ vectors in a single query | sqlite-vec v0.1.x is brute-force only; ANN index support is planned but not stable as of early 2026. Design for a migration path to HNSW when it lands. |
-| SQLite FTS5 | Using default `unicode61` tokenizer for code | Code identifiers with underscores, dots, slashes are poorly tokenized. Use `unicode61 tokenchars "._-/"` to preserve them as single tokens. |
-| SQLite FTS5 BM25 | Calling `bm25()` without understanding sign convention | SQLite FTS5 `bm25()` returns negative values (more negative = more relevant). `ORDER BY bm25(...)` is correct; `ORDER BY bm25(...) DESC` returns worst matches. |
-| OpenAI embeddings API | Not caching embeddings for frequently-queried content | Each API call costs money and adds 200-500ms latency. Cache embeddings at the chunk level. |
-| MCP stdio transport | Importing all dependencies at module load | Python's import time for `numpy`, `sqlite_vec`, `httpx` adds 300-800ms to every process spawn. Use lazy imports. |
+| Typer + ruff B006 | Apply ruff's "Replace with None" suggestion to list defaults in Typer commands | Use `# noqa: B006` with an explanatory comment; Typer needs the list literal for `--help` rendering |
+| Typer + ruff B008 | Apply B008 fix to `typer.Option()` / `typer.Argument()` in function defaults | B008 does not appear in this codebase's `src/` files — the one B008 violation is in `.windsurf/` template files. If it did appear, `typer.Option()` in Annotated defaults is exempt by design |
+| sqlite-utils + mypy | Adding `# type: ignore[union-attr]` to every `self.db["table"].method()` call | Create a `_table(name)` helper that returns `Table` via `assert isinstance` — one fix covers all call sites |
+| python-frontmatter + mypy | Adding global `ignore_missing_imports = true` | Use `[[tool.mypy.overrides]]` scoped to `module = "frontmatter"` only |
+| ruff `--fix` + `__init__.py` | Trusting auto-fix to know re-exports from unused imports | Audit F401 in `__init__.py` files manually before applying fixes; verify `__all__` entries are preserved |
+| mypy strict + Pydantic v2 | Pydantic v2 ships `py.typed` — no stubs needed; errors are real | Pydantic v2 is fully typed; any mypy errors from Pydantic models are real model definition errors, not stub issues |
 
 ---
 
 ## Performance Traps
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Embedding all file types without filtering | Indexing takes hours; index includes `.pyc`, lock files, `node_modules` | Default ignore patterns for binary, generated, and vendor files; show file count estimates before indexing | At 10k+ files in a repo |
-| Re-embedding unchanged files on every `corpus index` run | Reindex takes same time as initial index | Track file mtimes and content hashes; only re-embed files that changed | At 1k+ files |
-| Brute-force KNN on all vectors at query time | Queries take >500ms | sqlite-vec is fast up to ~100k vectors with brute-force; beyond that, plan for ANN or partitioning | At 100k+ chunks |
-| Loading all embeddings into Python memory for fusion | OOM on large corpora | Do vector search inside SQLite; only transfer top-K results to Python for RRF fusion | At 50k+ vectors |
-| No query result caching | Every repeated query hits SQLite + Ollama | Cache query embeddings (keyed on query text + model name) for 5-minute TTL | At >10 queries/minute (agents in loops) |
-| FTS5 index not rebuilt after mass delete/reindex | FTS5 internal b-tree fragmented; query speed degrades | Run `INSERT INTO fts_index(fts_index) VALUES('rebuild')` after bulk deletes | After bulk reindex of >10k documents |
-
----
-
-## Security Mistakes
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| MCP tool accepts arbitrary directory paths without validation | Agent indexes sensitive directories (`.ssh/`, `/etc/`) | Validate all paths against configured `source_dirs` allow-list; reject paths outside configured sources |
-| Storing cloud API keys in the corpus config file | Key exposure in shared repos or agent context | Use environment variables only; never write API keys to `corpus.toml` or the database |
-| MCP tool returns full file content in search snippets | Large file content in agent context windows, potential PII exposure | Return only snippet (200-500 chars around match), file path, and score — never full file content |
-| No rate limiting on MCP search tool | Agent in a loop calls search hundreds of times per second | Add per-session rate limiting: 60 calls/minute; log and return a friendly error on excess |
-
----
-
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Search returns results with no explanation of relevance | Developer doesn't know why a file ranked #1; can't improve query | Include: similarity score, matching snippet with highlighted terms, which classifier tags matched |
-| `corpus index` runs silently for minutes with no progress | Developer assumes it crashed; kills the process mid-index | Show real-time progress: files scanned, files embedded, estimated time remaining |
-| Hybrid search returns 0 results when either BM25 or vector returns 0 | Frustrating; sparse index or new query vocabulary causes complete failure | With RRF, one empty side contributes 0 to the score — it doesn't zero out the other side. Never AND the result sets. |
-| First-run experience requires manual Ollama setup with no guidance | Developer runs `corpus index` and gets a confusing connection error | On startup, check Ollama connectivity and emit a clear error: "Ollama is not running. Start it with: `ollama serve`. Then pull an embedding model: `ollama pull nomic-embed-text`." |
-| No way to tell if index is stale | Developer queries a corpus that hasn't been re-indexed in weeks; misses new files | `corpus status` shows last index time and count of unindexed files (files in source dirs not in DB) |
+Not applicable to a linting compliance pass — no runtime performance concerns.
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Hybrid search:** RRF fusion implemented — verify it produces different rankings than pure BM25. Run a semantic query ("authentication helper") and confirm a semantically-relevant but keyword-mismatched file appears in top 5.
-- [ ] **Embedding model validation:** Change `CORPUS_EMBEDDING_MODEL` config, run a query, confirm an error is raised (not silent bad results).
-- [ ] **Incremental indexing:** Modify one file, run `corpus index`, confirm only that file is re-embedded (check embedding count in DB, not total file count).
-- [ ] **MCP server first query latency:** Start the MCP server, wait 6 minutes (past Ollama keep-alive default), run a search. Measure response time. If >3 seconds, pre-warm is not working.
-- [ ] **SQLite concurrency:** Start `corpus index` on a large directory, then immediately run `corpus search "test"` from another terminal. Confirm no lock error.
-- [ ] **FTS5 BM25 sign convention:** Run `corpus search "test"` and verify results are sorted most-relevant-first (not last).
-- [ ] **Code chunking boundaries:** Index a Python file with multiple functions. Search for a term in the second function's body. Confirm the returned chunk includes the function signature, not just the body.
-- [ ] **Source path validation (MCP):** Call the MCP search tool with a path outside configured sources. Confirm it is rejected, not silently indexed.
+- [ ] **ruff auto-fix run:** After `ruff --fix`, re-run `ruff check .` and confirm count decreased. Auto-fix does not fix all 529 — 147 require manual intervention (`E501`, `B006`, etc.).
+- [ ] **Typer B006 check:** After ruff pass, invoke `corpus add --help` and verify `--include` shows `["**/*"]` as the default, not empty or `None`.
+- [ ] **Re-export check:** After F401 fixes, run `python -c "from corpus_analyzer.ingest import chunk_file, walk_source; from corpus_analyzer.llm import RewriteResult; from corpus import search"` — all imports must succeed.
+- [ ] **sqlite-utils helper:** After database mypy fixes, run `uv run pytest tests/test_database` to confirm all DB operations still work correctly.
+- [ ] **frontmatter override:** After mypy fixes, confirm `[[tool.mypy.overrides]]` for `frontmatter` is in `pyproject.toml` and `uv run mypy src/corpus_analyzer/extractors/` reports zero errors.
+- [ ] **llm/ line-length config:** After per-file config is set, confirm `uv run ruff check src/corpus_analyzer/llm/` reports zero E501 errors (not just suppressed — actually within 120 chars).
+- [ ] **Tests green:** After every batch of fixes, run `uv run pytest -q` and confirm 281 passed.
+- [ ] **mypy zero errors:** Final check: `uv run mypy src/` exits 0 with no output.
+- [ ] **ruff zero violations:** Final check: `uv run ruff check .` exits 0 with no output (or only expected ignores).
+- [ ] **warn_unused_ignores:** After all fixes, any `# type: ignore` added for a problem that no longer exists will be flagged — clean these up.
 
 ---
 
@@ -234,12 +333,12 @@ Phase 1 (Data model) — version fields must exist in the schema before any inde
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Embedding model mismatch discovered after index is built | HIGH — full reindex required | (1) `corpus db clear-embeddings`, (2) update config, (3) `corpus index --force`. Duration: same as initial indexing. |
-| Wrong chunking strategy indexed | HIGH — full reindex required | (1) `corpus db nuke`, (2) update chunk strategy config, (3) `corpus index`. All embeddings regenerated. |
-| SQLite WAL file grown unbounded | MEDIUM | (1) Stop all readers, (2) run `PRAGMA wal_checkpoint(TRUNCATE)`, (3) restart. Preventable with scheduled checkpoints. |
-| BM25 score sign bug causing reversed rankings | LOW | Fix the SQL `ORDER BY` direction. No data migration needed. |
-| FTS5 index corrupted after bulk delete | LOW | `INSERT INTO fts_index(fts_index) VALUES('rebuild')`. Takes 30-60 seconds for 100k documents. |
-| Ollama cold start causing agent timeouts | LOW | Set `OLLAMA_KEEP_ALIVE=-1`, restart Ollama, add pre-warm call to MCP startup. |
+| Typer B006 fix breaks --help defaults | LOW | Revert the change; add `# noqa: B006` to the original line |
+| F401 auto-fix removes re-export from `__init__.py` | LOW | `git diff` to identify removed imports; restore them with `# noqa: F401` |
+| sqlite-utils cast breaks DB insert | LOW | Tests catch immediately; revert the `_table()` helper and use `cast(Table, ...)` instead |
+| Global `ignore_missing_imports = true` added | LOW | Replace with `[[tool.mypy.overrides]]` per module; re-run mypy to surface real errors |
+| `ruff --unsafe-fixes` broke Typer command | LOW | `git diff` to see what changed; revert and apply safe fixes only |
+| Tests break after ruff whitespace fixes (W293/W291) | VERY LOW | Whitespace-only changes cannot break Python tests; if tests break, the cause is elsewhere |
 
 ---
 
@@ -247,35 +346,27 @@ Phase 1 (Data model) — version fields must exist in the schema before any inde
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Embedding model mismatch | Phase 1: Embedding pipeline | Integration test: change model config, assert error on query |
-| BM25/vector raw score fusion | Phase 2: Hybrid search | Unit test: RRF produces different ranking than pure BM25; semantic query returns semantic result in top 5 |
-| SQLite concurrency / database locked | Phase 1: Database setup (WAL + timeout) | Concurrent load test: indexer + query running simultaneously for 30 seconds |
-| MCP server cold start latency | Phase 3: MCP server | Timing test: query after 6-minute idle < 2 seconds with pre-warm |
-| Code chunked at character boundaries | Phase 1: Extraction/chunking | Manual test: search for function body term; returned chunk contains the function signature |
-| Chunk strategy version mismatch | Phase 1: Data model schema | Integration test: change strategy version, assert reindex is required |
-| FTS5 sign convention bug | Phase 2: Hybrid search | Smoke test: `corpus search "common_term"` returns most-matching document first |
-| No progress on long index | Phase 1: CLI UX | Acceptance test: index 500+ files shows progress bar/count |
-| Stale index UX | Phase 2: CLI UX | `corpus status` shows unindexed file count and last index timestamp |
+| B006 breaks Typer list defaults | Phase 1: ruff auto-fix setup | `corpus add --help` shows `["**/*"]` default |
+| sqlite-utils union-attr cascade | Phase 2: mypy — database layer | `uv run mypy src/corpus_analyzer/core/database.py` exits 0 |
+| type: ignore over-use | All phases | Final grep: `grep -r "type: ignore$" src/` returns nothing (all ignores have error codes) |
+| frontmatter missing stubs | Phase 2: mypy — extractors | `[[tool.mypy.overrides]]` in pyproject.toml; `uv run mypy src/corpus_analyzer/extractors/` exits 0 |
+| F401 removes re-exports | Phase 1: ruff auto-fix pass | `python -c "from corpus_analyzer.ingest import chunk_file"` succeeds after fix |
+| ABC dict-dispatch false positive | Phase 2: mypy — extractors | `uv run mypy src/corpus_analyzer/extractors/__init__.py` exits 0 |
+| no-any-return from fetchone()[0] | Phase 2: mypy — database layer | Zero `no-any-return` errors in database.py |
+| E501 manual fix breaks string literals | Phase 1: llm/ per-file config setup | Tests green after all E501 fixes |
 
 ---
 
 ## Sources
 
-- [Common Pitfalls When Using Vector Databases — DagsHub](https://dagshub.com/blog/common-pitfalls-to-avoid-when-using-vector-databases/) — HIGH confidence
-- [Hybrid Search in PostgreSQL: The Missing Manual — ParadeDB](https://www.paradedb.com/blog/hybrid-search-in-postgresql-the-missing-manual) — HIGH confidence
-- [Building Effective Hybrid Search in OpenSearch — OpenSearch blog](https://opensearch.org/blog/building-effective-hybrid-search-in-opensearch-techniques-and-best-practices/) — HIGH confidence
-- [Hybrid Search & Reciprocal Rank Fusion — minimalistinnovation.co](https://www.minimalistinnovation.co/post/hybrid-search-reciprocal-rank-fusion-lexical-semantic) — MEDIUM confidence
-- [sqlite-vec Tracking Issue: ANN Index — GitHub asg017/sqlite-vec #25](https://github.com/asg017/sqlite-vec/issues/25) — HIGH confidence (official issue tracker)
-- [SQLite WAL Concurrency — SQLite official docs](https://sqlite.org/wal.html) — HIGH confidence
-- [SQLite Concurrent Writes and "database is locked" — tenthousandmeters.com](https://tenthousandmeters.com/blog/sqlite-concurrent-writes-and-database-is-locked-errors/) — MEDIUM confidence
-- [Ollama Slow Embeddings — langchain-ai/langchain issue #21870](https://github.com/langchain-ai/langchain/issues/21870) — MEDIUM confidence
-- [Speed Up Ollama: Preloading Models into RAM — Medium](https://medium.com/@rafal.kedziorski/speed-up-ollama-how-i-preload-local-llms-into-ram-for-lightning-fast-ai-experiments-291a832edd48) — MEDIUM confidence
-- [Best Chunking Strategies for RAG — Firecrawl](https://www.firecrawl.dev/blog/best-chunking-strategies-rag-2025) — MEDIUM confidence
-- [AST-Aware Code Chunking — supermemory.ai](https://supermemory.ai/blog/building-code-chunk-ast-aware-code-chunking/) — MEDIUM confidence
-- [MCP Server Slow Startup — Gemini CLI Issue #4544](https://github.com/google-gemini/gemini-cli/issues/4544) — HIGH confidence (direct bug report with measured times)
-- [Why Your MCP Server is Slow — Arsturn](https://www.arsturn.com/blog/mcp-server-performance-issues-and-fixes) — MEDIUM confidence
-- [State of Vector Search in SQLite — Marco Bambini](https://marcobambini.substack.com/p/the-state-of-vector-search-in-sqlite) — MEDIUM confidence
+- Verified directly against the corpus-analyzer codebase: `uv run mypy src/` (42 errors, 9 files) and `uv run ruff check . --statistics` (529 violations) — HIGH confidence
+- Typer list default behavior: verified with `typer.testing.CliRunner` in-repo — HIGH confidence
+- sqlite-utils `__getitem__` return type: verified via `inspect.signature(sqlite_utils.Database.__getitem__).return_annotation` → `Union[Table, View]` — HIGH confidence
+- python-frontmatter py.typed status: verified `ls .venv/lib/python3.12/site-packages/frontmatter/py.typed` → not found — HIGH confidence
+- mypy ABC + dict.get() false positive: documented in mypy issue tracker and confirmed locally — HIGH confidence
+- ruff B006 / Typer interaction: tested with `CliRunner` — `["**/*"]` list default renders correctly in `--help`; `None` default does not — HIGH confidence
+- `warn_unused_ignores = true` already set in `pyproject.toml` — HIGH confidence (read directly from file)
 
 ---
-*Pitfalls research for: local semantic search engine — AI agent library indexing (Corpus)*
-*Researched: 2026-02-23*
+*Pitfalls research for: adding mypy + ruff strict compliance to existing Python codebase (v1.3 code quality milestone)*
+*Researched: 2026-02-24*
