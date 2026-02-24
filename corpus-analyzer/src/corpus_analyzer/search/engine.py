@@ -53,6 +53,7 @@ class CorpusSearch:
         construct_type: str | None = None,
         limit: int = 10,
         sort_by: str = "relevance",
+        min_score: float = 0.0,
     ) -> list[dict[str, Any]]:
         """Run a hybrid BM25+vector query with optional AND-filter chaining.
 
@@ -60,6 +61,10 @@ class CorpusSearch:
             sort_by: Post-retrieval sort order. One of:
                 "relevance" (default, RRF order), "construct" (CONSTRUCT_PRIORITY),
                 "confidence" (descending), "date" (descending), "path" (ascending).
+            min_score: Minimum _relevance_score threshold (inclusive). Results
+                below this score are excluded. Default 0.0 keeps all results
+                (all real RRF scores are positive). RRF scores range approximately
+                0.009–0.033 for K=60. Negative values behave the same as 0.0.
         """
         if sort_by not in _VALID_SORT_VALUES:
             raise ValueError(
@@ -102,6 +107,13 @@ class CorpusSearch:
             for r in results
             if any(term in str(r.get("text", "")).lower() for term in query_terms)
         ]
+
+        # RRF scores range ~0.009–0.033 for K=60; min_score=0.0 is a no-op.
+        if min_score > 0.0:
+            filtered = [
+                r for r in filtered
+                if float(r.get("_relevance_score", 0.0)) >= min_score
+            ]
 
         if sort_by == "construct":
             filtered.sort(
