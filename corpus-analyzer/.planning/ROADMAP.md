@@ -99,10 +99,12 @@ Plans:
   2. `corpus index` completes normally when `tree-sitter` is not installed — `chunk_file()` catches `ImportError` and returns `chunk_lines()` output rather than raising
   3. `uv run ruff check .` exits 0 and `uv run mypy src/` exits 0 after all v1.5 changes
   4. All 293+ existing tests continue to pass alongside the new `TestChunkTypeScript` and updated `TestChunkFile` tests
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 16-01: TBD
+- [ ] 16-01-PLAN.md — TDD RED: add failing tests for size guard + ImportError fallback; fix pre-existing E501
+- [ ] 16-02-PLAN.md — TDD GREEN: restructure ts_chunker.py with lazy imports + size guard + ImportError branch
+- [ ] 16-03-PLAN.md — Validation gate: ruff + mypy + 320 tests + smoke test + update PROJECT.md
 
 ## Progress
 
@@ -122,5 +124,5 @@ Plans:
 | 12. Validation Gate | v1.3 | 1/1 | Complete | 2026-02-24 |
 | 13. Engine Min-Score Filter | v1.4 | 1/1 | Complete | 2026-02-24 |
 | 14. API / MCP / CLI Parity | v1.4 | 2/2 | Complete | 2026-02-24 |
-| 15. Core AST Chunker | 2/2 | Complete    | 2026-02-24 | - |
-| 16. Integration Hardening | v1.5 | 0/? | Not started | - |
+| 15. Core AST Chunker | v1.5 | 2/2 | Complete | 2026-02-24 |
+| 16. Integration Hardening | v1.5 | 0/3 | Not started | - |
