@@ -935,9 +935,7 @@ class TestChunkTypeScriptMethodChunks:
     def test_class_methods_produce_dot_name_chunks(self, tmp_path: Path) -> None:
         """Class with two methods produces ClassName.method_a and ClassName.method_b chunks."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            "class MyClass {\n  method_a(): void {}\n  method_b(): void {}\n}\n"
-        )
+        ts_file.write_text("class MyClass {\n  method_a(): void {}\n  method_b(): void {}\n}\n")
 
         chunks = chunk_typescript(ts_file)
 
@@ -965,9 +963,7 @@ class TestChunkTypeScriptMethodChunks:
     def test_abstract_class_concrete_method_chunked(self, tmp_path: Path) -> None:
         """Concrete method in abstract class produces a per-method chunk."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            'abstract class Base {\n  greet(): string { return "hello"; }\n}\n'
-        )
+        ts_file.write_text('abstract class Base {\n  greet(): string { return "hello"; }\n}\n')
 
         chunks = chunk_typescript(ts_file)
 
@@ -994,9 +990,7 @@ class TestChunkTypeScriptMethodChunks:
     def test_method_chunk_text_contains_method_name(self, tmp_path: Path) -> None:
         """Method chunk text contains the method signature."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            'class MyClass {\n  myMethod(): string { return "x"; }\n}\n'
-        )
+        ts_file.write_text('class MyClass {\n  myMethod(): string { return "x"; }\n}\n')
 
         chunks = chunk_typescript(ts_file)
 
@@ -1030,9 +1024,7 @@ class TestChunkTypeScriptMethodChunks:
     def test_multi_class_file_all_classes_sub_chunked(self, tmp_path: Path) -> None:
         """Two classes in one file both get sub-chunked."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            "class Alpha {\n  run(): void {}\n}\nclass Beta {\n  go(): void {}\n}\n"
-        )
+        ts_file.write_text("class Alpha {\n  run(): void {}\n}\nclass Beta {\n  go(): void {}\n}\n")
 
         chunks = chunk_typescript(ts_file)
 
@@ -1042,9 +1034,7 @@ class TestChunkTypeScriptMethodChunks:
     def test_top_level_function_unaffected(self, tmp_path: Path) -> None:
         """Top-level function in same file still produces its own flat chunk."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            "function helper(): void {}\nclass MyClass {\n  method(): void {}\n}\n"
-        )
+        ts_file.write_text("function helper(): void {}\nclass MyClass {\n  method(): void {}\n}\n")
 
         chunks = chunk_typescript(ts_file)
 
@@ -1063,8 +1053,6 @@ class TestChunkTypeScriptMethodChunks:
     def test_deterministic_output(self, tmp_path: Path) -> None:
         """Calling chunk_typescript() twice on the same file produces identical results."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text(
-            "class MyClass {\n  alpha(): void {}\n  beta(): void {}\n}\n"
-        )
+        ts_file.write_text("class MyClass {\n  alpha(): void {}\n  beta(): void {}\n}\n")
 
         assert chunk_typescript(ts_file) == chunk_typescript(ts_file)

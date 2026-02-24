@@ -21,16 +21,20 @@ _DIALECT: dict[str, str] = {
     ".jsx": "tsx",
 }
 
-_TARGET_TYPES: frozenset[str] = frozenset({
-    "function_declaration",
-    "generator_function_declaration",
-    "class_declaration",
-    "abstract_class_declaration",
-    "interface_declaration",
-    "type_alias_declaration",
-    "lexical_declaration",
-    "enum_declaration",
-})
+_METHOD_NODE_TYPES: frozenset[str] = frozenset({"method_definition", "abstract_method_signature"})
+
+_TARGET_TYPES: frozenset[str] = frozenset(
+    {
+        "function_declaration",
+        "generator_function_declaration",
+        "class_declaration",
+        "abstract_class_declaration",
+        "interface_declaration",
+        "type_alias_declaration",
+        "lexical_declaration",
+        "enum_declaration",
+    }
+)
 
 
 @lru_cache(maxsize=8)
@@ -119,15 +123,10 @@ def _chunk_ts_class(
 
     # Collect direct method children from class_body (no recursion).
     # Both method_definition (concrete) and abstract_method_signature (abstract) produce chunks.
-    _METHOD_NODE_TYPES = frozenset({"method_definition", "abstract_method_signature"})
-    class_body = next(
-        (child for child in node.children if child.type == "class_body"), None
-    )
+    class_body = next((child for child in node.children if child.type == "class_body"), None)
     method_nodes: list[Any] = []
     if class_body is not None:
-        method_nodes = [
-            child for child in class_body.children if child.type in _METHOD_NODE_TYPES
-        ]
+        method_nodes = [child for child in class_body.children if child.type in _METHOD_NODE_TYPES]
 
     chunks: list[dict[str, Any]] = []
 
@@ -137,13 +136,15 @@ def _chunk_ts_class(
         end_line = outer.end_point[0] + 1
         chunk_text = "\n".join(lines[chunk_start_row : outer.end_point[0] + 1]).rstrip()
         if chunk_text:
-            chunks.append({
-                "text": chunk_text,
-                "start_line": start_line,
-                "end_line": end_line,
-                "chunk_name": class_name,
-                "chunk_text": chunk_text,
-            })
+            chunks.append(
+                {
+                    "text": chunk_text,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "chunk_name": class_name,
+                    "chunk_text": chunk_text,
+                }
+            )
         return chunks
 
     # Header chunk: from chunk_start_row up to (but not including) the first method.
@@ -151,13 +152,15 @@ def _chunk_ts_class(
     header_end_row = first_method.start_point[0]  # exclusive — lines up to this row
     header_text = "\n".join(lines[chunk_start_row:header_end_row]).rstrip()
     if header_text:
-        chunks.append({
-            "text": header_text,
-            "start_line": chunk_start_row + 1,
-            "end_line": header_end_row,  # 1-indexed line just before first method
-            "chunk_name": class_name,
-            "chunk_text": header_text,
-        })
+        chunks.append(
+            {
+                "text": header_text,
+                "start_line": chunk_start_row + 1,
+                "end_line": header_end_row,  # 1-indexed line just before first method
+                "chunk_name": class_name,
+                "chunk_text": header_text,
+            }
+        )
 
     # Per-method chunks.
     for method_node in method_nodes:
@@ -173,13 +176,15 @@ def _chunk_ts_class(
         ).rstrip()
         chunk_name = f"{class_name}.{method_name}"
         if method_text:
-            chunks.append({
-                "text": method_text,
-                "start_line": method_start_line,
-                "end_line": method_end_line,
-                "chunk_name": chunk_name,
-                "chunk_text": method_text,
-            })
+            chunks.append(
+                {
+                    "text": method_text,
+                    "start_line": method_start_line,
+                    "end_line": method_end_line,
+                    "chunk_name": chunk_name,
+                    "chunk_text": method_text,
+                }
+            )
 
     return chunks
 
@@ -251,17 +256,17 @@ def chunk_typescript(path: Path) -> list[dict[str, Any]]:
                     chunk_start_row = outer.start_point[0]
                     start_line = chunk_start_row + 1
                     end_line = outer.end_point[0] + 1
-                    chunk_text = "\n".join(
-                        lines[chunk_start_row : outer.end_point[0] + 1]
-                    ).rstrip()
+                    chunk_text = "\n".join(lines[chunk_start_row : outer.end_point[0] + 1]).rstrip()
                     if chunk_text:
-                        chunks.append({
-                            "text": chunk_text,
-                            "start_line": start_line,
-                            "end_line": end_line,
-                            "chunk_name": "default",
-                            "chunk_text": chunk_text,
-                        })
+                        chunks.append(
+                            {
+                                "text": chunk_text,
+                                "start_line": start_line,
+                                "end_line": end_line,
+                                "chunk_name": "default",
+                                "chunk_text": chunk_text,
+                            }
+                        )
                 # Re-export or other export without declaration — skip
                 continue
             export_node = child
@@ -304,13 +309,15 @@ def chunk_typescript(path: Path) -> list[dict[str, Any]]:
         chunk_name = _extract_name(node, export_node)
 
         if chunk_text:
-            chunks.append({
-                "text": chunk_text,
-                "start_line": start_line,
-                "end_line": end_line,
-                "chunk_name": chunk_name,
-                "chunk_text": chunk_text,
-            })
+            chunks.append(
+                {
+                    "text": chunk_text,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "chunk_name": chunk_name,
+                    "chunk_text": chunk_text,
+                }
+            )
 
     if not chunks:
         return chunk_lines(path)
