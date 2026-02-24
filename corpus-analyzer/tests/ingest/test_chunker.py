@@ -12,6 +12,7 @@ from corpus_analyzer.ingest.chunker import (
     chunk_markdown,
     chunk_python,
 )
+from corpus_analyzer.ingest.ts_chunker import chunk_typescript
 
 # ---------------------------------------------------------------------------
 # chunk_markdown tests
@@ -242,6 +243,234 @@ class TestChunkLines:
 
 
 # ---------------------------------------------------------------------------
+# chunk_typescript tests
+# ---------------------------------------------------------------------------
+
+
+class TestChunkTypeScript:
+    """Tests for chunk_typescript function (TDD RED phase — 15-01)."""
+
+    def test_function_extraction(self, tmp_path: Path) -> None:
+        """Plain function declaration yields one chunk with correct chunk_name and start_line."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("function foo(): void {\n  console.log('hi');\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert len(chunks) == 1
+        assert chunks[0]["chunk_name"] == "foo"
+        assert chunks[0]["start_line"] == 1
+
+    def test_generator_extraction(self, tmp_path: Path) -> None:
+        """Generator function yields chunk with correct chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            "function* gen(): Generator<number, void, void> {\n  yield 1;\n}\n"
+        )
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "gen" for c in chunks)
+
+    def test_class_extraction(self, tmp_path: Path) -> None:
+        """Class declaration yields chunk with correct chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("class Bar {\n  x = 1;\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Bar" for c in chunks)
+
+    def test_abstract_class_extraction(self, tmp_path: Path) -> None:
+        """Abstract class yields chunk with correct chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("abstract class Abs {\n  abstract method(): void;\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Abs" for c in chunks)
+
+    def test_interface_extraction(self, tmp_path: Path) -> None:
+        """Interface declaration yields chunk with correct chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("interface IFoo {\n  x: number;\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "IFoo" for c in chunks)
+
+    def test_type_alias_extraction(self, tmp_path: Path) -> None:
+        """Type alias yields chunk with correct chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("type Alias = string | number;\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Alias" for c in chunks)
+
+    def test_lexical_declaration_extraction(self, tmp_path: Path) -> None:
+        """Arrow function in const declaration yields chunk_name matching variable name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("const fn = (): void => {};\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "fn" for c in chunks)
+
+    def test_enum_extraction(self, tmp_path: Path) -> None:
+        """Enum declaration yields chunk with correct chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("enum Color {\n  Red,\n  Green,\n  Blue,\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Color" for c in chunks)
+
+    def test_export_function_unwrapping(self, tmp_path: Path) -> None:
+        """Exported function preserves 'export' in text and uses bare name as chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("export function foo(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert len(chunks) == 1
+        assert "export function foo" in chunks[0]["text"]
+        assert chunks[0]["chunk_name"] == "foo"
+
+    def test_export_class_unwrapping(self, tmp_path: Path) -> None:
+        """Exported class preserves 'export' in text and uses bare name as chunk_name."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("export class Bar {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert "export class Bar" in chunks[0]["text"]
+        assert chunks[0]["chunk_name"] == "Bar"
+
+    def test_export_default_function(self, tmp_path: Path) -> None:
+        """export default function() yields chunk_name 'default'."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("export default function(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "default" for c in chunks)
+
+    def test_line_range_accuracy(self, tmp_path: Path) -> None:
+        """Function on line 3 (after two comment lines) has start_line == 3."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("// line 1\n// line 2\nfunction foo(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        foo_chunks = [c for c in chunks if c.get("chunk_name") == "foo"]
+        assert len(foo_chunks) == 1
+        assert foo_chunks[0]["start_line"] == 3
+
+    def test_jsdoc_included(self, tmp_path: Path) -> None:
+        """JSDoc comment immediately preceding declaration is included; start_line is doc line."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("/** JSDoc comment */\nfunction foo(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        foo_chunks = [c for c in chunks if c.get("chunk_name") == "foo"]
+        assert len(foo_chunks) == 1
+        assert foo_chunks[0]["start_line"] == 1
+        assert "/** JSDoc comment */" in foo_chunks[0]["text"]
+
+    def test_single_line_comment_not_included(self, tmp_path: Path) -> None:
+        """Single-line // comment preceding declaration is NOT included; start_line is function line."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("// not jsdoc\nfunction foo(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        foo_chunks = [c for c in chunks if c.get("chunk_name") == "foo"]
+        assert len(foo_chunks) == 1
+        assert foo_chunks[0]["start_line"] == 2
+        assert "// not jsdoc" not in foo_chunks[0]["text"]
+
+    def test_jsdoc_blank_line_not_included(self, tmp_path: Path) -> None:
+        """JSDoc with blank line between it and declaration is NOT included."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("/** doc */\n\nfunction foo(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        foo_chunks = [c for c in chunks if c.get("chunk_name") == "foo"]
+        assert len(foo_chunks) == 1
+        assert foo_chunks[0]["start_line"] == 3
+
+    def test_jsx_in_tsx_parses(self, tmp_path: Path) -> None:
+        """JSX syntax in .tsx file parses without fallback; returns named chunk."""
+        tsx_file = tmp_path / "test.tsx"
+        tsx_file.write_text("const el = (): JSX.Element => <div />;\n")
+
+        chunks = chunk_typescript(tsx_file)
+
+        assert any(c["chunk_name"] == "el" for c in chunks)
+
+    def test_jsx_in_jsx_parses(self, tmp_path: Path) -> None:
+        """JSX syntax in .jsx file parses without fallback; returns named chunk."""
+        jsx_file = tmp_path / "test.jsx"
+        jsx_file.write_text("const el = (): JSX.Element => <div />;\n")
+
+        chunks = chunk_typescript(jsx_file)
+
+        assert any(c["chunk_name"] == "el" for c in chunks)
+
+    def test_non_ascii_identifier(self, tmp_path: Path) -> None:
+        """Non-ASCII identifier in function name is extracted correctly."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("function héllo(): void {}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "héllo" for c in chunks)
+
+    def test_has_error_does_not_fall_back(self, tmp_path: Path) -> None:
+        """Partial parse (valid + invalid syntax) does NOT fall back; extracts good constructs."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("function good(): void {}\n@@@@invalid@@@@\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "good" for c in chunks)
+
+    def test_catastrophic_failure_falls_back(self, tmp_path: Path) -> None:
+        """Binary / undecodable file falls back gracefully; returns list without raising."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_bytes(b"\x00\x01\x02\x03" * 100)
+
+        result = chunk_typescript(ts_file)
+
+        assert isinstance(result, list)
+
+    def test_chunk_name_field_present(self, tmp_path: Path) -> None:
+        """Every chunk dict returned by chunk_typescript has a 'chunk_name' key."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("function foo(): void {}\nconst x = 1;\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert all("chunk_name" in c for c in chunks)
+
+    def test_parser_cache(self, tmp_path: Path) -> None:
+        """Calling chunk_typescript twice on .ts files produces no cache-related crash."""
+        ts_file1 = tmp_path / "a.ts"
+        ts_file1.write_text("function alpha(): void {}\n")
+        ts_file2 = tmp_path / "b.ts"
+        ts_file2.write_text("function beta(): void {}\n")
+
+        result1 = chunk_typescript(ts_file1)
+        result2 = chunk_typescript(ts_file2)
+
+        assert isinstance(result1, list)
+        assert isinstance(result2, list)
+
+
+# ---------------------------------------------------------------------------
 # chunk_file dispatcher tests
 # ---------------------------------------------------------------------------
 
@@ -269,15 +498,41 @@ class TestChunkFile:
         assert len(chunks) == 1
         assert "def func():" in chunks[0]["text"]
 
-    def test_dispatches_other_to_chunk_lines(self, tmp_path: Path) -> None:
-        """chunk_file(".ts", ".js", ".json", etc.) calls chunk_lines."""
+    def test_dispatches_ts_to_chunk_typescript(self, tmp_path: Path) -> None:
+        """chunk_file(".ts") routes to chunk_typescript, not chunk_lines (AST-based)."""
         ts_file = tmp_path / "test.ts"
-        ts_file.write_text("const x = 1;\nconst y = 2;\n")
+        ts_file.write_text("function foo(): void {}\n")
 
         chunks = chunk_file(ts_file)
 
-        assert len(chunks) >= 1
-        assert all("start_line" in c and "end_line" in c for c in chunks)
+        assert any("foo" in c.get("chunk_name", "") for c in chunks)
+
+    def test_dispatches_tsx_to_chunk_typescript(self, tmp_path: Path) -> None:
+        """chunk_file(".tsx") routes to chunk_typescript."""
+        tsx_file = tmp_path / "test.tsx"
+        tsx_file.write_text("function bar(): void {}\n")
+
+        chunks = chunk_file(tsx_file)
+
+        assert any("bar" in c.get("chunk_name", "") for c in chunks)
+
+    def test_dispatches_js_to_chunk_typescript(self, tmp_path: Path) -> None:
+        """chunk_file(".js") routes to chunk_typescript."""
+        js_file = tmp_path / "test.js"
+        js_file.write_text("function baz(): void {}\n")
+
+        chunks = chunk_file(js_file)
+
+        assert any("baz" in c.get("chunk_name", "") for c in chunks)
+
+    def test_dispatches_jsx_to_chunk_typescript(self, tmp_path: Path) -> None:
+        """chunk_file(".jsx") routes to chunk_typescript."""
+        jsx_file = tmp_path / "test.jsx"
+        jsx_file.write_text("function qux(): void {}\n")
+
+        chunks = chunk_file(jsx_file)
+
+        assert any("qux" in c.get("chunk_name", "") for c in chunks)
 
     def test_yaml_uses_chunk_lines(self, tmp_path: Path) -> None:
         """chunk_file(".yaml") uses chunk_lines fallback."""
