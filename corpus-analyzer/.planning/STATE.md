@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24 — v1.5 milestone complete)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v1.5 TypeScript AST Chunking — COMPLETE. Phase 16: Integration Hardening done.
+**Current focus:** Planning next milestone — v1.5 archived, v2 planning not yet started
 
 ## Current Position
 
 Phase: 16 of 16 (Integration Hardening — COMPLETE)
 Plan: 3 of 3 in current phase (16-03 complete)
-Status: Phase 16 complete — v1.5 milestone validated
-Last activity: 2026-02-24 — 16-03 validation gate: ruff+mypy+320 tests all pass, PROJECT.md updated
+Status: v1.5 milestone archived — tagged, committed
+Last activity: 2026-02-24 — v1.5 milestone archived to .planning/milestones/
 
-Progress: [██████████] 100% (v1.5 complete)
+Progress: [██████████] 100% (v1.5 complete, archived)
 
 ## Performance Metrics
 

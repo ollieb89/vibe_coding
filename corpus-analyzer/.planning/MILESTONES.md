@@ -103,3 +103,24 @@
 
 ---
 
+
+## v1.5 TypeScript AST Chunking (Shipped: 2026-02-24)
+
+**Phases completed:** 2 phases (15–16), 5 plans
+**Timeline:** 2026-02-24 (1 day)
+**Python LOC:** ~7,811
+
+**Delivered:** Replaced line-based chunking for TypeScript and JavaScript with tree-sitter AST-aware chunking — `.ts`, `.tsx`, `.js`, `.jsx` files now index at construct-level precision matching the existing Python AST chunker, with production safeguards for minified files and optional-dependency environments.
+
+**Key accomplishments:**
+- `chunk_typescript()` extracts 8 top-level node types (function, generator, class, abstract class, interface, type alias, lexical declaration, enum) with correct 1-indexed line boundaries and export-unwrapping
+- Grammar dispatched by extension: TypeScript for `.ts`, TSX for `.tsx`/`.jsx`, JavaScript for `.js`; `@lru_cache` grammar loader prevents re-parsing on 500+ file corpora
+- TDD RED→GREEN: 21-method `TestChunkTypeScript` class at full parity with `TestChunkPython` (all node types, non-ASCII identifiers, JSX parse, partial-error tree, catastrophic failure fallback)
+- IDX-08 size guard: files >50,000 chars bypass AST parse entirely — safe for minified and generated files
+- IDX-09 `ImportError` fallback: `chunk_file()` catches missing tree-sitter at call site; import of `ts_chunker` no longer raises in optional-dependency environments
+- Zero-violation quality gate: ruff 0 violations, mypy 0 errors, 320 tests passing across 54 source files
+
+**Archive:** `.planning/milestones/v1.5-ROADMAP.md`
+
+---
+

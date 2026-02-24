@@ -14,6 +14,8 @@ v1.3 achieves a clean linting baseline across the entire codebase: zero mypy err
 
 v1.4 gives users full control over search output: `--min-score <float>` filters results below the RRF threshold (0.009–0.033 range documented in help text); `--sort-by score|date|title` orders results; a contextual FILT-03 hint fires when filtering eliminates all results. Python API and MCP are at parity — `search()` accepts `sort_by` and `min_score`; `corpus_search()` MCP tool accepts `min_score: Optional[float]`.
 
+v1.5 replaces line-based chunking for TypeScript and JavaScript with tree-sitter AST-aware chunking. `.ts`, `.tsx`, `.js`, `.jsx` files now index at construct-level precision — functions, classes, interfaces, type aliases, enums, and generators extracted as separate chunks with correct line boundaries. Production-safe: 50K+ char files fall back to line chunking; missing tree-sitter is caught at call site with graceful fallback.
+
 ## Core Value
 
 Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
@@ -47,47 +49,23 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ `Atom` promoted to module level; nested functions fully annotated in `chunked_processor.py` (MYPY-02) — v1.3
 - ✓ `DEFAULT_SYSTEM_PROMPT` trailing comma bug fixed (was `tuple[str]`, now `str`) (MYPY-05) — v1.3
 - ✓ `uv run ruff check .` → 0 violations; `uv run mypy src/` → 0 errors; 281 tests green (VALID-01–VALID-03) — v1.3
-
-### Validated
-
 - ✓ `--min-score <float>` CLI flag filters results below RRF threshold; help text documents 0.009–0.033 range (FILT-01, FILT-02) — v1.4
 - ✓ FILT-03 contextual hint when `--min-score` filters all results — v1.4
 - ✓ `--sort-by score|date|title` CLI flag with engine vocabulary translation — v1.4
 - ✓ Python `search()` API accepts `sort_by` and `min_score` with `ValueError` validation (PARITY-01, PARITY-02) — v1.4
 - ✓ MCP `corpus_search()` accepts `min_score: Optional[float]` with `None`→`0.0` + `filtered_by_min_score` signal (PARITY-03) — v1.4
-
-## Completed Milestone: v1.5 TypeScript AST Chunking
-
-**Goal:** Replace line-based chunking for TypeScript and JavaScript with tree-sitter AST-aware chunking, matching the precision and parity of the existing Python AST chunker.
-
-**Shipped 2026-02-24.**
-
-### Validated
-
-- [x] tree-sitter AST chunker for `.ts`, `.tsx`, `.js`, `.jsx` (IDX-01) — Validated
-- [x] Chunk granularity: functions, methods, classes, interfaces/types, top-level constants (IDX-02) — Validated
-- [x] Silent line-based fallback when tree-sitter cannot parse a file (IDX-03) — Validated
-- [x] Test suite at full parity with Python AST chunker coverage (TEST-01) — Validated
-- [x] Integration: new chunker wired into indexer dispatch for TS/JS extensions (IDX-04) — Validated
-- [x] Size guard: 50K+ char files fall back to chunk_lines (IDX-08) — Validated
-- [x] ImportError fallback when tree-sitter absent (IDX-09) — Validated
-- [x] ruff + mypy + 320 tests all pass (QUAL-01) — Validated
-
-## v1.5 Milestone Validation
-
-**Completed:** 2026-02-24
-
-| Requirement | Description | Status |
-|-------------|-------------|--------|
-| IDX-08 | Size guard: 50K+ char files fall back to chunk_lines | Validated |
-| IDX-09 | ImportError fallback when tree-sitter absent | Validated |
-| QUAL-01 | ruff + mypy + 320 tests all pass | Validated |
-
-**Quality gate evidence (Phase 16 completion):**
-- `uv run ruff check .` — exits 0, zero violations across 54 source files
-- `uv run mypy src/` — exits 0, zero type errors in 54 source files
-- `uv run pytest --tb=no -q` — 320 tests, 0 failed
-- `corpus extract` + `chunk_file` dispatch on `.ts` fixture — exit 0, 2 chunks extracted
+- ✓ `pyproject.toml` updated with `tree-sitter>=0.25.0` and `tree-sitter-language-pack>=0.13.0`; `uv sync` succeeds with pre-compiled wheels (DEP-01) — v1.5
+- ✓ `chunk_file()` dispatch routes `.ts`, `.tsx`, `.js`, `.jsx` to `chunk_typescript()` (IDX-01) — v1.5
+- ✓ `chunk_typescript()` extracts 8 top-level node types with correct 1-indexed line boundaries (IDX-02) — v1.5
+- ✓ `export_statement` unwrapping: `export function foo()` and `export class Bar` produce correctly-named chunks (IDX-03) — v1.5
+- ✓ Grammar dispatched by extension: TypeScript/TSX/JavaScript; `@lru_cache` grammar loader (IDX-04, IDX-07) — v1.5
+- ✓ Silent fallback to `chunk_lines()` on exception or zero constructs; no fallback on `has_error` alone (IDX-05) — v1.5
+- ✓ `chunk_name` field in returned chunk dict (IDX-06) — v1.5
+- ✓ Size guard: files >50,000 chars fall back to `chunk_lines()` before AST parse (IDX-08) — v1.5
+- ✓ `ImportError` guard in `chunk_file()` — missing tree-sitter falls back to line chunking (IDX-09) — v1.5
+- ✓ `TestChunkTypeScript` at full parity with `TestChunkPython` — 21 test methods (TEST-01) — v1.5
+- ✓ `TestChunkFile` dispatch assertions for all four TS/JS extensions (TEST-02) — v1.5
+- ✓ `ruff check .` exits 0, `mypy src/` exits 0, 320 tests passing (QUAL-01) — v1.5
 
 ### Out of Scope
 
@@ -99,18 +77,19 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.4 shipped 2026-02-24. All v1.4 requirements complete. Search output is now user-controllable across all three interfaces.**
+**v1.5 shipped 2026-02-24. TypeScript/JavaScript files now index at AST construct-level precision.**
 
-- ~7,513 lines Python source across 53 files (23 files touched in v1.4: +2,566 / -48 lines)
-- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text); graph layer uses SQLite (`graph.sqlite`)
-- 293 tests passing (pytest) — 8 new tests added in v1.4 (4 engine, 3 CLI, 2 MCP + 1 API updated)
+- ~7,811 lines Python source across 54 files (4 files created/modified in v1.5: `ts_chunker.py` new, `chunker.py`, `pyproject.toml`, `uv.lock`)
+- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text), tree-sitter + tree-sitter-language-pack; graph layer uses SQLite (`graph.sqlite`)
+- 320 tests passing (pytest) — 27 new tests added in v1.5 (21 `TestChunkTypeScript` + 4 updated `TestChunkFile` + 2 `TestIntegrationHardening`)
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
-- Zero mypy errors, zero ruff violations — maintained clean linting baseline through v1.4
+- Zero mypy errors, zero ruff violations — clean linting baseline maintained through v1.5
 
 Known limitations heading into v2 planning:
-- Search returns file-level results; chunk-level line ranges would improve precision
-- TypeScript/JS files use line-based chunking (no AST awareness)
+- Search returns file-level results; chunk-level line ranges would improve precision (CHUNK-01–CHUNK-03 candidates)
+- `chunk_name` persisted in chunk dict but not in LanceDB `ChunkRecord` schema — `--construct name:foo` filtering deferred (IDX-10)
+- Method-level sub-chunking (class methods as separate chunks) deferred until chunk-level result display lands (IDX-11)
 - Cold-start on first index after KEEP_ALIVE expiry still possible (pre-warm only covers MCP startup)
 - FILT-04 (MCP sort_by) and FILT-05 (score normalisation) explicitly deferred to v2
 
@@ -156,6 +135,14 @@ Known limitations heading into v2 planning:
 | `_CLI_SORT_BY_MAP` + `_API_SORT_MAP` translation dicts | CLI/API vocabulary (`score/date/title`) decoupled from engine vocabulary (`relevance/date/path`) | ✓ Good — user-facing names are stable even if engine internals change |
 | MCP `min_score: Optional[float]` with `None`→`0.0` guard | MCP schema requires Optional for backward-compat; explicit guard makes the no-op intent clear | ✓ Good — tested with both `None` and `0.02` cases |
 | FILT-03 branch checks `min_score > 0.0` before generic no-results | Contextual hint only fires when the user deliberately filtered; doesn't appear on regular empty results | ✓ Good — tested by asserting absence of generic message alongside presence of hint |
+| `get_parser(dialect)` from `tree_sitter_language_pack` with `@lru_cache` | Simpler than module-level globals; one Parser per dialect per process | ✓ Good — prevents 30s overhead on 500+ TS file corpora |
+| `.tsx` and `.jsx` both use TSX grammar | TypeScript grammar produces ERROR nodes on JSX elements | ✓ Good — all JSX cases handled cleanly |
+| Fall back only on exception or zero constructs, NOT on `has_error` | tree-sitter is error-tolerant; partial trees still yield good constructs | ✓ Good — no unnecessary fallback on syntax errors |
+| `export default function(){}` → detect 'default' child, emit full export_statement | `declaration` field is `None` for anonymous default exports; special-case required | ✓ Good — `test_export_default_function` passes |
+| Lazy import of `ts_chunker` inside `chunk_file` elif branch | Avoids circular import (`ts_chunker` imports from `chunker`) | ✓ Good — clean module boundary, no import side-effects |
+| Separate `except ImportError:` before `except Exception:` (not merged) | Explicit over broad; ImportError is a distinct, expected failure mode | ✓ Good — IDX-09 contract clear and testable |
+| Size guard before parser call (not after) | Minified files exit early with zero AST overhead | ✓ Good — 50K char threshold validated by test |
+| Smoke test via Python API (`chunk_file`) not CLI (`corpus index`) | `corpus index` requires configured LanceDB sources; API call confirms dispatch wiring without external config | ✓ Good — clean, hermetic validation |
 
 ---
-*Last updated: 2026-02-24 — v1.5 milestone complete (Phase 16: Integration Hardening)*
+*Last updated: 2026-02-24 — v1.5 milestone complete*
