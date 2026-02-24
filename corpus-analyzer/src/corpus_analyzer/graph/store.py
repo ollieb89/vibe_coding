@@ -146,3 +146,27 @@ class GraphStore:
                 (target_path,),
             ).fetchall()
         return [{**dict(r), "resolved": bool(r["resolved"])} for r in rows]
+
+    def search_paths(self, fragment: str) -> list[str]:
+        """Return distinct source paths whose source or target path contains *fragment*.
+
+        Used by the CLI ``graph`` command to resolve a slug or path substring to
+        the set of source paths that have recorded relationships.
+
+        Args:
+            fragment: Substring to search for in ``source_path`` or ``target_path``.
+
+        Returns:
+            Sorted list of distinct ``source_path`` values that match.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT source_path
+                FROM relationships
+                WHERE source_path LIKE ? OR target_path LIKE ?
+                ORDER BY source_path
+                """,
+                (f"%{fragment}%", f"%{fragment}%"),
+            ).fetchall()
+        return [r["source_path"] for r in rows]

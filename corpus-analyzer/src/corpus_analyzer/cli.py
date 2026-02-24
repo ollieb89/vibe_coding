@@ -334,12 +334,7 @@ def graph_command(
     store = GraphStore(graph_db)
 
     # Resolve slug to paths by substring match
-    with store._connect() as conn:
-        all_rows = conn.execute("SELECT * FROM relationships").fetchall()
-    matching_sources = {
-        dict(r)["source_path"] for r in all_rows
-        if slug in dict(r)["source_path"] or slug in dict(r)["target_path"]
-    }
+    matching_sources = store.search_paths(slug)
 
     if not matching_sources:
         console.print(f"[yellow]No relationships found for '[bold]{slug}[/bold]'.[/yellow]")
