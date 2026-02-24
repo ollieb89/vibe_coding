@@ -634,6 +634,52 @@ class TestCheckSourceStatus:
         assert "my-source" not in manifest
 
 
+def test_index_writes_relationship_edges(tmp_path: Path) -> None:
+    """Indexer writes graph edges when ## Related Skills section is present."""
+    from corpus_analyzer.graph.registry import SlugRegistry
+    from corpus_analyzer.graph.store import GraphStore
+
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+
+    # alpha.md references beta via ## Related Skills
+    alpha_path = source_dir / "alpha.md"
+    alpha_path.write_text("# Alpha\n\n## Related Skills\n\n- `beta`\n")
+
+    # beta.md is a plain file (the target)
+    beta_path = source_dir / "beta.md"
+    beta_path.write_text("# Beta\nPlain content.\n")
+
+    source = SourceConfig(name="my-source", path=str(source_dir), summarize=False)
+
+    # Build a SlugRegistry that knows about the beta directory.
+    # beta.md is a top-level file so we register it directly via a mapping.
+    registry = SlugRegistry({"beta": beta_path.resolve()})
+
+    graph_db_path = tmp_path / "graph.db"
+    graph_store = GraphStore(graph_db_path)
+
+    with (
+        patch(
+            "corpus_analyzer.ingest.indexer.classify_file",
+            return_value=ClassificationResult("skill", 0.6, "rule_based"),
+        ),
+        patch(
+            "corpus_analyzer.ingest.indexer.generate_summary",
+            return_value="",
+        ),
+    ):
+        index.index_source(source, graph_store=graph_store, registry=registry)
+
+    edges = graph_store.edges_from(str(alpha_path.resolve()))
+    assert len(edges) == 1, f"Expected 1 edge, got {len(edges)}: {edges}"
+    assert edges[0]["target_path"] == str(beta_path.resolve())
+    assert edges[0]["resolved"] is True
+
+
 def test_open_migrates_agent_config_to_agent(tmp_path: Path) -> None:
     """CorpusIndex.open() renames stored 'agent_config' rows to 'agent'."""
     embedder = MockEmbedder()
