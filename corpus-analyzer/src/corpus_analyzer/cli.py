@@ -124,6 +124,11 @@ def index_command(
     registry = SlugRegistry.build(source_roots)
     if len(registry) == 0:
         console.print("[dim]Graph registry: no component directories found.[/]")
+    for dup_slug, dup_paths in registry.duplicates.items():
+        console.print(
+            f"[yellow]⚠️  Duplicate slug detected: '{dup_slug}' "
+            f"({len(dup_paths)} candidates — use fully-qualified paths to disambiguate)[/]"
+        )
 
     # Index each source
     for source in config.sources:
