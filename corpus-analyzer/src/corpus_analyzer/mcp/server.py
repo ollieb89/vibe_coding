@@ -46,6 +46,7 @@ async def corpus_search(
     top_k: Optional[int] = 5,  # noqa: UP045
     min_score: Optional[float] = None,  # noqa: UP045
     name: Optional[str] = None,  # noqa: UP045
+    sort_by: Optional[str] = None,  # noqa: UP045
     ctx: Context = None,  # type: ignore[assignment]
 ) -> dict[str, Any]:
     """Search the corpus index with a natural language query.
@@ -68,6 +69,8 @@ async def corpus_search(
     Use 'source', 'type', 'construct' for filtering; 'top_k' for result count.
     'min_score' filters out results below the given relevance threshold (0.0 means no filter).
     'name' is an optional case-insensitive substring filter on chunk_name.
+    sort_by: sort order for results. One of: relevance (default) | construct |
+    confidence | date | path. Omit to use relevance order.
     Use to narrow results to a specific method or construct (e.g. 'ClassName.method').
     """
     engine_or_none: CorpusSearch | None = ctx.lifespan_context.get("engine")
@@ -81,6 +84,7 @@ async def corpus_search(
     limit = top_k if top_k is not None else 5
 
     effective_min_score = min_score if min_score is not None else 0.0
+    effective_sort_by = sort_by if sort_by is not None else "relevance"
 
     try:
         raw_results = engine.hybrid_search(
@@ -91,6 +95,7 @@ async def corpus_search(
             limit=limit,
             min_score=effective_min_score,
             name=name,
+            sort_by=effective_sort_by,
         )
     except Exception as exc:
         raise ValueError(

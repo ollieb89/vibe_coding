@@ -60,7 +60,7 @@ class MockEmbedder:
             ),
             "Greeter.__init__",
             4,
-            "def __init__",
+            "    def __init__",
         ),
         (
             ".ts",
@@ -74,7 +74,7 @@ class MockEmbedder:
             ),
             "Greeter.constructor",
             2,
-            "constructor",
+            "    constructor",
         ),
     ],
 )
