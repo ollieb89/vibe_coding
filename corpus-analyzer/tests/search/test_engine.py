@@ -373,3 +373,34 @@ class TestHybridSearchSort:
         assert confidences == sorted(confidences, reverse=True), (
             "Within the same construct type, higher confidence should rank first"
         )
+
+
+def test_min_score_zero_is_noop(search: CorpusSearch) -> None:
+    """FILT-01: min_score=0.0 returns identical results to no filter."""
+    without_filter = search.hybrid_search("search")
+    with_zero = search.hybrid_search("search", min_score=0.0)
+    assert with_zero == without_filter
+
+
+def test_min_score_above_max_returns_empty(search: CorpusSearch) -> None:
+    """FILT-01: min_score=99.0 exceeds any real RRF score — must return []."""
+    results = search.hybrid_search("search", min_score=99.0)
+    assert results == []
+
+
+def test_min_score_parameter_accepted(search: CorpusSearch) -> None:
+    """FILT-01: hybrid_search() must accept min_score without TypeError."""
+    # Raises TypeError if parameter does not exist
+    _ = search.hybrid_search("search", min_score=0.0)
+
+
+def test_min_score_filters_below_threshold(search: CorpusSearch) -> None:
+    """FILT-01: results passing the filter all have _relevance_score >= threshold."""
+    baseline = search.hybrid_search("search")
+    if not baseline:
+        pytest.skip("no results in seeded table for this query")
+    max_score = max(float(r.get("_relevance_score", 0.0)) for r in baseline)
+    # Threshold == max_score keeps at least one result (inclusive >=)
+    results = search.hybrid_search("search", min_score=max_score)
+    assert len(results) >= 1
+    assert all(float(r.get("_relevance_score", 0.0)) >= max_score for r in results)
