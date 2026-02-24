@@ -1,5 +1,6 @@
 """LLM-assisted document rewriting and consolidation."""
 
+import concurrent.futures
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -228,11 +229,6 @@ DEFAULT_SYSTEM_PROMPT = """You are a technical documentation expert. Your task i
 
 Be concise but comprehensive. Preserve important details. Do not include these instructions in the output.""",
 
-
-import concurrent.futures
-from typing import NamedTuple
-
-# ... existing imports ...
 
 class DocProcessResult(NamedTuple):
     """Result of processing a single document."""
