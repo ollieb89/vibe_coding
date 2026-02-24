@@ -197,3 +197,65 @@ def test_status_missing_index_message() -> None:
 
     assert result.exit_code == 0
     assert "Index not found. Run 'corpus index' first." in result.stdout
+
+
+def test_min_score_option_help_text() -> None:
+    """FILT-02: --min-score help text documents the RRF score range."""
+    result = runner.invoke(app, ["search", "--help"])
+    assert result.exit_code == 0
+    assert "--min-score" in result.stdout
+    assert "RRF scores range approximately 0.009" in result.stdout
+    assert "0.0 keeps all results" in result.stdout
+
+
+def test_min_score_filters_all_prints_hint() -> None:
+    """FILT-03: when --min-score filters all results, print the contextual hint."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = []
+        mock_search_cls.return_value = mock_search
+
+        result = runner.invoke(app, ["search", "anything", "--min-score", "0.999"])
+
+    assert result.exit_code == 0
+    assert "No results above 0.999" in result.stdout
+    assert "Run without --min-score to see available scores." in result.stdout
+    assert 'No results for "anything"' not in result.stdout
+
+
+def test_sort_by_option_forwards_to_engine() -> None:
+    """--sort-by translates API vocabulary to engine vocabulary before forwarding."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_engine = MagicMock()
+        mock_engine.hybrid_search.return_value = [
+            {"file_path": "/fake/path.md", "text": "content", "construct_type": "agent"}
+        ]
+        mock_search_cls.return_value = mock_engine
+
+        # score -> relevance
+        runner.invoke(app, ["search", "q", "--sort-by", "score"])
+        assert mock_engine.hybrid_search.call_args.kwargs["sort_by"] == "relevance"
+
+        # title -> path
+        runner.invoke(app, ["search", "q", "--sort-by", "title"])
+        assert mock_engine.hybrid_search.call_args.kwargs["sort_by"] == "path"
