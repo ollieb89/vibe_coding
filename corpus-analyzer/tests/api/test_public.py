@@ -155,9 +155,11 @@ def test_search_invalid_sort_by_raises_value_error() -> None:
     mock_engine = MagicMock()
     mock_engine.hybrid_search.return_value = []
 
-    with patch("corpus_analyzer.api.public._open_engine", return_value=(mock_engine, MagicMock())):
-        with pytest.raises(ValueError, match="Invalid sort_by"):
-            search("q", sort_by="invalid")
+    with (
+        patch("corpus_analyzer.api.public._open_engine", return_value=(mock_engine, MagicMock())),
+        pytest.raises(ValueError, match="Invalid sort_by"),
+    ):
+        search("q", sort_by="invalid")
 
 
 def test_search_min_score_forwarded() -> None:

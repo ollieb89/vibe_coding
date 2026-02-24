@@ -297,6 +297,14 @@ def check_command(
     console.print(table)
 
 
+_CLI_SORT_BY_MAP: dict[str, str] = {
+    "score": "relevance",
+    "date": "date",
+    "title": "path",
+}
+_VALID_CLI_SORT_BY_VALUES = frozenset(_CLI_SORT_BY_MAP.keys())
+
+
 @app.command("search")
 def search_command(
     query: Annotated[str, typer.Argument(help="Natural language search query")],
@@ -322,6 +330,24 @@ def search_command(
         str,
         typer.Option("--sort", help="Sort order: relevance|construct|confidence|date|path"),
     ] = "relevance",
+    min_score: Annotated[
+        float,
+        typer.Option(
+            "--min-score",
+            help=(
+                "Exclude results below this RRF score threshold. "
+                "RRF scores range approximately 0.009–0.033 (K=60); "
+                "0.0 keeps all results (default)."
+            ),
+        ),
+    ] = 0.0,
+    sort_by: Annotated[
+        str | None,
+        typer.Option(
+            "--sort-by",
+            help="Sort order using API vocabulary: score|date|title",
+        ),
+    ] = None,
 ) -> None:
     """Search the indexed corpus with a natural language query."""
     config = load_config(CONFIG_PATH)
@@ -336,6 +362,19 @@ def search_command(
     index = CorpusIndex.open(DATA_DIR, embedder)
     search = CorpusSearch(index.table, embedder)
 
+    # Resolve effective sort_by: --sort-by (API vocabulary) takes precedence over --sort.
+    # When --sort-by is not provided, fall back to the engine-vocabulary --sort flag.
+    if sort_by is not None:
+        if sort_by not in _VALID_CLI_SORT_BY_VALUES:
+            console.print(
+                f"[red]Invalid --sort-by value: {sort_by!r}. "
+                f"Allowed: {sorted(_VALID_CLI_SORT_BY_VALUES)}[/red]"
+            )
+            raise typer.Exit(code=1)
+        effective_sort_by = _CLI_SORT_BY_MAP[sort_by]
+    else:
+        effective_sort_by = sort
+
     try:
         results = search.hybrid_search(
             query,
@@ -343,14 +382,21 @@ def search_command(
             file_type=type_,
             construct_type=construct,
             limit=limit,
-            sort_by=sort,
+            sort_by=effective_sort_by,
+            min_score=min_score,
         )
     except ValueError as e:
         console.print(f"[red]Error:[/] {e}")
         raise typer.Exit(code=1) from e
 
     if not results:
-        console.print(f'[yellow]No results for "[bold]{query}[/bold]"[/yellow]')
+        if min_score > 0.0:
+            console.print(
+                f"No results above {min_score:.3f}. "
+                "Run without --min-score to see available scores."
+            )
+        else:
+            console.print(f'[yellow]No results for "[bold]{query}[/bold]"[/yellow]')
         return
 
     if construct and sort == "construct":
