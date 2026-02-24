@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 11 of 12 (Manual Ruff CLI + Mypy)
-Plan: 4 of N in current phase
+Plan: 1 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-24 — Phase 11 Plan 4 complete (MYPY-03/04/06: 9 mypy errors fixed across 6 files, OllamaClient.db field added, 281 tests passing)
+Last activity: 2026-02-24 — Phase 11 Plan 1 complete (RUFF-07: all 47 ruff violations in cli.py fixed, project-wide zero violations, 281 tests passing)
 
 Progress: [██░░░░░░░░] 20% (v1.3)
 
@@ -59,6 +59,9 @@ Recent decisions affecting current work:
 - [Phase 10-02]: shape.py f-string: extract depth_rows local variable to avoid unreadable inline generator expression
 - [10-03]: database.py ternary: use explicit 'is not None' for nullable float/bool fields — 'or' shortcut mishandles 0.0
 - [10-03]: Long test docstrings: wrap as multi-line PEP 257 (summary + blank + detail), not noqa suppression
+- [11-01]: B023 progress_callback fix: default-arg capture (_task_id=task_id) keeps external Callable[[int], None] signature unchanged
+- [11-01]: B904 search_command: use `from None` (deliberate suppression), not `from e` (chaining)
+- [11-01]: Two help strings shortened to fit 100 chars (construct filter, auto_category); all other E501 fixed by wrapping
 - [11-03]: chain_lines local res variable typed as list[str] to satisfy mypy inference for extend() calls
 - [11-04]: response.message.content (typed Optional[str]) not dict subscript (Any) for ollama ChatResponse access
 - [11-04]: OllamaClient is a plain class — self.db: CorpusDatabase | None = None with TYPE_CHECKING guard resolves both no-any-return and unblocks plan 05
@@ -74,5 +77,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 11-04-PLAN.md (MYPY-03/04/06: 9 mypy errors fixed across 6 files, OllamaClient.db added with TYPE_CHECKING guard)
+Stopped at: Completed 11-01-PLAN.md (RUFF-07: all 47 ruff violations in cli.py fixed — project-wide zero ruff violations, 281 tests passing)
 Resume file: None
