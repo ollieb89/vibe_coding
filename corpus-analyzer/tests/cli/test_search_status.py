@@ -265,3 +265,109 @@ def test_sort_by_option_forwards_to_engine() -> None:
         # title -> path
         runner.invoke(app, ["search", "q", "--sort-by", "title"])
         assert mock_engine.hybrid_search.call_args.kwargs["sort_by"] == "path"
+
+
+def test_search_name_flag_in_help() -> None:
+    """NAME-01: --name option appears in corpus search --help output."""
+    result = runner.invoke(app, ["search", "--help"])
+    assert result.exit_code == 0
+    assert "--name" in result.stdout
+
+
+def test_search_name_filter_passed_to_engine() -> None:
+    """NAME-01: --name value is passed as name= keyword to hybrid_search()."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = []
+        mock_search_cls.return_value = mock_search
+
+        runner.invoke(app, ["search", "myquery", "--name", "SearchEngine.search"])
+
+    call_kwargs = mock_search.hybrid_search.call_args.kwargs
+    assert call_kwargs.get("name") == "SearchEngine.search"
+
+
+def test_search_name_only_no_query_is_valid() -> None:
+    """NAME-03: corpus search --name foo (no positional query) exits 0."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = []
+        mock_search_cls.return_value = mock_search
+
+        result = runner.invoke(app, ["search", "--name", "foo"])
+
+    assert result.exit_code == 0
+
+
+def test_search_name_only_passes_empty_query_to_engine() -> None:
+    """NAME-03: --name only (no query) passes query='' to hybrid_search."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = []
+        mock_search_cls.return_value = mock_search
+
+        runner.invoke(app, ["search", "--name", "foo"])
+
+    positional_query = mock_search.hybrid_search.call_args.args[0]
+    assert positional_query == ""
+
+
+def test_search_no_query_no_name_exits_error() -> None:
+    """NAME-03: corpus search with no query and no --name prints error and exits 1."""
+    result = runner.invoke(app, ["search"])
+    assert result.exit_code == 1
+    assert "Provide a query or --name" in result.stdout
+
+
+def test_search_name_composes_with_source_filter() -> None:
+    """NAME-01: --name composes with --source as AND predicate passed to engine."""
+    with (
+        patch("corpus_analyzer.cli.load_config", return_value=_config()),
+        patch("corpus_analyzer.cli.OllamaEmbedder") as mock_embedder_cls,
+        patch("corpus_analyzer.cli.CorpusIndex.open") as mock_open,
+        patch("corpus_analyzer.cli.CorpusSearch") as mock_search_cls,
+    ):
+        mock_embedder = MagicMock()
+        mock_embedder.validate_connection.return_value = None
+        mock_embedder_cls.return_value = mock_embedder
+        mock_open.return_value = MagicMock(table=MagicMock())
+
+        mock_search = MagicMock()
+        mock_search.hybrid_search.return_value = []
+        mock_search_cls.return_value = mock_search
+
+        runner.invoke(app, ["search", "q", "--name", "foo", "--source", "my-src"])
+
+    call_kwargs = mock_search.hybrid_search.call_args.kwargs
+    assert call_kwargs.get("name") == "foo"
+    assert call_kwargs.get("source") == "my-src"

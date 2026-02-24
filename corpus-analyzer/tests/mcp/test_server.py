@@ -371,3 +371,53 @@ def test_corpus_search_no_content_error_field() -> None:
     result = asyncio.run(_run_test())
     r = result["results"][0]
     assert "content_error" not in r
+
+
+# -----------------------------------------------------------------------------
+# Tests — NAME-02: MCP name parameter
+# -----------------------------------------------------------------------------
+
+
+def test_corpus_search_name_parameter_accepted() -> None:
+    """NAME-02: corpus_search() tool accepts name parameter without TypeError."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", name="foo", ctx=ctx)
+
+    asyncio.run(_run_test())  # must not raise
+
+
+def test_corpus_search_name_forwarded_to_hybrid_search() -> None:
+    """NAME-02: name parameter is forwarded as name= to engine.hybrid_search()."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", name="SearchEngine.search", ctx=ctx)
+
+    asyncio.run(_run_test())
+
+    call_kwargs = engine.hybrid_search.call_args[1]
+    assert call_kwargs.get("name") == "SearchEngine.search"
+
+
+def test_corpus_search_name_none_forwards_none() -> None:
+    """NAME-02: name=None is forwarded as name=None to engine (backward compatible)."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", name=None, ctx=ctx)
+
+    asyncio.run(_run_test())
+
+    call_kwargs = engine.hybrid_search.call_args[1]
+    assert call_kwargs.get("name") is None
