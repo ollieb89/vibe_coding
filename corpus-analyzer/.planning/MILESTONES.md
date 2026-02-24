@@ -104,6 +104,28 @@
 ---
 
 
+## v2 Chunk-Level Precision (Planned: 2026-02-24)
+
+**Phases:** 9 phases (17–25), 17 plans
+**Status:** Planning complete — not started
+
+**Goal:** Expose chunk-level search results with exact line ranges and full text across CLI, MCP, and Python API. Add method-level sub-chunking for Python and TypeScript classes. Enable name-based filtering. Normalise scores to 0–1. Expose graph traversal via MCP. Add JSON output.
+
+**Key outcomes (planned):**
+- CLI output: `path/to/file.md:42-67 [skill] score:0.021` — IDE-clickable grep format with chunk text on second line
+- MCP `corpus_search`: self-contained results with `start_line`, `end_line`, `text` per chunk
+- Python and TypeScript classes sub-chunked at method level: `ClassName.method_name` naming
+- `corpus search --name foo` and MCP `name` parameter for construct-name filtering
+- MCP `sort_by` support; 0–1 normalised scores replace raw RRF values
+- `corpus search --output json` for shell piping
+- `corpus_graph` MCP tool for LLM graph traversal
+- 85%+ branch coverage on chunking modules; zero-hallucination line-range contract validated
+
+**Archive:** `.planning/milestones/v2-ROADMAP.md`
+
+---
+
+
 ## v1.5 TypeScript AST Chunking (Shipped: 2026-02-24)
 
 **Phases completed:** 2 phases (15–16), 5 plans
@@ -121,6 +143,28 @@
 - Zero-violation quality gate: ruff 0 violations, mypy 0 errors, 320 tests passing across 54 source files
 
 **Archive:** `.planning/milestones/v1.5-ROADMAP.md`
+
+---
+
+
+## v2.0 Chunk Foundation (Shipped: 2026-02-24)
+
+**Phases completed:** 2 phases (17–18), 4 plans
+**Timeline:** 2026-02-24 (1 day)
+**Python LOC:** ~7,926
+**Files modified:** 26 (+3,540 / -986 lines)
+
+**Delivered:** Established the chunk data foundation — every indexed chunk now carries exact line boundaries and full text in LanceDB; `corpus search` output switched to grep/IDE-clickable format with chunk text preview.
+
+**Key accomplishments:**
+- LanceDB schema v4: `ChunkRecord` gains `chunk_name`, `chunk_text`, `start_line`, `end_line` with idempotent `ensure_schema_v4()` migration (CHUNK-01)
+- All three chunkers (Markdown, Python, TypeScript) emit v4 fields; `_enforce_char_limit` carries fields through all sub-chunk split paths
+- Zero-hallucination line-range contract verified via parametrised round-trip test across `.md`/`.py`/`.ts` fixtures
+- `format_result(result, cwd)` implemented with grep-style `path:start-end [type] score:X.XXX` output and 200-char indented chunk text preview (CHUNK-02)
+- `search_command` render loop replaced — CLI output is now IDE-clickable in VSCode/IntelliJ
+- Rich markup escaping on path, construct_type, and preview — no MarkupError on special chars; 340 tests passing
+
+**Archive:** `.planning/milestones/v2.0-ROADMAP.md`
 
 ---
 

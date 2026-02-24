@@ -82,11 +82,11 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ `TestChunkTypeScript` at full parity with `TestChunkPython` — 21 test methods (TEST-01) — v1.5
 - ✓ `TestChunkFile` dispatch assertions for all four TS/JS extensions (TEST-02) — v1.5
 - ✓ `ruff check .` exits 0, `mypy src/` exits 0, 320 tests passing (QUAL-01) — v1.5
+- ✓ LanceDB schema v4: `start_line`, `end_line`, `chunk_name`, `chunk_text` persisted per chunk; `ensure_schema_v4()` idempotent migration; all chunkers emit v4 fields (CHUNK-01) — v2.0
+- ✓ CLI `corpus search` output: grep/IDE-clickable format `path:start-end [construct] score:X.XXX` with 200-char indented chunk text preview; Rich markup escaped (CHUNK-02) — v2.0
 
-### Active (v2 — in progress, Phase 17 complete)
+### Active (v2.1 — next milestone)
 
-- [ ] LanceDB schema v4: `start_line`, `end_line`, `chunk_name`, `chunk_text` persisted per chunk; `ensure_schema_v4()` idempotent migration (CHUNK-01) ✓ Phase 17 done
-- [ ] CLI `corpus search` output: grep/compiler-error format `path:start-end [construct] score:X.XXX` with chunk text on second line (CHUNK-02)
 - [ ] MCP `corpus_search` response includes `start_line`, `end_line`, `text` per result — self-contained unit of knowledge (CHUNK-03)
 - [ ] Python AST chunker: class header chunk (`ClassName`) + per-method chunks (`ClassName.method_name`) (SUB-01, SUB-02)
 - [ ] TypeScript AST chunker: per-method chunks for class bodies using `ClassName.method_name` naming (SUB-03)
@@ -94,7 +94,7 @@ Surface relevant agent files instantly — query an entire local agent library a
 - [ ] MCP `corpus_search` accepts `sort_by` parameter (same vocabulary as CLI); scores normalised to 0–1 per query (SORT-01, NORM-01)
 - [ ] `corpus search --output json` — JSON array to stdout for shell piping (JSON-01)
 - [ ] MCP `corpus_graph` tool: accepts `slug`, returns upstream/downstream neighbour lists (GRAPH-01)
-- [ ] 85%+ branch coverage on chunking modules; zero-hallucination integration test for line ranges (QUAL-01–04)
+- [ ] 85%+ branch coverage on chunking modules; zero-hallucination parametrised integration test for line ranges (QUAL-01, QUAL-02)
 
 ### Planned (v3)
 
@@ -119,22 +119,26 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.5 shipped 2026-02-24. TypeScript/JavaScript files now index at AST construct-level precision. v2 planning complete 2026-02-24 — 9 phases planned (17–25).**
+**v2.0 shipped 2026-02-24. Chunk data layer and IDE-clickable CLI display complete. v2.1 roadmap: Phases 19–25 (MCP chunk response, method sub-chunking, name filtering, score normalisation, JSON output, graph MCP).**
 
-- ~7,811 lines Python source across 54 files (4 files created/modified in v1.5: `ts_chunker.py` new, `chunker.py`, `pyproject.toml`, `uv.lock`)
+- ~7,926 lines Python source across 54 files
 - Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text), tree-sitter + tree-sitter-language-pack; graph layer uses SQLite (`graph.sqlite`)
-- 320 tests passing (pytest) — 27 new tests added in v1.5 (21 `TestChunkTypeScript` + 4 updated `TestChunkFile` + 2 `TestIntegrationHardening`)
+- 340 tests passing (pytest) — 10 new format_result tests added in v2.0
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
-- Zero mypy errors, zero ruff violations — clean linting baseline maintained through v1.5
+- Zero mypy errors, zero ruff violations — clean linting baseline maintained through v2.0
 
-Known limitations addressed by v2:
-- Search returns file-level results → v2 adds chunk-level line ranges in CLI and MCP (CHUNK-01–CHUNK-03)
-- `chunk_name` not in LanceDB schema → v2 schema v4 adds `chunk_name`, `chunk_text`, `start_line`, `end_line` (CHUNK-01)
-- Method-level sub-chunking deferred → v2 adds `ClassName.method_name` chunks for Python and TypeScript (SUB-01–SUB-03)
-- FILT-04/FILT-05 (MCP sort_by, score normalisation) deferred → v2 addresses both (SORT-01, NORM-01)
+Shipped in v2.0 (Phases 17–18):
+- CLI output is now grep/IDE-clickable: `path:start-end [construct] score:X.XXX` with chunk text preview
+- LanceDB stores exact line boundaries and full chunk text per chunk (schema v4)
 
-Remaining known limitations (not addressed in v2):
+Known limitations addressed in v2.1:
+- MCP `corpus_search` still returns file-level results — CHUNK-03 (Phase 19)
+- No method sub-chunking yet — SUB-01–SUB-03 (Phases 20–21)
+- No `--name` filter yet — NAME-01–NAME-03 (Phase 22)
+- `--min-score` help text references raw RRF range — will update after NORM-01 (Phase 23)
+
+Remaining known limitations (deferred):
 - Cold-start on first index after KEEP_ALIVE expiry still possible (pre-warm only covers MCP startup)
 - `.d.ts` ambient declarations excluded at scanner level — niche use case, deferred indefinitely
 
@@ -189,23 +193,20 @@ Remaining known limitations (not addressed in v2):
 | Size guard before parser call (not after) | Minified files exit early with zero AST overhead | ✓ Good — 50K char threshold validated by test |
 | Smoke test via Python API (`chunk_file`) not CLI (`corpus index`) | `corpus index` requires configured LanceDB sources; API call confirms dispatch wiring without external config | ✓ Good — clean, hermetic validation |
 
-**v2 Planned Decisions:**
-
-| Decision | Rationale | Status |
-|----------|-----------|--------|
-| CLI format: `file:start-end [construct] score:X.XXX` (grep/compiler-error pattern) | IDE-clickable natively in VSCode/IntelliJ; parseable by shell scripts; matches developer muscle memory | Planned |
-| MCP returns full `text` (untruncated); CLI truncates to 200 chars | MCP callers are LLMs — self-contained chunk avoids follow-up file-read; CLI is human-readable terminal output | Planned |
-| `start_line`/`end_line` are 1-indexed, inclusive | Matches existing chunker convention (tree-sitter 0-indexed → +1); matches editor conventions | Planned |
-| `ensure_schema_v4()` adds columns with defaults, does not rebuild | Same pattern as v3 migration (v1.1); users re-index to backfill; idempotent | Planned |
-| `ClassName.method_name` dot notation for method sub-chunks | Unambiguous; matches Python attribute access syntax; makes `--name` filtering readable | Planned |
-| Class header chunk = docstring + `__init__` up to first non-assignment | Makes class purpose searchable independently from methods; bounded and deterministic | Planned |
-| `--name foo` flag (not `--construct name:foo`) | `--construct` already has a fixed meaning (agent construct type); separate flag is cleaner UX | Planned |
-| Case-insensitive substring match for `--name` | Most useful for exploratory search; exact match would require knowing the precise chunk name | Planned |
-| Per-query min-max normalisation (not global baseline) | Cross-query normalisation is misleading for hybrid scores; within-query is correct and simple | Planned |
-| Normalisation inside search engine (not display layer) | API, CLI, and MCP all receive same normalised value; existing score-range tests must be updated | Planned |
-| `--output json` flag (not separate subcommand) | Composable with all existing filter flags; keeps CLI surface small | Planned |
-| `corpus_graph` MCP returns upstream/downstream lists (not graph object) | LLMs iterate with follow-up calls; flat lists are simpler to consume than nested structures | Planned |
-| `corpus_graph` MCP reuses `GraphStore` (no new storage) | Graph layer complete since v1.2; MCP tool is a thin wrapper; zero schema changes required | Planned |
+| CLI format: `file:start-end [construct] score:X.XXX` (grep/compiler-error pattern) | IDE-clickable natively in VSCode/IntelliJ; parseable by shell scripts; matches developer muscle memory | ✓ Good — shipped v2.0 |
+| MCP returns full `text` (untruncated); CLI truncates to 200 chars | MCP callers are LLMs — self-contained chunk avoids follow-up file-read; CLI is human-readable terminal output | — Pending (CHUNK-03 v2.1) |
+| `start_line`/`end_line` are 1-indexed, inclusive | Matches existing chunker convention (tree-sitter 0-indexed → +1); matches editor conventions | ✓ Good — shipped v2.0 |
+| `ensure_schema_v4()` adds columns with defaults, does not rebuild | Same pattern as v3 migration (v1.1); users re-index to backfill; idempotent | ✓ Good — shipped v2.0 |
+| `format_result` returns `(primary, preview \| None)` tuple — pure function | Console.print() owns rendering; testable without output side effects | ✓ Good — shipped v2.0 |
+| `ClassName.method_name` dot notation for method sub-chunks | Unambiguous; matches Python attribute access syntax; makes `--name` filtering readable | — Pending (SUB-01–03 v2.1) |
+| Class header chunk = docstring + `__init__` up to first non-assignment | Makes class purpose searchable independently from methods; bounded and deterministic | — Pending (v2.1) |
+| `--name foo` flag (not `--construct name:foo`) | `--construct` already has a fixed meaning (agent construct type); separate flag is cleaner UX | — Pending (NAME-02 v2.1) |
+| Case-insensitive substring match for `--name` | Most useful for exploratory search; exact match would require knowing the precise chunk name | — Pending (v2.1) |
+| Per-query min-max normalisation (not global baseline) | Cross-query normalisation is misleading for hybrid scores; within-query is correct and simple | — Pending (NORM-01 v2.1) |
+| Normalisation inside search engine (not display layer) | API, CLI, and MCP all receive same normalised value; existing score-range tests must be updated | — Pending (v2.1) |
+| `--output json` flag (not separate subcommand) | Composable with all existing filter flags; keeps CLI surface small | — Pending (JSON-01 v2.1/v2.2) |
+| `corpus_graph` MCP returns upstream/downstream lists (not graph object) | LLMs iterate with follow-up calls; flat lists are simpler to consume than nested structures | — Pending (GRAPH-01 v2.2) |
+| `corpus_graph` MCP reuses `GraphStore` (no new storage) | Graph layer complete since v1.2; MCP tool is a thin wrapper; zero schema changes required | — Pending (v2.2) |
 
 ---
-*Last updated: 2026-02-24 — v3.0 Intelligent Search milestone planning started*
+*Last updated: 2026-02-24 after v2.0 Chunk Foundation milestone*

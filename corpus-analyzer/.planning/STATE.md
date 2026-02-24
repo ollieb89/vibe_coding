@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 — v3.0 Intelligent Search milestone planned)
+See: .planning/PROJECT.md (updated 2026-02-24 after v2.0 milestone)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v2 Chunk-Level Precision (Phases 17–25) — Phase 17 complete; v3.0 roadmap created
+**Current focus:** v2.1 Result Quality (Phases 19–25) — v2.0 shipped; next: Phase 19 MCP chunk response
 
 ## Current Position
 
-Phase: 18-cli-chunk-display (v2 in progress — Phase 18 complete)
-Plan: 02 complete (format_result() GREEN implementation; search_command render loop updated)
-Status: Phase 18 complete — both plans done; CHUNK-02 satisfied; grep-style search output live
-Last activity: 2026-02-24 — Phase 18 Plan 02 complete (format_result GREEN + cli.py wired)
+Phase: v2.0 complete (Phases 17–18 shipped as v2.0 Chunk Foundation)
+Plan: — (milestone tagged; ready for v2.1)
+Status: v2.0 shipped — CHUNK-01 + CHUNK-02 delivered; tagged v2.0; 340 tests passing
+Last activity: 2026-02-24 — v2.0 milestone archived
 
-Progress: [███░░░░░░░] 25% of v2 (Phase 17 + 18 complete — 4 of 18 plans done); v3 planning complete
+Progress: v2.0 SHIPPED (Phases 17–18); v2.1 not started (Phases 19–25 planned)
 
 ## Performance Metrics
 
@@ -46,6 +46,11 @@ Progress: [███░░░░░░░] 25% of v2 (Phase 17 + 18 complete —
 **v1.5 Complete:**
 - Plans completed: 5 (15-01, 15-02, 16-01, 16-02, 16-03)
 - Phases: 2 complete (15, 16)
+- Timeline: 1 day (2026-02-24)
+
+**v2.0 Complete:**
+- Plans completed: 4 (17-01, 17-02, 18-01, 18-02)
+- Phases: 2 (17, 18)
 - Timeline: 1 day (2026-02-24)
 
 ## Accumulated Context
