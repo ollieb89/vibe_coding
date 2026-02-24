@@ -70,10 +70,10 @@ Plans:
   2. Each method chunk is named `ClassName.method_name` with correct `start_line`/`end_line`
   3. The constructor becomes `ClassName.constructor`
   4. Top-level functions and non-class constructs are unaffected and continue to index as before
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 21-01: TBD
+- [ ] 21-01-PLAN.md — TDD: TypeScript per-method chunk extraction (_chunk_ts_class(), SUB-03)
 
 ---
 
