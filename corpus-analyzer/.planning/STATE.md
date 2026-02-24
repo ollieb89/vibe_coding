@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24 after v1.5 milestone start)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v1.5 TypeScript AST Chunking — Phase 15: Core AST Chunker
+**Current focus:** v1.5 TypeScript AST Chunking — Phase 15: Core AST Chunker (COMPLETE)
 
 ## Current Position
 
-Phase: 15 of 16 (Core AST Chunker)
-Plan: 1 of 2 in current phase (15-01 complete)
-Status: In progress
-Last activity: 2026-02-24 — 15-01 RED tests committed
+Phase: 15 of 16 (Core AST Chunker — COMPLETE)
+Plan: 2 of 2 in current phase (15-02 complete — phase done)
+Status: Phase 15 complete
+Last activity: 2026-02-24 — 15-02 GREEN implementation committed
 
-Progress: [█░░░░░░░░░] 10% (v1.5)
+Progress: [██░░░░░░░░] 20% (v1.5)
 
 ## Performance Metrics
 
@@ -43,17 +43,21 @@ Progress: [█░░░░░░░░░] 10% (v1.5)
 - Phases: 2 (13, 14)
 - Timeline: 1 day (2026-02-24)
 
+**v1.5 In progress:**
+- Plans completed: 2 (15-01, 15-02)
+- Phases: 1 complete (15)
+- Timeline: 1 day (2026-02-24)
+
 ## Accumulated Context
 
 ### Decisions
 
-Cleared — v1.4 complete. See PROJECT.md Key Decisions table for full log.
-
-Key v1.5 decisions from research:
+Key v1.5 decisions:
 - Use `get_parser(dialect)` from `tree_sitter_language_pack` with `@lru_cache` (simpler than module-level globals)
 - `.tsx` and `.jsx` both use TSX grammar (TypeScript grammar produces ERROR nodes on JSX elements)
 - Fall back only on uncaught exception or zero constructs — NOT on `root_node.has_error` alone
-- All changes confined to three files: `chunker.py`, `test_chunker.py`, `pyproject.toml`
+- `export default function(): void {}` requires special-case: declaration field is None; detect 'default' child and emit full export_statement as chunk_name='default'
+- Lazy import of ts_chunker inside chunk_file elif branch avoids circular import
 
 Key 15-01 decisions:
 - Module-level import of ts_chunker in test file ensures clean RED state (ModuleNotFoundError at collection)
@@ -65,10 +69,10 @@ None.
 
 ### Blockers/Concerns
 
-None — 293 tests passing. Ruff-clean, mypy-clean. Research complete (HIGH confidence across all areas).
+None — 318 tests passing. Ruff-clean, mypy-clean. Phase 15 complete.
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: 15-01-PLAN.md complete (RED tests committed). Ready for Plan 02 (GREEN implementation).
+Stopped at: 15-02-PLAN.md complete (GREEN implementation committed). Phase 15 done. Ready for Phase 16.
 Resume file: None

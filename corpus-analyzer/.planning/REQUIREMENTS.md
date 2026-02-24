@@ -9,17 +9,17 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 
 ### Dependencies
 
-- [ ] **DEP-01**: `pyproject.toml` updated with `tree-sitter>=0.25.0` and `tree-sitter-language-pack>=0.13.0`; `uv sync` succeeds with pre-compiled wheels and no C toolchain
+- [x] **DEP-01**: `pyproject.toml` updated with `tree-sitter>=0.25.0` and `tree-sitter-language-pack>=0.13.0`; `uv sync` succeeds with pre-compiled wheels and no C toolchain
 
 ### Indexer
 
-- [ ] **IDX-01**: `chunk_file()` dispatch routes `.ts`, `.tsx`, `.js`, `.jsx` extensions to `chunk_typescript()`
-- [ ] **IDX-02**: `chunk_typescript()` extracts top-level constructs: `function_declaration`, `generator_function_declaration`, `class_declaration`, `abstract_class_declaration`, `interface_declaration`, `type_alias_declaration`, `lexical_declaration`, `enum_declaration`
-- [ ] **IDX-03**: `export_statement` nodes are unwrapped — `export function foo()` and `export class Bar` produce a chunk with the full exported text and the inner declaration's line boundaries
-- [ ] **IDX-04**: Grammar dispatched by extension: `typescript` for `.ts`, `tsx` for `.tsx` and `.jsx`, `javascript` for `.js`
-- [ ] **IDX-05**: Silent fallback to `chunk_lines()` when parse raises an exception or zero named constructs are extracted; does NOT fall back on `root_node.has_error` alone (tree-sitter is error-tolerant)
-- [ ] **IDX-06**: Returned chunk dict includes `chunk_name` field (name of extracted construct); indexer ignores the extra key today; forward-compatible with future `--construct` name filtering
-- [ ] **IDX-07**: Parser loader uses `@lru_cache` — grammar binaries loaded once per dialect per process (prevents 30s overhead on 500+ TS file corpora)
+- [x] **IDX-01**: `chunk_file()` dispatch routes `.ts`, `.tsx`, `.js`, `.jsx` extensions to `chunk_typescript()`
+- [x] **IDX-02**: `chunk_typescript()` extracts top-level constructs: `function_declaration`, `generator_function_declaration`, `class_declaration`, `abstract_class_declaration`, `interface_declaration`, `type_alias_declaration`, `lexical_declaration`, `enum_declaration`
+- [x] **IDX-03**: `export_statement` nodes are unwrapped — `export function foo()` and `export class Bar` produce a chunk with the full exported text and the inner declaration's line boundaries
+- [x] **IDX-04**: Grammar dispatched by extension: `typescript` for `.ts`, `tsx` for `.tsx` and `.jsx`, `javascript` for `.js`
+- [x] **IDX-05**: Silent fallback to `chunk_lines()` when parse raises an exception or zero named constructs are extracted; does NOT fall back on `root_node.has_error` alone (tree-sitter is error-tolerant)
+- [x] **IDX-06**: Returned chunk dict includes `chunk_name` field (name of extracted construct); indexer ignores the extra key today; forward-compatible with future `--construct` name filtering
+- [x] **IDX-07**: Parser loader uses `@lru_cache` — grammar binaries loaded once per dialect per process (prevents 30s overhead on 500+ TS file corpora)
 - [ ] **IDX-08**: Files exceeding 50,000 characters skip AST parse and fall back to `chunk_lines()` directly (guard against minified and generated files)
 - [ ] **IDX-09**: `ImportError` guard in `chunk_file()` — if `tree-sitter` or `tree-sitter-language-pack` is absent, fall back to line chunking rather than raising at import time
 
@@ -57,14 +57,14 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEP-01 | Phase 15 | Pending |
-| IDX-01 | Phase 15 | Pending |
-| IDX-02 | Phase 15 | Pending |
-| IDX-03 | Phase 15 | Pending |
-| IDX-04 | Phase 15 | Pending |
-| IDX-05 | Phase 15 | Pending |
-| IDX-06 | Phase 15 | Pending |
-| IDX-07 | Phase 15 | Pending |
+| DEP-01 | Phase 15 | Complete |
+| IDX-01 | Phase 15 | Complete |
+| IDX-02 | Phase 15 | Complete |
+| IDX-03 | Phase 15 | Complete |
+| IDX-04 | Phase 15 | Complete |
+| IDX-05 | Phase 15 | Complete |
+| IDX-06 | Phase 15 | Complete |
+| IDX-07 | Phase 15 | Complete |
 | IDX-08 | Phase 16 | Pending |
 | IDX-09 | Phase 16 | Pending |
 | TEST-01 | Phase 15 | Complete |
