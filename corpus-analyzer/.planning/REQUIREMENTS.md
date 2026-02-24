@@ -38,9 +38,9 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 
 ### Validation
 
-- [ ] **VALID-01**: `uv run ruff check .` exits 0 with zero violations
-- [ ] **VALID-02**: `uv run mypy src/` exits 0 with zero errors
-- [ ] **VALID-03**: `uv run pytest -v` — all 281 tests green
+- [x] **VALID-01**: `uv run ruff check .` exits 0 with zero violations
+- [x] **VALID-02**: `uv run mypy src/` exits 0 with zero errors
+- [x] **VALID-03**: `uv run pytest -v` — all 281 tests green
 
 ## Future Requirements
 
@@ -76,9 +76,9 @@ Requirements for v1.3 Code Quality milestone. Each maps to roadmap phases.
 | MYPY-04 | Phase 11 | Complete |
 | MYPY-05 | Phase 11 | Complete |
 | MYPY-06 | Phase 11 | Complete |
-| VALID-01 | Phase 12 | Pending |
-| VALID-02 | Phase 12 | Pending |
-| VALID-03 | Phase 12 | Pending |
+| VALID-01 | Phase 12 | Complete |
+| VALID-02 | Phase 12 | Complete |
+| VALID-03 | Phase 12 | Complete |
 
 **Coverage:**
 - v1 requirements: 20 total
