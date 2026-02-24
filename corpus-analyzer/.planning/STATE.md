@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 
 ## Current Position
 
-Phase: 19 (MCP Chunk Response)
+Phase: 20 (Python Method Sub-Chunking)
 Plan: 01 complete
-Status: Phase 19 complete — 1/1 plans done
-Last activity: 2026-02-24 — 19-01 CHUNK-03 MCP chunk response
+Status: Phase 20 in progress — 1/? plans done
+Last activity: 2026-02-24 — 20-01 SUB-01 class header chunk
 
 Progress: [=         ] 1/7 phases — v2.1 in progress
 
@@ -54,7 +54,7 @@ Progress: [=         ] 1/7 phases — v2.1 in progress
 - Timeline: 1 day (2026-02-24)
 
 **v2.1 In Progress:**
-- Plans completed: 1 (19-01)
+- Plans completed: 2 (19-01, 20-01)
 - Phases: 1/7 complete (19–25)
 - Timeline: started 2026-02-24
 
@@ -89,6 +89,8 @@ Key 17-02 decisions:
 - chunk_text read via chunk.get("chunk_text", "") in indexer — safe because summary prepend mutates chunk["text"] only
 - Test fixtures that directly insert LanceDB rows auto-fixed with chunk_name="" and chunk_text="" defaults
 - ensure_schema_v2 → ensure_schema_v3 → ensure_schema_v4 call order preserved in CorpusIndex.open()
+- [Phase 20-01]: _chunk_class() returns list[dict] to allow Plan 02 method chunk additions without signature change
+- [Phase 20-01]: init body traversal uses direct iteration over init_node.body (not ast.walk) to preserve linear order for truncation logic
 
 ### v2.1 Roadmap Notes
 
@@ -112,6 +114,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 19-01-PLAN.md (CHUNK-03 MCP chunk response)
+Stopped at: Completed 20-01-PLAN.md (SUB-01 class header chunk)
 Resume file: None
-Next step: Phase 20 — sub-chunking
+Next step: Phase 20 Plan 02 — method sub-chunks (SUB-02)
