@@ -45,7 +45,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 **Milestone Goal:** Achieve a clean, zero-error linting baseline — `uv run ruff check .` and `uv run mypy src/` both exit zero, all 281 tests green.
 
-- [ ] **Phase 9: Config and Auto-Fix** — pyproject.toml surgical additions + ruff auto-fix eliminating 72% of violations
+- [ ] **Phase 9: Config and Auto-Fix** — pyproject.toml surgical additions + ruff auto-fix eliminating ~282 violations (2 plans)
 - [ ] **Phase 10: Manual Ruff — Leaf to Hub** — Fix all remaining ruff violations in leaf modules through the core database hub
 - [ ] **Phase 11: Manual Ruff — CLI + Mypy** — Fix CLI and legacy rewriter ruff violations; fix all 42 mypy errors across 9 files
 - [ ] **Phase 12: Validation Gate** — Confirm zero ruff violations, zero mypy errors, all tests green
@@ -62,7 +62,11 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
   3. `pyproject.toml` excludes `.windsurf/` and `.planning/` from ruff scope
   4. Running `ruff check --fix` eliminates all W293/W291/I001/F401/UP045/F541/W605 violations with no manual edits
   5. All `__init__.py` re-exports remain importable after auto-fix (smoke-test passes)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Add ruff/mypy config stanzas to pyproject.toml (Commit 1)
+- [ ] 09-02-PLAN.md — Run ruff --fix, audit changes, smoke-test, full pytest, commit (Commit 2)
 
 ### Phase 10: Manual Ruff — Leaf to Hub
 **Goal**: All ruff violations in leaf modules and the core database hub are resolved — no B-series, F841/E741, E501, or E402 violations remain outside `cli.py`
@@ -109,7 +113,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 | 6. Frontmatter Classification | v1.1 | 2/2 | Complete | 2026-02-23 |
 | 7. Graph Layer | v1.2 | —/— | Complete | 2026-02-24 |
 | 8. Cleanup | v1.2 | 1/1 | Complete | 2026-02-24 |
-| 9. Config and Auto-Fix | v1.3 | 0/TBD | Not started | - |
+| 9. Config and Auto-Fix | v1.3 | 0/2 | Not started | - |
 | 10. Manual Ruff — Leaf to Hub | v1.3 | 0/TBD | Not started | - |
 | 11. Manual Ruff — CLI + Mypy | v1.3 | 0/TBD | Not started | - |
 | 12. Validation Gate | v1.3 | 0/TBD | Not started | - |
