@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 
 ## Current Position
 
-Phase: 21 (TypeScript Method Sub-Chunking)
+Phase: 22 (Name Filtering)
 Plan: 01 complete
-Status: Phase 21 complete — 1/1 plans done
-Last activity: 2026-02-24 — 21-01 SUB-03 TypeScript method sub-chunking
+Status: Phase 22 in progress — 1/? plans done
+Last activity: 2026-02-24 — 22-01 Engine name filter + empty-query support
 
-Progress: [==        ] 2/7 phases — v2.1 in progress
+Progress: [===       ] 3/7 phases — v2.1 in progress
 
 ## Performance Metrics
 
@@ -54,8 +54,8 @@ Progress: [==        ] 2/7 phases — v2.1 in progress
 - Timeline: 1 day (2026-02-24)
 
 **v2.1 In Progress:**
-- Plans completed: 4 (19-01, 20-01, 20-02, 21-01)
-- Phases: 2/7 complete (19–25)
+- Plans completed: 5 (19-01, 20-01, 20-02, 21-01, 22-01)
+- Phases: 2/7 complete (19–25) + phase 22 in progress
 - Timeline: started 2026-02-24
 
 ## Accumulated Context
@@ -95,6 +95,8 @@ Key 17-02 decisions:
 - [Phase 20-02]: Decorator start_line included in method chunk (decorator_list[0].lineno) so full method signature with decorators is captured
 - [Phase 21-01]: abstract_method_signature must be collected alongside method_definition for TypeScript abstract method sub-chunking
 - [Phase 21-01]: _METHOD_NODE_TYPES defined at module level in ts_chunker.py to satisfy ruff N806 rule
+- [Phase 22-name-filtering]: Empty query uses table.search() scan instead of hybrid search — LanceDB raises ValueError for empty text query in hybrid mode
+- [Phase 22-name-filtering]: name filter applied post-retrieval after text-term filter, before min_score; name='' treated as None via falsy check
 
 ### v2.1 Roadmap Notes
 
@@ -118,6 +120,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 21-01-PLAN.md (SUB-03 TypeScript method sub-chunking)
+Stopped at: Completed 22-01-PLAN.md (Engine name filter + empty-query support)
 Resume file: None
-Next step: Phase 21 complete — proceed to Phase 22 (Name filter)
+Next step: Phase 22 Plan 02 — CLI --name flag wiring

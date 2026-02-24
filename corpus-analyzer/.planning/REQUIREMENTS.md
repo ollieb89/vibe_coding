@@ -19,9 +19,9 @@
 
 ### Name Filtering
 
-- [ ] **NAME-01**: `corpus search --name <fragment>` CLI flag; case-insensitive substring match on `chunk_name`; composable with all existing filter flags
+- [x] **NAME-01**: `corpus search --name <fragment>` CLI flag; case-insensitive substring match on `chunk_name`; composable with all existing filter flags
 - [ ] **NAME-02**: MCP `corpus_search` accepts `name: Optional[str]` parameter; same case-insensitive substring match semantics
-- [ ] **NAME-03**: `corpus search --name foo` (no positional query) is valid; lists all chunks matching the name filter ordered by `--sort-by` (default: relevance)
+- [x] **NAME-03**: `corpus search --name foo` (no positional query) is valid; lists all chunks matching the name filter ordered by `--sort-by` (default: relevance)
 
 ### JSON Output
 
@@ -80,9 +80,9 @@
 | SUB-01 | Phase 20 | Complete |
 | SUB-02 | Phase 20 | Complete |
 | SUB-03 | Phase 21 | Complete |
-| NAME-01 | Phase 22 | Pending |
+| NAME-01 | Phase 22 | Complete |
 | NAME-02 | Phase 22 | Pending |
-| NAME-03 | Phase 22 | Pending |
+| NAME-03 | Phase 22 | Complete |
 | NORM-01 | Phase 23 | Pending |
 | SORT-01 | Phase 23 | Pending |
 | JSON-01 | Phase 24 | Pending |
