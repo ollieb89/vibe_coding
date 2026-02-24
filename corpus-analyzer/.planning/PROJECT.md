@@ -8,6 +8,8 @@ v1.0 ships as a CLI tool (`corpus add`, `corpus index`, `corpus search`, `corpus
 
 v1.1 adds configurable extension allowlists per source (no more config files polluting results) and frontmatter-aware construct classification — YAML `type:` and `component_type:` fields are classified at 0.95 confidence, making `--construct` filtering reliably accurate.
 
+v1.2 adds a relationship graph layer: `corpus index` now extracts `## Related Skills` / `## Related Files` links from indexed Markdown and persists them as a directed graph, queryable via `corpus graph <slug>`.
+
 ## Core Value
 
 Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
@@ -35,7 +37,8 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ### Active
 
-(None — planning v2 requirements)
+- [ ] Relationship graph: extract + persist `## Related Skills` / `## Related Files` links during `corpus index` (GRAPH-01–GRAPH-05)
+- [ ] Remove dead `use_llm_classification` parameter from `index_source()` (CLEAN-01)
 
 ### Out of Scope
 
@@ -48,19 +51,20 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.1 shipped 2026-02-23.**
+**v1.2 in progress (started 2026-02-24). v1.1 shipped 2026-02-23.**
 
-- ~6,248 lines Python source
-- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text)
-- 192 tests passing (pytest)
+- ~6,248 lines Python source (graph module adds ~300 lines)
+- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text); graph layer uses SQLite
+- 282 tests passing (pytest)
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
+
+Graph layer uses a separate `graph.sqlite` file (not LanceDB) to store directed edges; keeps concerns cleanly separated.
 
 Known limitations heading into v2 planning:
 - Search returns file-level results; chunk-level line ranges would improve precision
 - TypeScript/JS files use line-based chunking (no AST awareness)
 - Cold-start on first index after KEEP_ALIVE expiry still possible (pre-warm only covers MCP startup)
-- `use_llm_classification` parameter on `index_source()` is dead code (method reads from SourceConfig directly)
 
 ## Constraints
 
@@ -92,5 +96,8 @@ Known limitations heading into v2 planning:
 | `ensure_schema_v3()` in-place migration | Existing users don't rebuild index on upgrade | ✓ Good — idempotent, zero data loss |
 | Extension allowlist default includes doc/code types | Sensible out-of-box behavior without requiring config | ✓ Good — excludes `.sh`, `.html`, `.json`, `.lock`, binaries automatically |
 
+| SQLite for graph store (not LanceDB) | Graph edges are relational; SQLite is simpler and avoids LanceDB schema overhead | — Pending |
+| Closest-prefix ambiguity resolution for slugs | Context-aware: picks the candidate closest in filesystem path to the referencing file | — Pending |
+
 ---
-*Last updated: 2026-02-23 after v1.1 milestone*
+*Last updated: 2026-02-24 after v1.2 milestone started*

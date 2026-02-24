@@ -2,17 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-23 after v1.1 milestone)
+See: .planning/PROJECT.md (updated 2026-02-24 after v1.2 milestone started)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Planning next milestone (v1.2 or v2.0)
+**Current focus:** v1.2 Graph Linker milestone
 
 ## Current Position
 
-Phase: — (v1.1 complete)
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.1 shipped — ready to plan next milestone
-Last activity: 2026-02-23 — v1.1 Search Quality milestone completed
+Status: Defining requirements
+Last activity: 2026-02-24 — Milestone v1.2 started
 
 Progress: [██████████] 100% (v1.1 complete)
 
