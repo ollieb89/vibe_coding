@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -28,20 +28,23 @@ def _make_engine(raw_results: list[dict[str, Any]]) -> MagicMock:
 
 
 # -----------------------------------------------------------------------------
-# Tests
+# Tests — existing shape / filter tests
 # -----------------------------------------------------------------------------
 
 
 def test_corpus_search_returns_results_shape() -> None:
-    """Tool returns list of result dicts with all required fields."""
+    """Tool returns list of result dicts with all required CHUNK-03 fields."""
     from corpus_analyzer.mcp.server import corpus_search
 
     raw = [
         {
             "file_path": "/some/file.md",
             "_relevance_score": 0.9,
-            "text": "hello world",
+            "chunk_text": "hello world",
+            "start_line": 1,
+            "end_line": 3,
             "construct_type": "skill",
+            "chunk_name": "intro",
             "summary": "A skill file",
             "file_type": ".md",
         }
@@ -62,8 +65,10 @@ def test_corpus_search_returns_results_shape() -> None:
     assert r["construct_type"] == "skill"
     assert r["summary"] == "A skill file"
     assert r["file_type"] == ".md"
-    assert "snippet" in r
-    assert "full_content" in r
+    assert "text" in r
+    assert "start_line" in r
+    assert "end_line" in r
+    assert "chunk_name" in r
 
 
 def test_corpus_search_empty_results() -> None:
@@ -79,45 +84,6 @@ def test_corpus_search_empty_results() -> None:
     result = asyncio.run(_run_test())
 
     assert result == {"results": [], "message": "No results found for query: nonexistent"}
-
-
-def test_corpus_search_content_error_present_on_oserror() -> None:
-    from corpus_analyzer.mcp.server import corpus_search
-
-    raw = [{"file_path": "/fake/path.md"}]
-    engine = _make_engine(raw)
-    ctx = _make_ctx(engine)
-
-    with patch("corpus_analyzer.mcp.server.Path.read_text", side_effect=OSError("no such file")):
-        async def _run_test() -> dict[str, Any]:
-            return await corpus_search(query="hello", ctx=ctx)
-
-        result = asyncio.run(_run_test())
-
-    assert "results" in result
-    assert len(result["results"]) == 1
-    r = result["results"][0]
-    assert "content_error" in r
-    assert r["content_error"] == "File not found: /fake/path.md"
-
-
-def test_corpus_search_content_error_absent_on_success() -> None:
-    from corpus_analyzer.mcp.server import corpus_search
-
-    raw = [{"file_path": "/fake/path.md"}]
-    engine = _make_engine(raw)
-    ctx = _make_ctx(engine)
-
-    with patch("corpus_analyzer.mcp.server.Path.read_text", return_value="file content"):
-        async def _run_test() -> dict[str, Any]:
-            return await corpus_search(query="hello", ctx=ctx)
-
-        result = asyncio.run(_run_test())
-
-    assert "results" in result
-    assert len(result["results"]) == 1
-    r = result["results"][0]
-    assert "content_error" not in r
 
 
 def test_corpus_search_engine_none_raises_value_error() -> None:
@@ -201,3 +167,207 @@ def test_server_module_does_not_write_to_stdout(capsys: pytest.CaptureFixture[st
 
     captured = capsys.readouterr()
     assert captured.out == "", f"Unexpected stdout output: {captured.out!r}"
+
+
+# -----------------------------------------------------------------------------
+# Tests — CHUNK-03 new response shape (RED phase)
+# -----------------------------------------------------------------------------
+
+
+def test_corpus_search_text_field_present() -> None:
+    """Result dict includes 'text' field with full untruncated chunk_text content."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/some/file.py",
+            "_relevance_score": 0.8,
+            "chunk_text": "def foo():\n    pass",
+            "start_line": 10,
+            "end_line": 12,
+            "construct_type": "function",
+            "chunk_name": "foo",
+            "summary": "",
+            "file_type": ".py",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="foo", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert r["text"] == "def foo():\n    pass"
+
+
+def test_corpus_search_line_bounds_present() -> None:
+    """Result dict includes correct start_line and end_line from the row."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/some/file.py",
+            "_relevance_score": 0.8,
+            "chunk_text": "def foo():\n    pass",
+            "start_line": 10,
+            "end_line": 12,
+            "construct_type": "function",
+            "chunk_name": "foo",
+            "summary": "",
+            "file_type": ".py",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="foo", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert r["start_line"] == 10
+    assert r["end_line"] == 12
+
+
+def test_corpus_search_legacy_row_empty_text() -> None:
+    """Legacy row with empty chunk_text and zero line bounds returns text='' without raising."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/legacy/file.md",
+            "_relevance_score": 0.5,
+            "chunk_text": "",
+            "start_line": 0,
+            "end_line": 0,
+            "construct_type": "documentation",
+            "chunk_name": "",
+            "summary": "",
+            "file_type": ".md",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="legacy", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert r["text"] == ""
+    assert r["start_line"] == 0
+    assert r["end_line"] == 0
+
+
+def test_corpus_search_no_snippet_field() -> None:
+    """Regression guard: 'snippet' must NOT appear in result dict (old truncated preview removed)."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/some/file.md",
+            "_relevance_score": 0.7,
+            "chunk_text": "Some content here",
+            "start_line": 5,
+            "end_line": 7,
+            "construct_type": "documentation",
+            "chunk_name": "intro",
+            "summary": "",
+            "file_type": ".md",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="content", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert "snippet" not in r
+
+
+def test_corpus_search_no_full_content_field() -> None:
+    """Regression guard: 'full_content' must NOT appear in result dict (whole-file read removed)."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/some/file.md",
+            "_relevance_score": 0.7,
+            "chunk_text": "Some content here",
+            "start_line": 5,
+            "end_line": 7,
+            "construct_type": "documentation",
+            "chunk_name": "intro",
+            "summary": "",
+            "file_type": ".md",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="content", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert "full_content" not in r
+
+
+def test_corpus_search_text_field_is_first_key() -> None:
+    """Content-first ordering: 'text' must be the first key in result dict."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/some/file.py",
+            "_relevance_score": 0.9,
+            "chunk_text": "class Foo:\n    pass",
+            "start_line": 1,
+            "end_line": 2,
+            "construct_type": "class",
+            "chunk_name": "Foo",
+            "summary": "A class",
+            "file_type": ".py",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="Foo", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert list(r.keys())[0] == "text"
+
+
+def test_corpus_search_no_content_error_field() -> None:
+    """No file-read means no OSError path: 'content_error' must NOT appear in result dict."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    raw = [
+        {
+            "file_path": "/some/file.md",
+            "_relevance_score": 0.6,
+            "chunk_text": "Content here",
+            "start_line": 1,
+            "end_line": 3,
+            "construct_type": "documentation",
+            "chunk_name": "sec",
+            "summary": "",
+            "file_type": ".md",
+        }
+    ]
+    engine = _make_engine(raw)
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> dict[str, Any]:
+        return await corpus_search(query="content", ctx=ctx)
+
+    result = asyncio.run(_run_test())
+    r = result["results"][0]
+    assert "content_error" not in r
