@@ -45,6 +45,7 @@ async def corpus_search(
     construct: Optional[str] = None,  # noqa: UP045
     top_k: Optional[int] = 5,  # noqa: UP045
     min_score: Optional[float] = None,  # noqa: UP045
+    name: Optional[str] = None,  # noqa: UP045
     ctx: Context = None,  # type: ignore[assignment]
 ) -> dict[str, Any]:
     """Search the corpus index with a natural language query.
@@ -66,6 +67,8 @@ async def corpus_search(
 
     Use 'source', 'type', 'construct' for filtering; 'top_k' for result count.
     'min_score' filters out results below the given relevance threshold (0.0 means no filter).
+    'name' is an optional case-insensitive substring filter on chunk_name.
+    Use to narrow results to a specific method or construct (e.g. 'ClassName.method').
     """
     engine_or_none: CorpusSearch | None = ctx.lifespan_context.get("engine")
     if engine_or_none is None:
@@ -87,6 +90,7 @@ async def corpus_search(
             construct_type=construct,
             limit=limit,
             min_score=effective_min_score,
+            name=name,
         )
     except Exception as exc:
         raise ValueError(

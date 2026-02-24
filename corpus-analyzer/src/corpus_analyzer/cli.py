@@ -307,7 +307,10 @@ _VALID_CLI_SORT_BY_VALUES = frozenset(_CLI_SORT_BY_MAP.keys())
 
 @app.command("search")
 def search_command(
-    query: Annotated[str, typer.Argument(help="Natural language search query")],
+    query: Annotated[
+        str | None,
+        typer.Argument(help="Natural language search query (optional when --name is used)"),
+    ] = None,
     source: Annotated[
         str | None, typer.Option("--source", "-s", help="Filter by source name")
     ] = None,
@@ -348,8 +351,22 @@ def search_command(
             help="Sort order using API vocabulary: score|date|title",
         ),
     ] = None,
+    name_filter: Annotated[
+        str | None,
+        typer.Option(
+            "--name",
+            "-N",
+            help="Filter results by chunk name (case-insensitive substring match). "
+                 "Can be used without a query to list all matching chunks.",
+        ),
+    ] = None,
 ) -> None:
     """Search the indexed corpus with a natural language query."""
+    if query is None and name_filter is None:
+        console.print("[red]Error:[/] Provide a query or --name to filter by chunk name.")
+        raise typer.Exit(code=1)
+    effective_query = query if query is not None else ""
+
     config = load_config(CONFIG_PATH)
 
     embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
@@ -377,13 +394,14 @@ def search_command(
 
     try:
         results = search.hybrid_search(
-            query,
+            effective_query,
             source=source,
             file_type=type_,
             construct_type=construct,
             limit=limit,
             sort_by=effective_sort_by,
             min_score=min_score,
+            name=name_filter,
         )
     except ValueError as e:
         console.print(f"[red]Error:[/] {e}")
@@ -395,8 +413,12 @@ def search_command(
                 f"No results above {min_score:.3f}. "
                 "Run without --min-score to see available scores."
             )
+        elif name_filter:
+            console.print(
+                f'[yellow]No chunks with name containing "[bold]{name_filter}[/bold]"[/yellow]'
+            )
         else:
-            console.print(f'[yellow]No results for "[bold]{query}[/bold]"[/yellow]')
+            console.print(f'[yellow]No results for "[bold]{effective_query}[/bold]"[/yellow]')
         return
 
     if construct and sort == "construct":

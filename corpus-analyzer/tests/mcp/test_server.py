@@ -126,6 +126,7 @@ def test_corpus_search_passes_filters_to_hybrid_search() -> None:
         construct_type="skill",
         limit=3,
         min_score=0.0,
+        name=None,
     )
 
 
