@@ -8,6 +8,7 @@ not hardcoded, to keep tests resilient to schema changes.
 import hashlib
 
 import pytest
+from pydantic import ValidationError
 
 from corpus_analyzer.store.schema import ChunkRecord, make_chunk_id
 
@@ -145,12 +146,12 @@ class TestChunkRecordInstantiation:
 
     def test_wrong_vector_dimension_raises(self) -> None:
         """ChunkRecord raises ValidationError when vector has wrong length (e.g. 512)."""
-        with pytest.raises(Exception):  # pydantic ValidationError or similar
+        with pytest.raises(ValidationError):
             self._make_valid_record(vector=[0.1] * 512)
 
     def test_wrong_vector_dimension_1024_raises(self) -> None:
         """ChunkRecord raises ValidationError when vector has 1024 dims (mxbai model dims)."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             self._make_valid_record(vector=[0.0] * 1024)
 
     def test_start_line_is_int(self) -> None:
