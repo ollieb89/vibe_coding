@@ -61,12 +61,12 @@ def split_on_headings(content: str, max_chunk_size: int = 8000) -> list[Document
             # Use specific heading for this atom if provided (e.g. the heading line itself)
             # otherwise use the context heading
             h = force_heading if force_heading else current_heading
-            l = force_level if force_level else current_level
+            level_val = force_level if force_level else current_level
 
             atoms.append(Atom(
                 lines=current_lines,
                 heading=h,
-                level=l,
+                level=level_val,
                 is_code=is_code_atom,
                 start_idx=atom_start_idx
             ))
@@ -138,7 +138,7 @@ def split_on_headings(content: str, max_chunk_size: int = 8000) -> list[Document
         return res
 
     for atom in atoms:
-        atom_size = sum(len(l) for l in atom.lines)
+        atom_size = sum(len(line) for line in atom.lines)
 
         # Heuristic: If adding this atom exceeds max size...
         if current_chunk_atoms and (current_chunk_size + atom_size > max_chunk_size):
