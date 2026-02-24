@@ -51,7 +51,10 @@ def test_extract_snippet_empty_query() -> None:
 
 
 def test_format_result_with_line_range() -> None:
-    """CHUNK-02: full result with line range produces path:start-end, score, bracket tag, preview."""
+    """CHUNK-02: full result with line range produces path:start-end, score, bracket tag, preview.
+
+    Verifies grep-style location, score formatting, construct brackets, and preview content.
+    """
     result = {
         "file_path": "/cwd/skills/foo.md",
         "start_line": 42,
@@ -118,7 +121,7 @@ def test_format_result_chunk_text_newline_takes_first_line() -> None:
 
 
 def test_format_result_truncates_at_200_chars() -> None:
-    """CHUNK-02: chunk_text > 200 chars is truncated to 200 chars + '...' (207 total with indent)."""
+    """CHUNK-02: chunk_text > 200 chars is truncated to 200 chars + '...' (207 with indent)."""
     result = {
         "file_path": "/cwd/skills/foo.md",
         "start_line": 1,

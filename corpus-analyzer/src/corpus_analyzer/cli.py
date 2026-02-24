@@ -24,7 +24,7 @@ from corpus_analyzer.ingest.embedder import OllamaEmbedder
 from corpus_analyzer.ingest.indexer import CorpusIndex, SourceStatus
 from corpus_analyzer.ingest.scanner import walk_source
 from corpus_analyzer.search.engine import CorpusSearch
-from corpus_analyzer.search.formatter import extract_snippet
+from corpus_analyzer.search.formatter import format_result
 from corpus_analyzer.settings import settings as app_settings
 
 app = typer.Typer(
@@ -405,15 +405,12 @@ def search_command(
             "sorting by priority is implicit.[/]"
         )
 
+    cwd = Path.cwd()
     for result in results:
-        console.print(
-            f"[bold blue]{result['file_path']}[/]  "
-            f"[dim]{result.get('construct_type') or 'documentation'}[/]  "
-            f"[dim]score: {result.get('_relevance_score', 0.0):.3f}[/]"
-        )
-        if result.get("summary"):
-            console.print(f"  [italic]{result['summary']}[/italic]")
-        console.print(f"  {extract_snippet(str(result['text']), query)}")
+        primary, preview = format_result(result, cwd)
+        console.print(primary)
+        if preview is not None:
+            console.print(preview)
         console.print()
 
 
