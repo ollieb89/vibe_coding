@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 11 of 12 (Manual Ruff CLI + Mypy)
-Plan: 3 of 4 in current phase
+Plan: 4 of N in current phase
 Status: In progress
-Last activity: 2026-02-24 — Phase 11 Plan 3 complete (MYPY-02: Atom promoted to module level, nested functions annotated, zero mypy errors in chunked_processor.py, 281 tests passing)
+Last activity: 2026-02-24 — Phase 11 Plan 4 complete (MYPY-03/04/06: 9 mypy errors fixed across 6 files, OllamaClient.db field added, 281 tests passing)
 
 Progress: [██░░░░░░░░] 20% (v1.3)
 
@@ -48,6 +48,9 @@ Recent decisions affecting current work:
 - [v1.3 planning]: Fix ordering is strict — ruff auto-fix before manual, pyproject.toml config before E501 wrapping, leaf modules before hub, ruff clean before mypy
 - [v1.3 planning]: B006 Typer list defaults must use `# noqa: B006`, not naive `None` replacement (breaks `--help`)
 - [v1.3 planning]: sqlite-utils union-attr — use `cast(Table, ...)` per call site, not `# type: ignore`
+- [11-02]: cast(Table, self.db[...]) at every sqlite-utils Table call site (delete_where, insert, update) resolves union-attr; int(row[0]) fixes no-any-return on SQL row IDs
+- [11-02]: params: list[str] (not list[Any]) — query parameter values in get_documents/get_gold_standard_documents are always strings
+- [11-02]: Local variable guard _cc/_qs for float(row.get(...)) — avoids double .get() and satisfies mypy arg-type narrowing
 - [v1.3 planning]: `llm/rewriter.py` line 406 operator error is a genuine bug — investigate control flow before fixing
 - [10-01]: Use `lnk` (not `link2`) for database.py deserialization rename to avoid shadowing imported Link class
 - [10-01]: Use `level_val` for chunked_processor.py rename to match semantics of force_level/current_level source variables
@@ -65,10 +68,9 @@ None.
 ### Blockers/Concerns
 
 - [Phase 11]: rewriter.py line 406 operator error requires reading branch logic in context — cannot resolve from error output alone
-- [Phase 11]: OllamaClient — verify whether it is a Pydantic model or plain class before adding `db: Optional[...]` field
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 11-03-PLAN.md (MYPY-02: chunked_processor.py zero mypy errors — Atom promoted, nested functions annotated)
+Stopped at: Completed 11-02-PLAN.md (MYPY-01: database.py zero mypy errors — cast(Table,...) wrapping, parameterised generics, float() guards)
 Resume file: None
