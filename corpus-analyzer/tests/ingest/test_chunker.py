@@ -380,7 +380,10 @@ class TestChunkTypeScript:
         assert "/** JSDoc comment */" in foo_chunks[0]["text"]
 
     def test_single_line_comment_not_included(self, tmp_path: Path) -> None:
-        """Single-line // comment preceding declaration is NOT included; start_line is function line."""
+        """Single-line // comment before declaration is NOT included.
+
+        start_line is the function declaration line, not the comment line.
+        """
         ts_file = tmp_path / "test.ts"
         ts_file.write_text("// not jsdoc\nfunction foo(): void {}\n")
 
@@ -468,6 +471,35 @@ class TestChunkTypeScript:
 
         assert isinstance(result1, list)
         assert isinstance(result2, list)
+
+    def test_large_file_falls_back_to_chunk_lines(self, tmp_path: Path) -> None:
+        """Files exceeding 50,000 characters skip AST parse and fall back to chunk_lines."""
+        ts_file = tmp_path / "test.ts"
+        # 50,001 chars — just above the threshold
+        ts_file.write_text("x" * 50_001)
+
+        chunks = chunk_typescript(ts_file)
+
+        # chunk_lines output has no chunk_name field; AST path would have chunk_name
+        assert isinstance(chunks, list)
+        assert all("chunk_name" not in c for c in chunks)
+
+    def test_import_error_falls_back_to_chunk_lines(self, tmp_path: Path) -> None:
+        """chunk_typescript falls back to chunk_lines when tree-sitter is not installed."""
+        from unittest.mock import patch
+
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("function foo(): void {}\n")
+
+        with patch(
+            "corpus_analyzer.ingest.ts_chunker._get_cached_parser",
+            side_effect=ImportError("No module named 'tree_sitter'"),
+        ):
+            result = chunk_typescript(ts_file)
+
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert all("chunk_name" not in c for c in result)
 
 
 # ---------------------------------------------------------------------------
