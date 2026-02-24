@@ -922,3 +922,149 @@ class TestChunkPythonMethodChunks:
         result2 = chunk_python(py_file)
 
         assert result1 == result2
+
+
+# ---------------------------------------------------------------------------
+# TestChunkTypeScriptMethodChunks — SUB-03 per-method chunk behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestChunkTypeScriptMethodChunks:
+    """Tests for SUB-03: per-method chunk extraction in _chunk_ts_class() / chunk_typescript()."""
+
+    def test_class_methods_produce_dot_name_chunks(self, tmp_path: Path) -> None:
+        """Class with two methods produces ClassName.method_a and ClassName.method_b chunks."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            "class MyClass {\n  method_a(): void {}\n  method_b(): void {}\n}\n"
+        )
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "MyClass.method_a" for c in chunks)
+        assert any(c["chunk_name"] == "MyClass.method_b" for c in chunks)
+
+    def test_constructor_becomes_dot_constructor(self, tmp_path: Path) -> None:
+        """Constructor produces a ClassName.constructor chunk."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("class MyClass {\n  constructor(private x: number) {}\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "MyClass.constructor" for c in chunks)
+
+    def test_abstract_method_chunked(self, tmp_path: Path) -> None:
+        """Abstract method in abstract class produces a per-method chunk."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("abstract class Base {\n  abstract run(): void;\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Base.run" for c in chunks)
+
+    def test_abstract_class_concrete_method_chunked(self, tmp_path: Path) -> None:
+        """Concrete method in abstract class produces a per-method chunk."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            'abstract class Base {\n  greet(): string { return "hello"; }\n}\n'
+        )
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Base.greet" for c in chunks)
+
+    def test_header_chunk_always_emitted(self, tmp_path: Path) -> None:
+        """Header chunk named ClassName is always present even when class has methods."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("class MyClass {\n  go(): void {}\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "MyClass" for c in chunks)
+
+    def test_monolithic_replaced_by_header_plus_methods(self, tmp_path: Path) -> None:
+        """Class with 2 methods produces at least 3 chunks (header + 2 methods)."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("class MyClass {\n  alpha(): void {}\n  beta(): void {}\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert len([c for c in chunks if c["chunk_name"].startswith("MyClass")]) >= 3
+
+    def test_method_chunk_text_contains_method_name(self, tmp_path: Path) -> None:
+        """Method chunk text contains the method signature."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            'class MyClass {\n  myMethod(): string { return "x"; }\n}\n'
+        )
+
+        chunks = chunk_typescript(ts_file)
+
+        method_chunk = next((c for c in chunks if c["chunk_name"] == "MyClass.myMethod"), None)
+        assert method_chunk is not None
+        assert "myMethod" in method_chunk["text"]
+
+    def test_method_chunk_line_range(self, tmp_path: Path) -> None:
+        """Method chunk start_line and end_line point to the method node in the file."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("class MyClass {\n  go(): void {}\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        go_chunk = next((c for c in chunks if c["chunk_name"] == "MyClass.go"), None)
+        assert go_chunk is not None
+        assert go_chunk["start_line"] >= 2  # method is not on line 1
+        assert go_chunk["end_line"] >= go_chunk["start_line"]
+
+    def test_no_methods_no_method_chunks(self, tmp_path: Path) -> None:
+        """Class with only field declarations produces no ClassName.method chunks."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("class MyClass {\n  x: number = 1;\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert not any(
+            "." in c["chunk_name"] and c["chunk_name"].startswith("MyClass") for c in chunks
+        )
+
+    def test_multi_class_file_all_classes_sub_chunked(self, tmp_path: Path) -> None:
+        """Two classes in one file both get sub-chunked."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            "class Alpha {\n  run(): void {}\n}\nclass Beta {\n  go(): void {}\n}\n"
+        )
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Alpha.run" for c in chunks)
+        assert any(c["chunk_name"] == "Beta.go" for c in chunks)
+
+    def test_top_level_function_unaffected(self, tmp_path: Path) -> None:
+        """Top-level function in same file still produces its own flat chunk."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            "function helper(): void {}\nclass MyClass {\n  method(): void {}\n}\n"
+        )
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "helper" for c in chunks)
+        assert any(c["chunk_name"] == "MyClass.method" for c in chunks)
+
+    def test_exported_class_sub_chunked(self, tmp_path: Path) -> None:
+        """Exported class (export class Foo) still gets sub-chunked."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text("export class Foo {\n  bar(): void {}\n}\n")
+
+        chunks = chunk_typescript(ts_file)
+
+        assert any(c["chunk_name"] == "Foo.bar" for c in chunks)
+
+    def test_deterministic_output(self, tmp_path: Path) -> None:
+        """Calling chunk_typescript() twice on the same file produces identical results."""
+        ts_file = tmp_path / "test.ts"
+        ts_file.write_text(
+            "class MyClass {\n  alpha(): void {}\n  beta(): void {}\n}\n"
+        )
+
+        assert chunk_typescript(ts_file) == chunk_typescript(ts_file)
