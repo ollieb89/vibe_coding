@@ -125,4 +125,4 @@ Plans:
 | 13. Engine Min-Score Filter | v1.4 | 1/1 | Complete | 2026-02-24 |
 | 14. API / MCP / CLI Parity | v1.4 | 2/2 | Complete | 2026-02-24 |
 | 15. Core AST Chunker | v1.5 | 2/2 | Complete | 2026-02-24 |
-| 16. Integration Hardening | 1/3 | In Progress|  | - |
+| 16. Integration Hardening | 2/3 | In Progress|  | - |

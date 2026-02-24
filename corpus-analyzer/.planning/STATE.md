@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v1.5 milestone start)
 ## Current Position
 
 Phase: 16 of 16 (Integration Hardening — in progress)
-Plan: 1 of 3 in current phase (16-01 complete)
+Plan: 2 of 3 in current phase (16-02 complete)
 Status: Phase 16 in progress
-Last activity: 2026-02-24 — 16-01 TDD RED tests committed
+Last activity: 2026-02-24 — 16-02 GREEN phase: size guard + ImportError fallback implemented
 
 Progress: [███░░░░░░░] 30% (v1.5)
 
@@ -44,7 +44,7 @@ Progress: [███░░░░░░░] 30% (v1.5)
 - Timeline: 1 day (2026-02-24)
 
 **v1.5 In progress:**
-- Plans completed: 3 (15-01, 15-02, 16-01)
+- Plans completed: 4 (15-01, 15-02, 16-01, 16-02)
 - Phases: 1 complete (15), 1 in progress (16)
 - Timeline: 1 day (2026-02-24)
 
@@ -67,16 +67,21 @@ Key 16-01 decisions:
 - RED state acknowledged as pre-passing for test_import_error_falls_back_to_chunk_lines — current except Exception catches ImportError; 16-02 creates explicit separate branch
 - RED state for test_large_file_falls_back_to_chunk_lines confirmed — 50,001-char 'x' file falls back via no-named-constructs path; 16-02 adds explicit size guard before parse
 
+Key 16-02 decisions:
+- Lazy import of get_parser inside _get_cached_parser body allows ImportError to be caught in chunk_typescript's try/except
+- Separate except ImportError and except Exception clauses preserved (not merged) per locked CONTEXT.md decision
+- Removed quotes from Parser return type annotation — ruff UP037 requires unquoted form when from __future__ import annotations is present; TYPE_CHECKING guard is sufficient for mypy
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-None — 320 tests passing. Ruff-clean. 16-01 TDD RED complete.
+None — 320 tests passing. Ruff-clean. Mypy-clean.
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: 16-01-PLAN.md complete (TDD RED tests committed). Ready for 16-02 (size guard + ImportError implementation).
+Stopped at: Completed 16-02-PLAN.md (size guard + ImportError fallback GREEN). Ready for 16-03.
 Resume file: None
