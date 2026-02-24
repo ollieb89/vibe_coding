@@ -46,6 +46,36 @@ class MockEmbedder:
             1,
             "export function hello",
         ),
+        (
+            ".py",
+            (
+                "class Greeter:\n"
+                '    """A greeter class."""\n'
+                "\n"
+                "    def __init__(self, name: str) -> None:\n"
+                "        self.name = name\n"
+                "\n"
+                "    def greet(self) -> str:\n"
+                '        return f"Hello, {self.name}"\n'
+            ),
+            "Greeter.__init__",
+            4,
+            "def __init__",
+        ),
+        (
+            ".ts",
+            (
+                "export class Greeter {\n"
+                "    constructor(private name: string) {}\n"
+                "    greet(): string {\n"
+                "        return `Hello, ${this.name}`;\n"
+                "    }\n"
+                "}\n"
+            ),
+            "Greeter.constructor",
+            2,
+            "constructor",
+        ),
     ],
 )
 def test_round_trip_chunk_fields(

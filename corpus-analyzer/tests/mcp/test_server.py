@@ -127,6 +127,7 @@ def test_corpus_search_passes_filters_to_hybrid_search() -> None:
         limit=3,
         min_score=0.0,
         name=None,
+        sort_by="relevance",
     )
 
 
@@ -422,3 +423,40 @@ def test_corpus_search_name_none_forwards_none() -> None:
 
     call_kwargs = engine.hybrid_search.call_args[1]
     assert call_kwargs.get("name") is None
+
+
+# -----------------------------------------------------------------------------
+# Tests — SORT-01: MCP sort_by parameter
+# -----------------------------------------------------------------------------
+
+
+def test_corpus_search_sort_by_forwarded() -> None:
+    """SORT-01: sort_by parameter is forwarded to hybrid_search() unchanged."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", sort_by="construct", ctx=ctx)
+
+    asyncio.run(_run_test())
+
+    call_kwargs = engine.hybrid_search.call_args[1]
+    assert call_kwargs["sort_by"] == "construct"
+
+
+def test_corpus_search_sort_by_default_is_relevance() -> None:
+    """SORT-01: omitting sort_by defaults to 'relevance'."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", ctx=ctx)
+
+    asyncio.run(_run_test())
+
+    call_kwargs = engine.hybrid_search.call_args[1]
+    assert call_kwargs["sort_by"] == "relevance"
