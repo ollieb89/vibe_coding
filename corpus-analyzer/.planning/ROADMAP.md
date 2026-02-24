@@ -88,10 +88,11 @@ Plans:
   3. `corpus search --name foo` with no positional query argument is valid and lists matching chunks ordered by `--sort-by` (default: relevance)
   4. MCP `corpus_search` accepts a `name: Optional[str]` parameter applying the same case-insensitive substring semantics
   5. `corpus search --name ClassName.method` narrows results to that specific method chunk
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 22-01: TBD
+- [ ] 22-01-PLAN.md — TDD: engine name filter + empty-query name-only search (NAME-01, NAME-03 engine)
+- [ ] 22-02-PLAN.md — TDD: CLI --name flag + optional query + MCP name parameter (NAME-01, NAME-02, NAME-03)
 
 ---
 
@@ -193,7 +194,7 @@ Plans:
   3. `corpus search --name foo` with no positional query argument is valid and lists matching chunks ordered by `--sort-by` (default: relevance)
   4. MCP `corpus_search` accepts a `name: Optional[str]` parameter applying the same case-insensitive substring semantics
   5. `corpus search --name ClassName.method` narrows results to that specific method chunk
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 23: Score Normalisation and MCP Sort
 **Goal**: All search surfaces return scores in a consistent 0–1 range; MCP gains `sort_by` parameter parity with CLI
@@ -245,7 +246,7 @@ Plans:
 | 19. MCP Chunk Response | 1/1 | Complete    | 2026-02-24 | - |
 | 20. Python Sub-Chunking | 2/2 | Complete    | 2026-02-24 | - |
 | 21. TypeScript Sub-Chunking | 1/1 | Complete    | 2026-02-24 | - |
-| 22. Name Filtering | v2.1 | 0/TBD | Not started | - |
+| 22. Name Filtering | v2.1 | 0/2 | Not started | - |
 | 23. Score Normalisation + MCP Sort | v2.1 | 0/TBD | Not started | - |
 | 24. JSON Output | v2.1 | 0/TBD | Not started | - |
 | 25. Graph MCP + Quality Gate | v2.1 | 0/TBD | Not started | - |
