@@ -104,28 +104,6 @@
 ---
 
 
-## v2 Chunk-Level Precision (Planned: 2026-02-24)
-
-**Phases:** 9 phases (17–25), 17 plans
-**Status:** Planning complete — not started
-
-**Goal:** Expose chunk-level search results with exact line ranges and full text across CLI, MCP, and Python API. Add method-level sub-chunking for Python and TypeScript classes. Enable name-based filtering. Normalise scores to 0–1. Expose graph traversal via MCP. Add JSON output.
-
-**Key outcomes (planned):**
-- CLI output: `path/to/file.md:42-67 [skill] score:0.021` — IDE-clickable grep format with chunk text on second line
-- MCP `corpus_search`: self-contained results with `start_line`, `end_line`, `text` per chunk
-- Python and TypeScript classes sub-chunked at method level: `ClassName.method_name` naming
-- `corpus search --name foo` and MCP `name` parameter for construct-name filtering
-- MCP `sort_by` support; 0–1 normalised scores replace raw RRF values
-- `corpus search --output json` for shell piping
-- `corpus_graph` MCP tool for LLM graph traversal
-- 85%+ branch coverage on chunking modules; zero-hallucination line-range contract validated
-
-**Archive:** `.planning/milestones/v2-ROADMAP.md`
-
----
-
-
 ## v1.5 TypeScript AST Chunking (Shipped: 2026-02-24)
 
 **Phases completed:** 2 phases (15–16), 5 plans
@@ -165,6 +143,28 @@
 - Rich markup escaping on path, construct_type, and preview — no MarkupError on special chars; 340 tests passing
 
 **Archive:** `.planning/milestones/v2.0-ROADMAP.md`
+
+---
+
+
+## v2.1 Result Quality (Shipped: 2026-02-24)
+
+**Phases completed:** 7 phases (19–25), 11 plans
+**Timeline:** 2026-02-24 (1 day)
+**Python LOC:** ~8,000
+
+**Delivered:** Completed the chunk-level search experience across CLI, MCP, and Python API surfaces. Search results are now self-contained, finely chunked, reliably scored, and strictly formatted.
+
+**Key accomplishments:**
+- MCP `corpus_search` response now includes `start_line`, `end_line`, and `text` per result, making it a self-contained unit of knowledge (CHUNK-03)
+- Python and TypeScript AST chunkers sub-chunk classes at method level with `ClassName.method_name` naming (SUB-01–03)
+- `--name` filtering enabled across CLI and MCP via substring matching on chunk name (NAME-01–03)
+- Search scores normalised to 0–1 range internally; MCP `sort_by` achieves parity with CLI (SORT-01, NORM-01)
+- `corpus search --output json` emits a clean JSON array to stdout for shell automation (JSON-01)
+- `corpus_graph` MCP tool added for LLM-driven graph traversal using the existing `GraphStore` (GRAPH-01)
+- Quality gates verified: 85%+ branch coverage on chunking modules and zero-hallucination line-range contract enforced by parametrised integration tests (QUAL-01–02)
+
+**Archive:** `.planning/ROADMAP.md`
 
 ---
 

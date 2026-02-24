@@ -2,7 +2,7 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
+See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone completion sync)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
 **Current focus:** v3 deferred requirements and prioritization

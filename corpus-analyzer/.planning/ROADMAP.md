@@ -142,7 +142,7 @@ Plans:
   2. `corpus_graph` reuses the existing `GraphStore` with zero new storage — no schema changes required
   3. `pytest --cov --cov-branch` reports 85%+ branch coverage on `ingest/chunker.py` and `ingest/ts_chunker.py` (Python and TypeScript chunking modules)
   4. A parametrised integration test verifies that every stored `start_line`/`end_line` matches actual file content for `.md`, `.py`, and `.ts` fixtures (zero hallucination)
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 25-01: Add corpus_graph MCP tool
