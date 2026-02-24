@@ -64,7 +64,7 @@ Plans:
 
 Plans:
 - [x] 18-01-PLAN.md — TDD RED: write failing tests for new result formatter (grep-style output, truncation, path format)
-- [ ] 18-02-PLAN.md — GREEN: implement new formatter, wire into CLI search command, update any snapshot tests
+- [x] 18-02-PLAN.md — GREEN: implement new formatter, wire into CLI search command, update any snapshot tests
 
 ---
 

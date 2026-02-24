@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24 — v3.0 Intelligent Search milest
 
 ## Current Position
 
-Phase: 18-cli-chunk-display (v2 in progress)
-Plan: 01 complete (RED test suite for format_result)
-Status: Phase 18 Plan 01 done — 10 RED tests committed; ready for Plan 02 GREEN implementation
-Last activity: 2026-02-24 — Phase 18 Plan 01 complete (format_result RED tests)
+Phase: 18-cli-chunk-display (v2 in progress — Phase 18 complete)
+Plan: 02 complete (format_result() GREEN implementation; search_command render loop updated)
+Status: Phase 18 complete — both plans done; CHUNK-02 satisfied; grep-style search output live
+Last activity: 2026-02-24 — Phase 18 Plan 02 complete (format_result GREEN + cli.py wired)
 
-Progress: [██░░░░░░░░] 20% of v2 (Phase 17 complete — 2 of 2 plans done); v3 planning complete
+Progress: [███░░░░░░░] 25% of v2 (Phase 17 + 18 complete — 4 of 18 plans done); v3 planning complete
 
 ## Performance Metrics
 
@@ -60,6 +60,11 @@ Key v3 planning decisions:
 - RERANK-02 sentence-transformers is an optional extra ([rerank]) — never a core dep; lazy-import only inside --rerank branch
 - Phase 32 score range docs must be updated for post-NORM-01 normalised 0–1 scores; no doc or test should reference raw RRF range (0.009–0.033) as output
 
+Key 18-02 decisions:
+- extract_snippet removed from cli.py import after render loop replacement (F401 — unused); still exported from module
+- SIM108 ternary style enforced by ruff for construct_part and preview assignments in format_result()
+- format_result returns (primary, preview | None) tuple — pure function; Console.print() owns rendering
+
 Key 18-01 decisions:
 - format_result() RED tests import at module level — single ImportError is the RED signal for all 10 tests
 - test_format_result_rich_markup_escape_in_path checks '[deprecated]' in primary (escaped string), not Rich internals
@@ -82,6 +87,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 18-01-PLAN.md (format_result RED tests committed as 0aedbcf)
+Stopped at: Completed 18-02-PLAN.md (format_result GREEN implementation + cli.py render loop; 31091ac)
 Resume file: None
-Next step: Phase 18 Plan 02 — GREEN implementation of format_result()
+Next step: Phase 19 (next v2 phase)
