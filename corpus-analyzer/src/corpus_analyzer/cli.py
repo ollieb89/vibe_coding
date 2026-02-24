@@ -56,10 +56,19 @@ def main(
 @app.command("add")
 def add_command(
     directory: Annotated[str, typer.Argument(help="Directory path to add as a source")],
-    name: Annotated[str | None, typer.Option("--name", "-n", help="Source name (default: directory basename)")] = None,
-    include: Annotated[list[str], typer.Option("--include", help="Glob patterns to include")] = ["**/*"],
-    exclude: Annotated[list[str], typer.Option("--exclude", help="Glob patterns to exclude")] = [],
-    force: Annotated[bool, typer.Option("--force", help="Re-add if source already exists")] = False,
+    name: Annotated[
+        str | None,
+        typer.Option("--name", "-n", help="Source name (default: directory basename)"),
+    ] = None,
+    include: Annotated[
+        list[str], typer.Option("--include", help="Glob patterns to include")
+    ] = ["**/*"],
+    exclude: Annotated[
+        list[str], typer.Option("--exclude", help="Glob patterns to exclude")
+    ] = [],
+    force: Annotated[
+        bool, typer.Option("--force", help="Re-add if source already exists")
+    ] = False,
 ) -> None:
     """Add a directory to corpus.toml as a named source."""
     # Resolve source name
@@ -73,12 +82,17 @@ def add_command(
     existing_by_path = next((s for s in config.sources if s.path == directory), None)
 
     if (existing_by_name or existing_by_path) and not force:
-        console.print(f"[red]Error:[/] Source '{source_name}' or path '{directory}' already exists. Use --force to re-add.")
+        console.print(
+            f"[red]Error:[/] Source '{source_name}' or path '{directory}' already exists. "
+            "Use --force to re-add."
+        )
         raise typer.Exit(code=1)
 
     # If force, remove existing
     if force:
-        config.sources = [s for s in config.sources if s.name != source_name and s.path != directory]
+        config.sources = [
+            s for s in config.sources if s.name != source_name and s.path != directory
+        ]
 
     # Add new source
     config.sources.append(SourceConfig(
@@ -97,7 +111,9 @@ def add_command(
 
 @app.command("index")
 def index_command(
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Print each file as it is processed")] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Print each file as it is processed")
+    ] = False,
 ) -> None:
     """Index all configured sources into LanceDB."""
     # Load config
@@ -154,7 +170,9 @@ def index_command(
 
         # Show active extensions only on first run (onboarding/diagnostic signal)
         if status.reason == "new source":
-            ext_str = ", ".join(source.extensions) if source.extensions else "(none — all files skipped)"
+            ext_str = (
+                ", ".join(source.extensions) if source.extensions else "(none — all files skipped)"
+            )
             console.print(
                 f"[dim]Active extensions for {source.name}: {ext_str}[/dim]\n"
                 f"[dim]Add 'extensions = [...]' to this source in corpus.toml to customize.[/dim]"
@@ -203,13 +221,16 @@ def index_command(
         )
         if result.files_removed > 0:
             console.print(
-                f"[yellow]Removed {result.files_removed} file(s) no longer in extension allowlist.[/]"
+                f"[yellow]Removed {result.files_removed} file(s) "
+                "no longer in extension allowlist.[/]"
             )
 
 
 @app.command("check")
 def check_command(
-    json_output: Annotated[bool, typer.Option("--json", help="Output as JSON for scripting")] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Output as JSON for scripting")
+    ] = False,
 ) -> None:
     """Check which sources need indexing without modifying any state."""
     config = load_config(CONFIG_PATH)
@@ -227,7 +248,9 @@ def check_command(
         index = CorpusIndex.open(DATA_DIR, embedder)
     except Exception:
         if json_output:
-            console.print(json_module.dumps({"error": "Index not initialised. Run 'corpus index' first."}))
+            console.print(
+                json_module.dumps({"error": "Index not initialised. Run 'corpus index' first."})
+            )
         else:
             console.print("[yellow]Index not initialised. Run 'corpus index' first.[/]")
         raise typer.Exit(code=0) from None
@@ -277,11 +300,28 @@ def check_command(
 @app.command("search")
 def search_command(
     query: Annotated[str, typer.Argument(help="Natural language search query")],
-    source: Annotated[str | None, typer.Option("--source", "-s", help="Filter by source name")] = None,
-    type_: Annotated[str | None, typer.Option("--type", "-t", help="Filter by file type (.md, .py, etc.)")] = None,
-    construct: Annotated[str | None, typer.Option("--construct", "-c", help="Filter by construct type (agent, skill, workflow, command, rule, prompt, code, documentation)")] = None,
-    limit: Annotated[int, typer.Option("--limit", "-n", help="Maximum number of results")] = 10,
-    sort: Annotated[str, typer.Option("--sort", help="Sort order: relevance|construct|confidence|date|path")] = "relevance",
+    source: Annotated[
+        str | None, typer.Option("--source", "-s", help="Filter by source name")
+    ] = None,
+    type_: Annotated[
+        str | None,
+        typer.Option("--type", "-t", help="Filter by file type (.md, .py, etc.)"),
+    ] = None,
+    construct: Annotated[
+        str | None,
+        typer.Option(
+            "--construct",
+            "-c",
+            help="Filter by construct type (agent, skill, workflow, command, rule, prompt, code)",
+        ),
+    ] = None,
+    limit: Annotated[
+        int, typer.Option("--limit", "-n", help="Maximum number of results")
+    ] = 10,
+    sort: Annotated[
+        str,
+        typer.Option("--sort", help="Sort order: relevance|construct|confidence|date|path"),
+    ] = "relevance",
 ) -> None:
     """Search the indexed corpus with a natural language query."""
     config = load_config(CONFIG_PATH)
@@ -315,7 +355,8 @@ def search_command(
 
     if construct and sort == "construct":
         console.print(
-            f"[dim]Note: Results already limited to '{construct}'; sorting by priority is implicit.[/]"
+            f"[dim]Note: Results already limited to '{construct}'; "
+            "sorting by priority is implicit.[/]"
         )
 
     for result in results:
@@ -332,11 +373,13 @@ def search_command(
 
 @app.command("graph")
 def graph_command(
-    slug: Annotated[str | None, typer.Argument(help="Component slug or path fragment to look up")] = None,
+    slug: Annotated[
+        str | None, typer.Argument(help="Component slug or path fragment to look up")
+    ] = None,
     depth: Annotated[int, typer.Option("--depth", "-d", help="Traversal depth")] = 1,
     show_duplicates: Annotated[
         bool,
-        typer.Option("--show-duplicates", help="List all duplicate slugs and their candidate paths"),
+        typer.Option("--show-duplicates", help="List all duplicate slugs and their candidates"),
     ] = False,
 ) -> None:
     """Show upstream and downstream relationships for a component."""
@@ -417,7 +460,10 @@ def _count_stale_files(source: SourceConfig, indexed_at: str) -> int:
         indexed_dt = datetime.fromisoformat(indexed_at)
         source_path = Path(source.path).expanduser()
         return sum(
-            1 for fp in walk_source(source_path, source.include, source.exclude, extensions=source.extensions)
+            1
+            for fp in walk_source(
+                source_path, source.include, source.exclude, extensions=source.extensions
+            )
             if fp.stat().st_mtime > indexed_dt.timestamp()
         )
     except Exception:
@@ -426,7 +472,9 @@ def _count_stale_files(source: SourceConfig, indexed_at: str) -> int:
 
 @app.command("status")
 def status_command(
-    json_output: Annotated[bool, typer.Option("--json", help="Output as JSON for scripting")] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Output as JSON for scripting")
+    ] = False,
 ) -> None:
     """Show index health: sources, staleness, chunk count, embedding model status."""
     config = load_config(CONFIG_PATH)
@@ -446,7 +494,9 @@ def status_command(
         stats = search.status(config.embedding.model)
     except Exception:
         if json_output:
-            console.print(json_module.dumps({"error": "Index not found. Run 'corpus index' first."}))
+            console.print(
+                json_module.dumps({"error": "Index not found. Run 'corpus index' first."})
+            )
         else:
             console.print("[yellow]Index not found. Run 'corpus index' first.[/]")
         raise typer.Exit(code=0) from None
@@ -493,8 +543,16 @@ def status_command(
 
     # Rich table output
     age_str = _human_age(last_indexed) if last_indexed != "never" else "never"
-    health_str = "[green]OK[/green]" if total_stale == 0 else f"[yellow]{total_stale} files changed since last index[/yellow]"
-    model_str = f"{config.embedding.model}  [green]connected[/]" if model_status == "connected" else f"{config.embedding.model}  [red]unreachable[/]"
+    health_str = (
+        "[green]OK[/green]"
+        if total_stale == 0
+        else f"[yellow]{total_stale} files changed since last index[/yellow]"
+    )
+    model_str = (
+        f"{config.embedding.model}  [green]connected[/]"
+        if model_status == "connected"
+        else f"{config.embedding.model}  [red]unreachable[/]"
+    )
 
     table = Table(title="[bold]Index Status[/]", show_header=True)
     table.add_column("Metric", style="bold", min_width=18)
@@ -513,7 +571,11 @@ def status_command(
         src_table.add_column("Path")
         src_table.add_column("Status")
         for row in source_rows:
-            icon = "[green]current[/]" if row["stale_files"] == 0 else f"[yellow]{row['stale_files']} stale[/]"
+            icon = (
+                "[green]current[/]"
+                if row["stale_files"] == 0
+                else f"[yellow]{row['stale_files']} stale[/]"
+            )
             src_table.add_row(str(row["name"]), str(row["path"]), icon)
         console.print(src_table)
 
@@ -544,7 +606,9 @@ def mcp_serve() -> None:
 
 @db_app.command("initialize")
 def db_init(
-    path: Annotated[Path, typer.Option("--path", "-p", help="Database path")] = app_settings.database_path,
+    path: Annotated[
+        Path, typer.Option("--path", "-p", help="Database path")
+    ] = app_settings.database_path,
 ) -> None:
     """Initialize the corpus database schema."""
     db = CorpusDatabase(path)
@@ -554,7 +618,9 @@ def db_init(
 
 @db_app.command("inspect")
 def db_inspect(
-    path: Annotated[Path, typer.Option("--path", "-p", help="Database path")] = app_settings.database_path,
+    path: Annotated[
+        Path, typer.Option("--path", "-p", help="Database path")
+    ] = app_settings.database_path,
 ) -> None:
     """Inspect database schema and sample data."""
     from corpus_analyzer.utils.ui import print_sample_data, print_table_schema
@@ -670,8 +736,13 @@ def extract(
 
 @app.command()
 def classify(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
-    use_full_content: Annotated[bool, typer.Option("--full-content", help="Use full document content for better classification")] = True,
+    database: Annotated[
+        Path, typer.Argument(help="Corpus database path")
+    ] = app_settings.database_path,
+    use_full_content: Annotated[
+        bool,
+        typer.Option("--full-content", help="Use full document content for better classification"),
+    ] = True,
 ) -> None:
     """Classify documents by type and domain tags with enhanced analysis."""
     from corpus_analyzer.classifiers.document_type import classify_documents
@@ -692,7 +763,9 @@ def classify(
 
 @app.command()
 def analyze(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
+    database: Annotated[
+        Path, typer.Argument(help="Corpus database path")
+    ] = app_settings.database_path,
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Reports output directory")
     ] = app_settings.reports_dir,
@@ -709,7 +782,9 @@ def analyze(
 
 @app.command("analyze-quality")
 def analyze_quality(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
+    database: Annotated[
+        Path, typer.Argument(help="Corpus database path")
+    ] = app_settings.database_path,
 ) -> None:
     """Analyze document quality and mark gold standard patterns."""
     from corpus_analyzer.analyzers.quality import QualityAnalyzer
@@ -724,8 +799,12 @@ def analyze_quality(
 
 @samples_app.command("extract")
 def samples_extract(
-    database: Annotated[Path, typer.Option("--db", "-d", help="Corpus database path")] = app_settings.database_path,
-    output: Annotated[Path, typer.Option("--output", "-o", help="Output directory")] = Path("source_docs"),
+    database: Annotated[
+        Path, typer.Option("--db", "-d", help="Corpus database path")
+    ] = app_settings.database_path,
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Output directory")
+    ] = Path("source_docs"),
     limit: Annotated[int, typer.Option("--limit", "-l", help="Samples per category")] = 2,
 ) -> None:
     """Extract representative samples for each category to a directory."""
@@ -742,7 +821,9 @@ def samples_extract(
 
 @templates_app.command("generate")
 def templates_generate(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
+    database: Annotated[
+        Path, typer.Argument(help="Corpus database path")
+    ] = app_settings.database_path,
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Templates output directory")
     ] = app_settings.templates_dir,
@@ -759,7 +840,9 @@ def templates_generate(
 
 @templates_app.command("freeze")
 def templates_freeze(
-    templates_dir: Annotated[Path, typer.Option("--dir", "-d", help="Templates directory")] = app_settings.templates_dir,
+    templates_dir: Annotated[
+        Path, typer.Option("--dir", "-d", help="Templates directory")
+    ] = app_settings.templates_dir,
 ) -> None:
     """Freeze templates with contracts."""
     from corpus_analyzer.generators.templates import TEMPLATE_CONTRACTS, TEMPLATES
@@ -789,16 +872,32 @@ def templates_freeze(
 
 @app.command()
 def rewrite(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
-    category: Annotated[str, typer.Option("--category", "-c", help="Document category to rewrite")] = "howto",
-    model: Annotated[str, typer.Option("--model", "-m", help="Ollama model name")] = app_settings.ollama_model,
+    database: Annotated[
+        Path, typer.Argument(help="Corpus database path")
+    ] = app_settings.database_path,
+    category: Annotated[
+        str, typer.Option("--category", "-c", help="Document category to rewrite")
+    ] = "howto",
+    model: Annotated[
+        str, typer.Option("--model", "-m", help="Ollama model name")
+    ] = app_settings.ollama_model,
     output: Annotated[
         Path | None, typer.Option("--output", "-o", help="Output directory for rewritten docs")
     ] = None,
-    optimized: Annotated[bool, typer.Option("--optimized", help="Use gold standard patterns for optimization")] = False,
-    use_templates: Annotated[bool, typer.Option("--templates", help="Use template-based rewriting")] = True,
-    auto_category: Annotated[bool, typer.Option("--auto-category", help="Auto-select best category based on classification confidence")] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed progress information")] = False,
+    optimized: Annotated[
+        bool,
+        typer.Option("--optimized", help="Use gold standard patterns for optimization"),
+    ] = False,
+    use_templates: Annotated[
+        bool, typer.Option("--templates", help="Use template-based rewriting")
+    ] = True,
+    auto_category: Annotated[
+        bool,
+        typer.Option("--auto-category", help="Auto-select best category by confidence score"),
+    ] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Show detailed progress information")
+    ] = False,
 ) -> None:
     """Rewrite/consolidate documents using enhanced unified rewriter."""
     from corpus_analyzer.core.models import DocumentCategory
@@ -824,14 +923,23 @@ def rewrite(
             # Find category with highest average confidence and most documents
             best_category = max(
                 category_scores.keys(),
-                key=lambda c: (len(category_scores[c]), sum(category_scores[c]) / len(category_scores[c]))
+                key=lambda c: (
+                    len(category_scores[c]),
+                    sum(category_scores[c]) / len(category_scores[c]),
+                ),
             )
-            avg_confidence = sum(category_scores[best_category]) / len(category_scores[best_category])
+            best_count = len(category_scores[best_category])
+            avg_confidence = sum(category_scores[best_category]) / best_count
 
-            console.print(f"[bold green]→[/] Auto-selected: {best_category.value} ({len(category_scores[best_category])} docs, {avg_confidence:.2f} avg confidence)")
+            console.print(
+                f"[bold green]→[/] Auto-selected: {best_category.value} "
+                f"({best_count} docs, {avg_confidence:.2f} avg confidence)"
+            )
             category = best_category.value
         else:
-            console.print("[yellow]Warning: Could not auto-select category, using provided category[/]")
+            console.print(
+                "[yellow]Warning: Could not auto-select category, using provided category[/]"
+            )
 
     if output is None:
         output = Path(f"output/{category}")
@@ -914,8 +1022,12 @@ def rewrite(
 
 @app.command()
 def review(
-    database: Annotated[Path, typer.Argument(help="Corpus database path")] = app_settings.database_path,
-    category: Annotated[str | None, typer.Option("--category", "-c", help="Filter by category")] = None,
+    database: Annotated[
+        Path, typer.Argument(help="Corpus database path")
+    ] = app_settings.database_path,
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Filter by category")
+    ] = None,
     limit: Annotated[int, typer.Option("--limit", "-l", help="Number of docs to review")] = 10,
 ) -> None:
     """Manually review documents and mark as Gold Standard."""
