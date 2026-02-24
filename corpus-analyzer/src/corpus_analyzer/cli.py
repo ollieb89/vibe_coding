@@ -124,10 +124,13 @@ def index_command(
     registry = SlugRegistry.build(source_roots)
     if len(registry) == 0:
         console.print("[dim]Graph registry: no component directories found.[/]")
-    for dup_slug, dup_paths in registry.duplicates.items():
+    # Only surface plausible real collisions (≤ 8 candidates); higher counts are structural noise.
+    real_dups = {s: p for s, p in registry.duplicates.items() if len(p) <= 8}
+    if real_dups:
+        summary = ", ".join(f"{s} ({len(p)})" for s, p in real_dups.items())
         console.print(
-            f"[yellow]⚠️  Duplicate slug detected: '{dup_slug}' "
-            f"({len(dup_paths)} candidates — use fully-qualified paths to disambiguate)[/]"
+            f"[yellow]⚠️  {len(real_dups)} duplicate slug(s) detected: {summary}[/]\n"
+            "[dim]    Run `corpus graph --show-duplicates` to see all.[/]"
         )
 
     # Index each source

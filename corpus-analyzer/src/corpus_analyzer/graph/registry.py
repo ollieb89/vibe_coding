@@ -24,6 +24,62 @@ logger = logging.getLogger(__name__)
 
 _PREFERRED = ("SKILL.md", "README.md")
 
+# Directory names that are common infrastructure containers, not component slugs.
+# A directory whose name appears in this set is never registered as a slug, even
+# if it contains .md files.
+_STRUCTURAL_DIRS: frozenset[str] = frozenset(
+    {
+        "docs",
+        "templates",
+        "assets",
+        "references",
+        "reference",
+        "tests",
+        "examples",
+        "helpers",
+        "hooks",
+        "plugins",
+        "resources",
+        "tools",
+        "guides",
+        "images",
+        "static",
+        "public",
+        "dist",
+        "build",
+        "__tests__",
+        "scripts",
+        "utils",
+        "types",
+        "data",
+        "init",
+        "core",
+        "integration",
+        "analysis",
+        "automation",
+        "optimization",
+        "performance",
+        "monitoring",
+        "workflows",
+        "deployment",
+        "testing",
+        "architecture",
+        "security",
+        "commands",
+        "agents",
+        "rules",
+        "validation",
+        "reports",
+        "releases",
+        "checkpoints",
+        "training",
+        "mobile",
+        "development",
+        "custom",
+        "goal",
+    }
+)
+
 
 def _pick_index_file(directory: Path) -> Path | None:
     """Return the preferred representative file for a slug directory.
@@ -89,6 +145,8 @@ class SlugRegistry:
                 if index is None:
                     continue
                 slug = directory.name
+                if slug in _STRUCTURAL_DIRS:
+                    continue
                 candidates.setdefault(slug, []).append(index)
 
         mapping: dict[str, Path] = {}

@@ -88,3 +88,29 @@ def test_fallback_to_readme_when_no_skill_md(tmp_path: Path) -> None:
     reg = SlugRegistry.build([tmp_path])
     assert reg.resolve("my-skill") is not None
     assert reg.resolve("my-skill").name == "README.md"  # type: ignore[union-attr]
+
+
+def test_structural_dirs_are_not_registered(tmp_path: Path) -> None:
+    """Directories named after common infrastructure patterns must not become slugs."""
+    for structural_name in ("docs", "references", "agents", "commands", "templates"):
+        d = tmp_path / structural_name
+        d.mkdir()
+        (d / "README.md").write_text("infra content")
+    reg = SlugRegistry.build([tmp_path])
+    for structural_name in ("docs", "references", "agents", "commands", "templates"):
+        assert reg.resolve(structural_name) is None, (
+            f"Structural dir '{structural_name}' should not be registered as a slug"
+        )
+        assert structural_name not in reg.duplicates
+
+
+def test_non_structural_dirs_still_registered(tmp_path: Path) -> None:
+    """Excluding structural dirs must not affect real skill directories."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "README.md").write_text("infra")
+    skill_dir = tmp_path / "my-real-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("skill content")
+    reg = SlugRegistry.build([tmp_path])
+    assert reg.resolve("my-real-skill") is not None
+    assert reg.resolve("docs") is None
