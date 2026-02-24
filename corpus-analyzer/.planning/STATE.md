@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-24 — v3.0 Intelligent Search milest
 
 ## Current Position
 
-Phase: 17 complete (v2 in progress); v3 roadmap written
-Plan: —
-Status: v2 Phase 17 done (330 tests green); v3.0 roadmap created — ready to continue v2 at Phase 18
-Last activity: 2026-02-24 — v3.0 Intelligent Search roadmap created (Phases 26–32)
+Phase: 18-cli-chunk-display (v2 in progress)
+Plan: 01 complete (RED test suite for format_result)
+Status: Phase 18 Plan 01 done — 10 RED tests committed; ready for Plan 02 GREEN implementation
+Last activity: 2026-02-24 — Phase 18 Plan 01 complete (format_result RED tests)
 
 Progress: [██░░░░░░░░] 20% of v2 (Phase 17 complete — 2 of 2 plans done); v3 planning complete
 
@@ -60,6 +60,11 @@ Key v3 planning decisions:
 - RERANK-02 sentence-transformers is an optional extra ([rerank]) — never a core dep; lazy-import only inside --rerank branch
 - Phase 32 score range docs must be updated for post-NORM-01 normalised 0–1 scores; no doc or test should reference raw RRF range (0.009–0.033) as output
 
+Key 18-01 decisions:
+- format_result() RED tests import at module level — single ImportError is the RED signal for all 10 tests
+- test_format_result_rich_markup_escape_in_path checks '[deprecated]' in primary (escaped string), not Rich internals
+- test_format_result_no_ellipsis_at_exactly_200_chars: len(preview)==204 (4 indent + 200 chars)
+
 Key 17-02 decisions:
 - chunk_text read via chunk.get("chunk_text", "") in indexer — safe because summary prepend mutates chunk["text"] only
 - Test fixtures that directly insert LanceDB rows auto-fixed with chunk_name="" and chunk_text="" defaults
@@ -77,6 +82,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: v3.0 roadmap written — Phases 26–32 defined, requirements traceability updated
+Stopped at: Completed 18-01-PLAN.md (format_result RED tests committed as 0aedbcf)
 Resume file: None
-Next step: Resume v2 at Phase 18
+Next step: Phase 18 Plan 02 — GREEN implementation of format_result()
