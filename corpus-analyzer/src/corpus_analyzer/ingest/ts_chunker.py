@@ -81,6 +81,109 @@ def _extract_name(node: Any, export_node: Any | None) -> str:
     return "<anonymous>"
 
 
+def _chunk_ts_class(
+    node: Any,
+    export_node: Any | None,
+    lines: list[str],
+    class_name: str,
+) -> list[dict[str, Any]]:
+    """Split a class or abstract class node into a header chunk plus per-method chunks.
+
+    The header chunk covers the class signature, field declarations, and any
+    content before the first method_definition node. One chunk per
+    method_definition is appended after the header, named ClassName.method_name.
+
+    Args:
+        node: The class_declaration or abstract_class_declaration AST node.
+        export_node: The export_statement wrapper node if present, else None.
+        lines: All source lines (0-indexed) of the file.
+        class_name: The resolved class name string (already extracted).
+
+    Returns:
+        List of chunk dicts: one header chunk followed by one chunk per method_definition.
+    """
+    # outer is the export wrapper (if present) or the declaration node itself.
+    outer = export_node if export_node is not None else node
+
+    # JSDoc lookback — same logic as chunk_typescript() main loop.
+    chunk_start_row = outer.start_point[0]
+    prev = outer.prev_sibling
+    if prev is not None and prev.type not in ("comment",):
+        prev = prev.prev_sibling
+    if prev is not None and prev.type == "comment":
+        comment_bytes = prev.text
+        if comment_bytes is not None:
+            comment_text = comment_bytes.decode("utf-8")
+            if comment_text.startswith("/**") and outer.start_point[0] - prev.end_point[0] <= 1:
+                chunk_start_row = prev.start_point[0]
+
+    # Collect direct method children from class_body (no recursion).
+    # Both method_definition (concrete) and abstract_method_signature (abstract) produce chunks.
+    _METHOD_NODE_TYPES = frozenset({"method_definition", "abstract_method_signature"})
+    class_body = next(
+        (child for child in node.children if child.type == "class_body"), None
+    )
+    method_nodes: list[Any] = []
+    if class_body is not None:
+        method_nodes = [
+            child for child in class_body.children if child.type in _METHOD_NODE_TYPES
+        ]
+
+    chunks: list[dict[str, Any]] = []
+
+    if not method_nodes:
+        # No methods — emit a single header chunk spanning the full class.
+        start_line = chunk_start_row + 1
+        end_line = outer.end_point[0] + 1
+        chunk_text = "\n".join(lines[chunk_start_row : outer.end_point[0] + 1]).rstrip()
+        if chunk_text:
+            chunks.append({
+                "text": chunk_text,
+                "start_line": start_line,
+                "end_line": end_line,
+                "chunk_name": class_name,
+                "chunk_text": chunk_text,
+            })
+        return chunks
+
+    # Header chunk: from chunk_start_row up to (but not including) the first method.
+    first_method = method_nodes[0]
+    header_end_row = first_method.start_point[0]  # exclusive — lines up to this row
+    header_text = "\n".join(lines[chunk_start_row:header_end_row]).rstrip()
+    if header_text:
+        chunks.append({
+            "text": header_text,
+            "start_line": chunk_start_row + 1,
+            "end_line": header_end_row,  # 1-indexed line just before first method
+            "chunk_name": class_name,
+            "chunk_text": header_text,
+        })
+
+    # Per-method chunks.
+    for method_node in method_nodes:
+        method_start_line = method_node.start_point[0] + 1  # 1-indexed
+        method_end_line = method_node.end_point[0] + 1  # 1-indexed
+        name_node = method_node.child_by_field_name("name")
+        if name_node is not None and name_node.text is not None:
+            method_name = name_node.text.decode("utf-8")
+        else:
+            method_name = "<anonymous>"
+        method_text = "\n".join(
+            lines[method_node.start_point[0] : method_node.end_point[0] + 1]
+        ).rstrip()
+        chunk_name = f"{class_name}.{method_name}"
+        if method_text:
+            chunks.append({
+                "text": method_text,
+                "start_line": method_start_line,
+                "end_line": method_end_line,
+                "chunk_name": chunk_name,
+                "chunk_text": method_text,
+            })
+
+    return chunks
+
+
 def chunk_typescript(path: Path) -> list[dict[str, Any]]:
     """Split a TypeScript/JavaScript file into chunks by top-level constructs.
 
@@ -165,6 +268,13 @@ def chunk_typescript(path: Path) -> list[dict[str, Any]]:
             node = inner
 
         if node.type not in _TARGET_TYPES:
+            continue
+
+        # Sub-chunk class declarations into header + per-method chunks (SUB-03)
+        if node.type in ("class_declaration", "abstract_class_declaration"):
+            chunk_name = _extract_name(node, export_node)
+            sub_chunks = _chunk_ts_class(node, export_node, lines, chunk_name)
+            chunks.extend(sub_chunks)
             continue
 
         # outer is the export wrapper (if present) or the declaration itself.
