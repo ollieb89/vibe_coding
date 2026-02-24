@@ -76,6 +76,14 @@ def _open_engine() -> tuple[CorpusSearch, Any]:
     return engine, config
 
 
+_API_SORT_MAP: dict[str, str] = {
+    "score": "relevance",
+    "date": "date",
+    "title": "path",
+}
+_VALID_API_SORT_VALUES: frozenset[str] = frozenset(_API_SORT_MAP.keys())
+
+
 def search(
     query: str,
     *,
@@ -83,6 +91,8 @@ def search(
     file_type: str | None = None,
     construct_type: str | None = None,
     limit: int = 10,
+    sort_by: str = "score",
+    min_score: float = 0.0,
 ) -> list[SearchResult]:
     """Search the corpus index and return structured results.
 
@@ -95,10 +105,18 @@ def search(
         file_type: Optional file type filter (e.g. ".md").
         construct_type: Optional construct type filter.
         limit: Maximum number of results.
+        sort_by: Sort order for results. One of "score" (default), "date", "title".
+            Translated to engine vocabulary before forwarding.
+        min_score: Minimum relevance score threshold (0.0 means no filter).
 
     Returns:
         List of SearchResult dataclass instances.
     """
+    if sort_by not in _VALID_API_SORT_VALUES:
+        raise ValueError(
+            f"Invalid sort_by value: {sort_by!r}. "
+            f"Allowed values: {sorted(_VALID_API_SORT_VALUES)}"
+        )
     engine, _ = _open_engine()
     raw = engine.hybrid_search(
         query,
@@ -106,6 +124,8 @@ def search(
         file_type=file_type,
         construct_type=construct_type,
         limit=limit,
+        sort_by=_API_SORT_MAP[sort_by],
+        min_score=min_score,
     )
     return [
         SearchResult(

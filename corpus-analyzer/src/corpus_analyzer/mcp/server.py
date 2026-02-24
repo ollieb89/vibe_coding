@@ -46,12 +46,14 @@ async def corpus_search(
     type: Optional[str] = None,  # noqa: UP045
     construct: Optional[str] = None,  # noqa: UP045
     top_k: Optional[int] = 5,  # noqa: UP045
+    min_score: Optional[float] = None,  # noqa: UP045
     ctx: Context = None,  # type: ignore[assignment]
 ) -> dict[str, Any]:
     """Search the corpus index with a natural language query.
 
     Returns full file content for top matching files plus metadata.
     Use 'source', 'type', 'construct' for filtering; 'top_k' for result count.
+    'min_score' filters out results below the given relevance threshold (0.0 means no filter).
     """
     engine_or_none: CorpusSearch | None = ctx.lifespan_context.get("engine")
     if engine_or_none is None:
@@ -63,6 +65,8 @@ async def corpus_search(
 
     limit = top_k if top_k is not None else 5
 
+    effective_min_score = min_score if min_score is not None else 0.0
+
     try:
         raw_results = engine.hybrid_search(
             query,
@@ -70,6 +74,7 @@ async def corpus_search(
             file_type=type,
             construct_type=construct,
             limit=limit,
+            min_score=effective_min_score,
         )
     except Exception as exc:
         raise ValueError(
@@ -77,7 +82,13 @@ async def corpus_search(
         ) from exc
 
     if not raw_results:
-        return {"results": [], "message": f"No results found for query: {query}"}
+        empty_response: dict[str, Any] = {
+            "results": [],
+            "message": f"No results found for query: {query}",
+        }
+        if min_score:
+            empty_response["filtered_by_min_score"] = True
+        return empty_response
 
     results = []
     for row in raw_results:
