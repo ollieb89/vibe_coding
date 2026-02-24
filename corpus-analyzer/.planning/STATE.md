@@ -106,7 +106,7 @@ Key 17-02 decisions:
 - Phase 22 (NAME-01–03): `--name` with no positional query requires making the query argument Optional in the CLI command signature
 - Phase 23 (NORM-01): Normalisation inside the search engine means all existing score-range tests (e.g. FILT-01 threshold tests) must be updated to expect 0–1 values
 - Phase 23 (SORT-01): MCP sort_by uses the existing `_API_SORT_MAP` translation — minimal wiring required
-- Phase 24 (JSON-01): Rich must be fully suppressed when `--output json`; use `print()` not `Console.print()`
+- ~~Phase 24 (JSON-01): Rich must be fully suppressed when `--output json`; use `print()` not `Console.print()`~~ (Completed)
 - Phase 25 (GRAPH-01): `corpus_graph` MCP tool is a thin wrapper around existing `GraphStore.search_paths()` and `get_neighbours()` — no new storage
 
 ### Pending Todos

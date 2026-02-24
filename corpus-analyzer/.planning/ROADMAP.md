@@ -126,10 +126,9 @@ Plans:
   2. Each JSON object contains the same fields as a `SearchResult` (path, score, construct_type, chunk_name, start_line, end_line, text, etc.)
   3. `--output json` composes with all existing filter flags including `--name`, `--min-score`, `--sort-by`, `--limit`
   4. The output is valid JSON parseable by `jq` and Python `json.loads()`
-**Plans**: TBD
 
 Plans:
-- [ ] 24-01: TBD
+- [x] 24-01: Add JSON output support to CLI
 
 ---
 
