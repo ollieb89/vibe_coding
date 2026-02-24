@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 from statistics import mean
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from corpus_analyzer.core.database import CorpusDatabase
 from corpus_analyzer.core.models import DocumentCategory
@@ -209,7 +209,7 @@ def _format_heading_frequency_csv(report: ShapeReport) -> str:
     return "\n".join(lines)
 
 
-def _generate_recommended_schema(report: ShapeReport) -> dict:
+def _generate_recommended_schema(report: ShapeReport) -> dict[str, Any]:
     """Generate recommended schema from analysis."""
     return {
         "category": report.category,

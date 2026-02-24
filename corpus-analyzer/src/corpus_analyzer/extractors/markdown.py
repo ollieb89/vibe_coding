@@ -4,6 +4,7 @@ import hashlib
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 
@@ -65,7 +66,7 @@ class MarkdownExtractor(BaseExtractor):
     def _extract_title(
         self,
         content: str,
-        metadata: dict,
+        metadata: dict[str, Any],
         file_path: Path,
     ) -> str:
         """Extract title from frontmatter, first H1, or filename."""

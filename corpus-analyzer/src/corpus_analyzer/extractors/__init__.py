@@ -21,7 +21,7 @@ def extract_document(file_path: Path, root: Path) -> Document | None:
 
     suffix = file_path.suffix.lower()
 
-    extractors = {
+    extractors: dict[str, type[MarkdownExtractor] | type[PythonExtractor]] = {
         ".md": MarkdownExtractor,
         ".py": PythonExtractor,
         ".txt": MarkdownExtractor,  # Treat as plain text markdown

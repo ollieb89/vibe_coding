@@ -270,7 +270,7 @@ def _enforce_char_limit(
 
         # Split oversized chunk into smaller pieces
         lines = text.split("\n")
-        current_lines = []
+        current_lines: list[str] = []
         current_start = chunk["start_line"]
         current_line_num = chunk["start_line"]
 

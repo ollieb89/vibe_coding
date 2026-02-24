@@ -1,11 +1,14 @@
 """UI utilities for the CLI."""
 
+from typing import Any
+
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
 
-def print_table_schema(table_name: str, table_obj):
+
+def print_table_schema(table_name: str, table_obj: Any) -> None:
     """Print high-level schema of a database table."""
     schema_table = Table(
         title=f"Schema for {table_name}", show_header=True, header_style="bold magenta"
@@ -27,7 +30,7 @@ def print_table_schema(table_name: str, table_obj):
         )
     console.print(schema_table)
 
-def print_sample_data(table_name: str, table_obj, limit: int = 5):
+def print_sample_data(table_name: str, table_obj: Any, limit: int = 5) -> None:
     """Print sample rows from a database table."""
     rows = list(table_obj.rows_where(limit=limit))
     if not rows:
