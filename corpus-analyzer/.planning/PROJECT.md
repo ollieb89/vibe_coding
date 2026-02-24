@@ -56,23 +56,38 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ Python `search()` API accepts `sort_by` and `min_score` with `ValueError` validation (PARITY-01, PARITY-02) — v1.4
 - ✓ MCP `corpus_search()` accepts `min_score: Optional[float]` with `None`→`0.0` + `filtered_by_min_score` signal (PARITY-03) — v1.4
 
-## Current Milestone: v1.5 TypeScript AST Chunking
+## Completed Milestone: v1.5 TypeScript AST Chunking
 
 **Goal:** Replace line-based chunking for TypeScript and JavaScript with tree-sitter AST-aware chunking, matching the precision and parity of the existing Python AST chunker.
 
-**Target features:**
-- tree-sitter based AST chunker for `.ts`, `.tsx`, `.js`, `.jsx`
-- Chunk types: functions/methods, classes, interfaces/types, top-level constants
-- Silent line-based fallback on parse failure
-- Full test coverage at parity with the Python AST chunker
+**Shipped 2026-02-24.**
 
-### Active
+### Validated
 
-- [ ] tree-sitter AST chunker for `.ts`, `.tsx`, `.js`, `.jsx` (IDX-01)
-- [ ] Chunk granularity: functions, methods, classes, interfaces/types, top-level constants (IDX-02)
-- [ ] Silent line-based fallback when tree-sitter cannot parse a file (IDX-03)
-- [ ] Test suite at full parity with Python AST chunker coverage (TEST-01)
-- [ ] Integration: new chunker wired into indexer dispatch for TS/JS extensions (IDX-04)
+- [x] tree-sitter AST chunker for `.ts`, `.tsx`, `.js`, `.jsx` (IDX-01) — Validated
+- [x] Chunk granularity: functions, methods, classes, interfaces/types, top-level constants (IDX-02) — Validated
+- [x] Silent line-based fallback when tree-sitter cannot parse a file (IDX-03) — Validated
+- [x] Test suite at full parity with Python AST chunker coverage (TEST-01) — Validated
+- [x] Integration: new chunker wired into indexer dispatch for TS/JS extensions (IDX-04) — Validated
+- [x] Size guard: 50K+ char files fall back to chunk_lines (IDX-08) — Validated
+- [x] ImportError fallback when tree-sitter absent (IDX-09) — Validated
+- [x] ruff + mypy + 320 tests all pass (QUAL-01) — Validated
+
+## v1.5 Milestone Validation
+
+**Completed:** 2026-02-24
+
+| Requirement | Description | Status |
+|-------------|-------------|--------|
+| IDX-08 | Size guard: 50K+ char files fall back to chunk_lines | Validated |
+| IDX-09 | ImportError fallback when tree-sitter absent | Validated |
+| QUAL-01 | ruff + mypy + 320 tests all pass | Validated |
+
+**Quality gate evidence (Phase 16 completion):**
+- `uv run ruff check .` — exits 0, zero violations across 54 source files
+- `uv run mypy src/` — exits 0, zero type errors in 54 source files
+- `uv run pytest --tb=no -q` — 320 tests, 0 failed
+- `corpus extract` + `chunk_file` dispatch on `.ts` fixture — exit 0, 2 chunks extracted
 
 ### Out of Scope
 
@@ -143,4 +158,4 @@ Known limitations heading into v2 planning:
 | FILT-03 branch checks `min_score > 0.0` before generic no-results | Contextual hint only fires when the user deliberately filtered; doesn't appear on regular empty results | ✓ Good — tested by asserting absence of generic message alongside presence of hint |
 
 ---
-*Last updated: 2026-02-24 after v1.5 milestone start*
+*Last updated: 2026-02-24 — v1.5 milestone complete (Phase 16: Integration Hardening)*
