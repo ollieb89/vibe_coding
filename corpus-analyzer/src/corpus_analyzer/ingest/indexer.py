@@ -418,7 +418,7 @@ class CorpusIndex:
                         graph_store.clear_edges_for(resolved_path)
                         edges: list[tuple[str, bool, str]] = []
                         for slug in slugs:
-                            resolved_target = registry.resolve(slug)
+                            resolved_target = registry.resolve(slug, context_path=resolved_path)
                             if resolved_target is not None:
                                 edges.append((str(resolved_target), True, "related_skill"))
                             else:
