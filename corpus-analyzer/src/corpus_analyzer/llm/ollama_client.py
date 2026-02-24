@@ -1,10 +1,16 @@
 """Ollama client for local LLM integration."""
 
+from __future__ import annotations
+
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import ollama
 
 from corpus_analyzer.settings import settings
+
+if TYPE_CHECKING:
+    from corpus_analyzer.core.database import CorpusDatabase
 
 
 class OllamaClient:
@@ -19,6 +25,7 @@ class OllamaClient:
         self.host = host or settings.ollama_host
         self.model = model or settings.ollama_model
         self.client = ollama.Client(host=self.host)
+        self.db: CorpusDatabase | None = None
 
     def generate(
         self,
@@ -38,7 +45,7 @@ class OllamaClient:
             options={"temperature": temperature},
         )
 
-        return response["message"]["content"]
+        return str(response.message.content or "")
 
     def generate_stream(
         self,
