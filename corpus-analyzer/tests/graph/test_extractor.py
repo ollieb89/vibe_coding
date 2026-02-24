@@ -54,3 +54,23 @@ def test_stops_at_next_heading() -> None:
 def test_deduplicates_slugs() -> None:
     md = "## Related Skills\n\n- `auth`, `auth`\n"
     assert extract_related_slugs(md) == ["auth"]
+
+
+def test_ignores_prose_backticks_in_section() -> None:
+    """Prose backticks inside the section body are not extracted as slugs."""
+    md = (
+        "## Related Skills\n\n"
+        "See the `feature-planning` guide for details.\n"
+        "- `actual-slug`\n"
+    )
+    assert extract_related_slugs(md) == ["actual-slug"]
+
+
+def test_ignores_prose_bold_in_section() -> None:
+    """Bold text that is not a list item is not extracted as a slug."""
+    md = (
+        "## Related Skills\n\n"
+        "**Note:** this is important context.\n"
+        "- **real-slug**: the actual dependency\n"
+    )
+    assert extract_related_slugs(md) == ["real-slug"]

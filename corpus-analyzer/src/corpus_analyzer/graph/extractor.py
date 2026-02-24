@@ -38,17 +38,21 @@ def extract_related_slugs(text: str) -> list[str]:
         return []
 
     section = match.group(1)
-    seen: dict[str, None] = {}  # ordered set
+    seen: dict[str, None] = {}  # ordered set — preserves insertion order
 
-    for slug in _BACKTICK_RE.findall(section):
-        seen.setdefault(slug, None)
-    for slug in _BOLD_RE.findall(section):
-        seen.setdefault(slug, None)
-
-    # Plain items only if line has NO backtick or bold markup
     for line in section.splitlines():
-        plain = _PLAIN_RE.match(line.strip())
-        if plain and "`" not in line and "**" not in line:
-            seen.setdefault(plain.group(1), None)
+        stripped = line.strip()
+        if not stripped.startswith(("- ", "* ")):
+            continue
+        for slug in _BACKTICK_RE.findall(stripped):
+            seen.setdefault(slug, None)
+        for slug in _BOLD_RE.findall(stripped):
+            if "`" not in stripped:  # don't double-count mixed lines
+                seen.setdefault(slug, None)
+        # Plain item: no backtick and no bold markup
+        if "`" not in stripped and "**" not in stripped:
+            plain = _PLAIN_RE.match(stripped)
+            if plain:
+                seen.setdefault(plain.group(1), None)
 
     return list(seen)
