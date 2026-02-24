@@ -48,7 +48,13 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ### Active
 
-(None — planning next milestone)
+<!-- v1.4 Search Precision — current milestone -->
+
+- [ ] Relevance score displayed in `corpus search` output
+- [ ] `--sort` flag on `corpus search`: `relevance` (default) and `path`
+- [ ] `--min-score <float>` flag to hard-filter low-relevance results
+- [ ] Python `search()` API accepts `sort_by` and `min_score` parameters
+- [ ] MCP `corpus_search` tool accepts `min_score` parameter
 
 ### Out of Scope
 
@@ -114,5 +120,15 @@ Known limitations heading into v2 planning:
 | `Atom` promoted to module level (not type: ignore on nested) | Nested dataclasses prevent typed annotations on helper closures | ✓ Good — cleaner module structure, zero mypy errors |
 | `OllamaClient.db: CorpusDatabase \| None = None` added | `advanced_rewriter.py` uses `client.db`; TYPE_CHECKING guard avoids circular import | ✓ Good — optional field, no runtime impact if unused |
 
+## Current Milestone: v1.4 Search Precision
+
+**Goal:** Give users control over search output — expose relevance scores, add sorting, and filter noise via a minimum-score threshold — across CLI, Python API, and MCP.
+
+**Target features:**
+- Relevance score display in `corpus search` output
+- `--sort relevance|path` flag for ordering results
+- `--min-score <float>` flag to discard low-relevance results
+- Python API and MCP parity for the new controls
+
 ---
-*Last updated: 2026-02-24 after v1.3 milestone*
+*Last updated: 2026-02-24 after v1.4 milestone start*

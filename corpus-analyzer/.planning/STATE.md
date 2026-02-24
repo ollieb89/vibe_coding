@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v1.3 milestone)
+See: .planning/PROJECT.md (updated 2026-02-24 after v1.4 milestone start)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** Planning next milestone (/gsd:new-milestone)
+**Current focus:** v1.4 Search Precision — relevance scores, sorting, min-score filtering
 
 ## Current Position
 
-Phase: 12 of 12 (Validation Gate) — COMPLETE
-Plan: 1 of 1 in current phase (COMPLETE)
-Status: v1.3 milestone complete
-Last activity: 2026-02-24 — Phase 12 Plan 1 complete (VALID-01/02/03: ruff clean, mypy clean, 281 tests passing)
-
-Progress: [██████████] 100% v1.3 COMPLETE (phases 9-12)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-24 — Milestone v1.4 Search Precision started
 
 ## Performance Metrics
 
