@@ -154,6 +154,10 @@ def generate_shape_reports(db: CorpusDatabase, output_dir: Path) -> list[Path]:
 
 def _format_shape_report_md(report: ShapeReport) -> str:
     """Format shape report as markdown."""
+    depth_rows = chr(10).join(
+        f"| H{level} | {count} |"
+        for level, count in sorted(report.heading_depth_distribution.items())
+    )
     return f"""# Shape Report: {report.category}
 
 ## Overview
@@ -175,7 +179,7 @@ def _format_shape_report_md(report: ShapeReport) -> str:
 
 | Level | Count |
 |-------|-------|
-{chr(10).join(f"| H{level} | {count} |" for level, count in sorted(report.heading_depth_distribution.items()))}
+{depth_rows}
 
 ## Most Common Headings
 

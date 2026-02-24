@@ -249,7 +249,9 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
     return chunks
 
 
-def _enforce_char_limit(chunks: list[dict[str, Any]], max_chars: int = 4000) -> list[dict[str, Any]]:
+def _enforce_char_limit(
+    chunks: list[dict[str, Any]], max_chars: int = 4000
+) -> list[dict[str, Any]]:
     """Enforce maximum character limit on chunks, splitting if necessary.
 
     Args:

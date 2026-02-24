@@ -7,7 +7,9 @@ console = Console()
 
 def print_table_schema(table_name: str, table_obj):
     """Print high-level schema of a database table."""
-    schema_table = Table(title=f"Schema for {table_name}", show_header=True, header_style="bold magenta")
+    schema_table = Table(
+        title=f"Schema for {table_name}", show_header=True, header_style="bold magenta"
+    )
     schema_table.add_column("CID", justify="right")
     schema_table.add_column("Name")
     schema_table.add_column("Type")
@@ -32,12 +34,18 @@ def print_sample_data(table_name: str, table_obj, limit: int = 5):
         console.print(f"[yellow]No data in {table_name}[/]")
         return
 
-    data_table = Table(title=f"Sample data from {table_name} (LIMIT {limit})", show_header=True, header_style="bold green")
+    data_table = Table(
+        title=f"Sample data from {table_name} (LIMIT {limit})",
+        show_header=True,
+        header_style="bold green",
+    )
 
     all_cols = list(rows[0].keys())
     # Adjust display columns for readability
     if table_name == "documents":
-        display_cols = ["id", "relative_path", "file_type", "title", "category", "category_confidence"]
+        display_cols = [
+            "id", "relative_path", "file_type", "title", "category", "category_confidence"
+        ]
     else:
         display_cols = all_cols[:8]
 

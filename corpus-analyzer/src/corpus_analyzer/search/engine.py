@@ -111,7 +111,9 @@ class CorpusSearch:
                 )
             )
         elif sort_by == "confidence":
-            filtered.sort(key=lambda r: float(r.get("classification_confidence") or 0.0), reverse=True)
+            filtered.sort(
+                key=lambda r: float(r.get("classification_confidence") or 0.0), reverse=True
+            )
         elif sort_by == "date":
             filtered.sort(key=lambda r: str(r.get("indexed_at") or ""), reverse=True)
         elif sort_by == "path":

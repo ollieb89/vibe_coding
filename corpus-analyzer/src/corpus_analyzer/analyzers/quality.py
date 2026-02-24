@@ -77,7 +77,9 @@ class QualityAnalyzer:
             if category_docs and category_docs[0].quality_score >= 0.5:
                 top_doc = category_docs[0]
                 if top_doc.id:
-                    self.db.update_document_quality(top_doc.id, top_doc.quality_score, is_gold_standard=True)
+                    self.db.update_document_quality(
+                        top_doc.id, top_doc.quality_score, is_gold_standard=True
+                    )
                     logger.info(f"Marked {top_doc.path} as gold standard for {cat.value}")
 
         return count

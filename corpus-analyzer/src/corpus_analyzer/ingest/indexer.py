@@ -94,7 +94,9 @@ class CorpusIndex:
     change detection, and stale chunk cleanup.
     """
 
-    def __init__(self, table: lancedb.table.Table, embedder: OllamaEmbedder, data_dir: Path) -> None:
+    def __init__(
+        self, table: lancedb.table.Table, embedder: OllamaEmbedder, data_dir: Path
+    ) -> None:
         """Initialize with LanceDB table, embedder, and data directory.
 
         Args:
