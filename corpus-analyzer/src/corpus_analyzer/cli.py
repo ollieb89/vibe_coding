@@ -324,8 +324,8 @@ def graph_command(
     depth: Annotated[int, typer.Option("--depth", "-d", help="Traversal depth")] = 1,
 ) -> None:
     """Show upstream and downstream relationships for a component."""
-    from corpus_analyzer.graph.store import GraphStore
-
+    if depth != 1:
+        console.print("[yellow]Note: --depth > 1 not yet implemented, showing depth=1.[/yellow]")
     graph_db = DATA_DIR / "graph.sqlite"
     if not graph_db.exists():
         console.print("[yellow]No graph index found. Run 'corpus index' first.[/yellow]")

@@ -35,7 +35,7 @@ def source_dir(tmp_path: Path) -> Path:
     src.mkdir()
     (src / "skill-a" / "SKILL.md").parent.mkdir(parents=True, exist_ok=True)
     (src / "skill-a" / "SKILL.md").write_text(
-        "# Skill A\n\n## Related Skills\n\n- [[skill-b]]\n"
+        "# Skill A\n\n## Related Skills\n\n- `skill-b`\n"
     )
     return src
 

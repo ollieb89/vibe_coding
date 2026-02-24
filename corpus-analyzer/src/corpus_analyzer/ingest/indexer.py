@@ -182,14 +182,14 @@ class CorpusIndex:
         """Path to the source manifest JSON file."""
         return self._data_dir / "index" / "source_manifest.json"
 
-    def _load_manifest(self) -> dict[str, dict[str, object]]:
+    def _load_manifest(self) -> dict[str, dict[str, str | int]]:
         """Load the source manifest, returning empty dict on any error.
 
         Returns:
             Mapping of source_name → {last_indexed_at: str, file_count: int}.
         """
         try:
-            return json.loads(self._manifest_path.read_text())
+            return json.loads(self._manifest_path.read_text())  # type: ignore[no-any-return]
         except Exception:
             return {}
 
@@ -583,5 +583,4 @@ class CorpusIndex:
     def close(self) -> None:
         """Close the index and release resources."""
         # LanceDB handles cleanup automatically
-        pass
         pass
