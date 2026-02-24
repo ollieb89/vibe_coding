@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 
 ## Current Position
 
-Phase: 9 of 12 (Config and Auto-Fix)
-Plan: 2 of 2 in current phase
+Phase: 10 of 12 (Manual Ruff Leaf-to-Hub)
+Plan: 1 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-24 — Phase 9 Plan 2 complete (ruff auto-fix, 370 violations eliminated)
+Last activity: 2026-02-24 — Phase 10 Plan 1 complete (E741/E402/B017 semantic violations fixed, 281 tests passing)
 
 Progress: [█░░░░░░░░░] 10% (v1.3)
 
@@ -49,6 +49,9 @@ Recent decisions affecting current work:
 - [v1.3 planning]: B006 Typer list defaults must use `# noqa: B006`, not naive `None` replacement (breaks `--help`)
 - [v1.3 planning]: sqlite-utils union-attr — use `cast(Table, ...)` per call site, not `# type: ignore`
 - [v1.3 planning]: `llm/rewriter.py` line 406 operator error is a genuine bug — investigate control flow before fixing
+- [10-01]: Use `lnk` (not `link2`) for database.py deserialization rename to avoid shadowing imported Link class
+- [10-01]: Use `level_val` for chunked_processor.py rename to match semantics of force_level/current_level source variables
+- [10-01]: ruff --fix (safe only) sufficient for scripts/ F401/W293; no --unsafe-fixes needed
 
 ### Pending Todos
 
@@ -62,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 09-02-PLAN.md (ruff auto-fix pass)
+Stopped at: Completed 10-01-PLAN.md (E741/E402/B017 semantic fixes)
 Resume file: None

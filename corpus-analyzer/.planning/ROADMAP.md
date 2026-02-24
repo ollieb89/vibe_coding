@@ -119,6 +119,6 @@ Plans:
 | 7. Graph Layer | v1.2 | —/— | Complete | 2026-02-24 |
 | 8. Cleanup | v1.2 | 1/1 | Complete | 2026-02-24 |
 | 9. Config and Auto-Fix | 2/2 | Complete   | 2026-02-24 | - |
-| 10. Manual Ruff — Leaf to Hub | v1.3 | 0/TBD | Not started | - |
+| 10. Manual Ruff — Leaf to Hub | 1/3 | In Progress|  | - |
 | 11. Manual Ruff — CLI + Mypy | v1.3 | 0/TBD | Not started | - |
 | 12. Validation Gate | v1.3 | 0/TBD | Not started | - |
