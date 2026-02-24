@@ -52,10 +52,11 @@ Plans:
   3. Special methods (`__init__`, `__str__`, `__repr__`) follow the same dot-notation naming
   4. The monolithic class chunk no longer appears — it is replaced by the header + per-method chunks
   5. Re-indexing an already-indexed Python file produces the same chunks deterministically
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 20-01: TBD
+- [ ] 20-01-PLAN.md — TDD: class header chunk extraction (_chunk_class() helper, SUB-01)
+- [ ] 20-02-PLAN.md — TDD: per-method chunk extraction (ClassName.method_name, SUB-02)
 
 ---
 
