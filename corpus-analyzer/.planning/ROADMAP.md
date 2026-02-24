@@ -145,7 +145,9 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 25-01: TBD
+- [x] 25-01: Add corpus_graph MCP tool
+- [x] 25-02: Add zero-hallucination integration tests
+- [x] 25-03: Improve branch coverage to 85%+
 
 ---
 
@@ -250,4 +252,4 @@ Plans:
 | 22. Name Filtering | 2/2 | Complete    | 2026-02-24 | - |
 | 23. Score Normalisation + MCP Sort | v2.1 | 0/2 | Not started | - |
 | 24. JSON Output | v2.1 | 0/TBD | Not started | - |
-| 25. Graph MCP + Quality Gate | v2.1 | 0/TBD | Not started | - |
+| 25. Graph MCP + Quality Gate | v2.1 | 3/3 | Complete | 2026-02-24 |
