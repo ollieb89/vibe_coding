@@ -24,6 +24,13 @@ class TestOllamaEmbedderInit:
         embedder = OllamaEmbedder(model="test-model")
         assert embedder.host == "http://localhost:11434"
 
+    def test_default_batch_size_is_safe_for_8k_context(self) -> None:
+        """Default batch_size (8) x max_chars (2000) stays within 8192-token context."""
+        embedder = OllamaEmbedder(model="test-model")
+        # 8 chunks × 2000 chars ÷ 4 chars-per-token ≈ 4000 tokens — well within 8192
+        assert embedder._batch_size == 8
+        assert embedder._max_chars == 2000
+
 
 class TestValidateConnection:
     """Tests for validate_connection method."""
@@ -143,3 +150,63 @@ class TestEmbedBatch:
 
         assert len(embeddings) == 1
         assert len(embeddings[0]) == 768
+
+    def test_large_batch_splits_into_multiple_api_calls(self) -> None:
+        """embed_batch splits 70 texts into 3 calls when batch_size=32 (32+32+6)."""
+        embedder = OllamaEmbedder(model="test", batch_size=32)
+
+        # Each sub-batch call returns the right number of embeddings
+        def make_response(n: int) -> MagicMock:
+            r = MagicMock()
+            r.embeddings = [[0.1] * 4] * n
+            return r
+
+        with patch.object(embedder._client, "embed") as mock_embed:
+            mock_embed.side_effect = [make_response(32), make_response(32), make_response(6)]
+            result = embedder.embed_batch(["t"] * 70)
+
+        assert mock_embed.call_count == 3
+        assert len(result) == 70
+
+    def test_batch_results_concatenated_in_order(self) -> None:
+        """Results from multiple sub-batches are returned in original order."""
+        embedder = OllamaEmbedder(model="test", batch_size=2)
+
+        resp1 = MagicMock()
+        resp1.embeddings = [[1.0, 1.0], [2.0, 2.0]]
+        resp2 = MagicMock()
+        resp2.embeddings = [[3.0, 3.0]]
+
+        with patch.object(embedder._client, "embed") as mock_embed:
+            mock_embed.side_effect = [resp1, resp2]
+            result = embedder.embed_batch(["a", "b", "c"])
+
+        assert result == [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]]
+
+    def test_texts_truncated_to_max_chars(self) -> None:
+        """Texts longer than max_chars are truncated before embedding."""
+        embedder = OllamaEmbedder(model="test", max_chars=10)
+
+        mock_response = MagicMock()
+        mock_response.embeddings = [[0.1] * 4]
+
+        with patch.object(embedder._client, "embed") as mock_embed:
+            mock_embed.return_value = mock_response
+            embedder.embed_batch(["hello world this is very long text"])
+
+        called_input = mock_embed.call_args[1]["input"]
+        assert called_input == ["hello worl"]  # truncated to 10 chars
+
+    def test_short_texts_not_truncated(self) -> None:
+        """Texts shorter than max_chars are passed through unchanged."""
+        embedder = OllamaEmbedder(model="test", max_chars=100)
+
+        mock_response = MagicMock()
+        mock_response.embeddings = [[0.1] * 4]
+
+        with patch.object(embedder._client, "embed") as mock_embed:
+            mock_embed.return_value = mock_response
+            embedder.embed_batch(["short"])
+
+        called_input = mock_embed.call_args[1]["input"]
+        assert called_input == ["short"]

@@ -10,7 +10,7 @@ import pytest
 
 from corpus_analyzer.config.schema import SourceConfig
 from corpus_analyzer.search.classifier import ClassificationResult
-from corpus_analyzer.ingest.indexer import CorpusIndex, IndexResult  # type: ignore[attr-defined]
+from corpus_analyzer.ingest.indexer import CorpusIndex, IndexResult, SourceStatus  # type: ignore[attr-defined]
 
 
 class MockEmbedder:
@@ -414,3 +414,248 @@ def test_index_rebuilds_fts_index(tmp_path) -> None:
         index.index_source(source)
 
     mock_fts.assert_called_once_with(index.table, "text", replace=True)
+
+
+# --- Source-level change detection tests ---
+
+
+class TestSourceLevelChangeDetection:
+    """Source-level fast-path: skip expensive LanceDB ops when nothing has changed."""
+
+    def test_clean_source_skips_lancedb_query_on_second_run(self, tmp_path: Path) -> None:
+        """Second run on unchanged source never queries LanceDB (table.search not called)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "a.md").write_text("# A\nContent A.")
+        (source_dir / "b.md").write_text("# B\nContent B.")
+
+        index = CorpusIndex.open(tmp_path, MockEmbedder())
+        source = SourceConfig(name="my-source", path=str(source_dir))
+
+        index.index_source(source)  # first run — writes manifest
+
+        # Second run: table.search should never be called (source-level skip)
+        with patch.object(index._table, "search") as mock_search:
+            result2 = index.index_source(source)
+
+        mock_search.assert_not_called()
+        assert result2.files_indexed == 0
+        assert result2.files_skipped == 2
+
+    def test_clean_source_skips_optimize_on_second_run(self, tmp_path: Path) -> None:
+        """Second run on unchanged source skips table.optimize() (no work done)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "a.md").write_text("# A\nContent A.")
+
+        index = CorpusIndex.open(tmp_path, MockEmbedder())
+        source = SourceConfig(name="my-source", path=str(source_dir))
+
+        index.index_source(source)
+
+        with patch.object(index._table, "optimize") as mock_optimize:
+            index.index_source(source)
+
+        mock_optimize.assert_not_called()
+
+    def test_modified_file_still_queries_lancedb(self, tmp_path: Path) -> None:
+        """Modified file triggers full reindex path (table.search IS called)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        file_path = source_dir / "a.md"
+        file_path.write_text("# Original\nContent.")
+
+        index = CorpusIndex.open(tmp_path, MockEmbedder())
+        source = SourceConfig(name="my-source", path=str(source_dir))
+
+        index.index_source(source)
+        file_path.write_text("# Changed\nNew content.")
+
+        with patch.object(index._table, "search", wraps=index._table.search) as mock_search:
+            result2 = index.index_source(source)
+
+        mock_search.assert_called()
+        assert result2.files_indexed == 1
+
+    def test_added_file_triggers_full_reindex(self, tmp_path: Path) -> None:
+        """New file in source triggers full reindex (file count changed)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "a.md").write_text("# A\nContent.")
+
+        index = CorpusIndex.open(tmp_path, MockEmbedder())
+        source = SourceConfig(name="my-source", path=str(source_dir))
+
+        index.index_source(source)
+        (source_dir / "b.md").write_text("# B\nNew file.")
+
+        with patch.object(index._table, "search", wraps=index._table.search) as mock_search:
+            result2 = index.index_source(source)
+
+        mock_search.assert_called()
+        assert result2.files_indexed >= 1
+
+    def test_deleted_file_triggers_full_reindex(self, tmp_path: Path) -> None:
+        """Deleted file triggers full reindex (file count changed)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "a.md").write_text("# A\nContent A.")
+        (source_dir / "b.md").write_text("# B\nContent B.")
+
+        index = CorpusIndex.open(tmp_path, MockEmbedder())
+        source = SourceConfig(name="my-source", path=str(source_dir))
+
+        index.index_source(source)
+        (source_dir / "b.md").unlink()
+
+        with patch.object(index._table, "search", wraps=index._table.search) as mock_search:
+            index.index_source(source)
+
+        mock_search.assert_called()
+
+
+# --- check_source_status tests ---
+
+
+class TestCheckSourceStatus:
+    """Tests for CorpusIndex.check_source_status() — public pre-index check."""
+
+    @pytest.fixture
+    def index(self, tmp_path: Path) -> CorpusIndex:
+        """Create a CorpusIndex fixture."""
+        return CorpusIndex.open(tmp_path, MockEmbedder())
+
+    def test_new_source_needs_indexing(self, index: CorpusIndex, tmp_path: Path) -> None:
+        """check_source_status() reports needs_indexing=True for a never-indexed source."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "file.md").write_text("# Content")
+
+        source = SourceConfig(name="new-source", path=str(source_dir))
+        status = index.check_source_status(source)
+
+        assert isinstance(status, SourceStatus)
+        assert status.needs_indexing is True
+        assert status.reason == "new source"
+        assert status.last_indexed_at is None
+        assert status.source_name == "new-source"
+
+    def test_up_to_date_source_does_not_need_indexing(
+        self, index: CorpusIndex, tmp_path: Path
+    ) -> None:
+        """check_source_status() reports needs_indexing=False when source is unchanged."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "file.md").write_text("# Content")
+
+        source = SourceConfig(name="my-source", path=str(source_dir))
+        index.index_source(source)
+
+        status = index.check_source_status(source)
+
+        assert status.needs_indexing is False
+        assert status.reason == "up to date"
+        assert status.last_indexed_at is not None
+
+    def test_modified_file_needs_indexing(self, index: CorpusIndex, tmp_path: Path) -> None:
+        """check_source_status() reports needs_indexing=True when a file has been modified."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        file_path = source_dir / "file.md"
+        file_path.write_text("# Original")
+
+        source = SourceConfig(name="my-source", path=str(source_dir))
+        index.index_source(source)
+
+        # Modify the file so its mtime advances past last_indexed_at
+        file_path.write_text("# Changed")
+
+        status = index.check_source_status(source)
+
+        assert status.needs_indexing is True
+        assert status.last_indexed_at is not None
+
+    def test_added_file_needs_indexing(self, index: CorpusIndex, tmp_path: Path) -> None:
+        """check_source_status() reports needs_indexing=True when a file has been added."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "file.md").write_text("# Original")
+
+        source = SourceConfig(name="my-source", path=str(source_dir))
+        index.index_source(source)
+
+        (source_dir / "new_file.md").write_text("# New file")
+
+        status = index.check_source_status(source)
+
+        assert status.needs_indexing is True
+
+    def test_source_status_includes_file_count(
+        self, index: CorpusIndex, tmp_path: Path
+    ) -> None:
+        """check_source_status() includes the file_count recorded at last index."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "file1.md").write_text("# A")
+        (source_dir / "file2.md").write_text("# B")
+
+        source = SourceConfig(name="my-source", path=str(source_dir))
+        index.index_source(source)
+
+        status = index.check_source_status(source)
+
+        assert status.file_count == 2
+
+    def test_new_source_has_zero_file_count(self, index: CorpusIndex, tmp_path: Path) -> None:
+        """check_source_status() reports file_count=0 for a never-indexed source."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "file.md").write_text("# Content")
+
+        source = SourceConfig(name="never-indexed", path=str(source_dir))
+        status = index.check_source_status(source)
+
+        assert status.file_count == 0
+
+    def test_check_does_not_modify_manifest(
+        self, index: CorpusIndex, tmp_path: Path
+    ) -> None:
+        """check_source_status() is read-only — does not update the manifest."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        (source_dir / "file.md").write_text("# Content")
+
+        source = SourceConfig(name="my-source", path=str(source_dir))
+        # Never indexed — manifest has no entry for this source
+        index.check_source_status(source)
+
+        # Manifest should still be empty (check is side-effect-free)
+        manifest = index._load_manifest()
+        assert "my-source" not in manifest
+
+
+def test_open_migrates_agent_config_to_agent(tmp_path: Path) -> None:
+    """CorpusIndex.open() renames stored 'agent_config' rows to 'agent'."""
+    embedder = MockEmbedder()
+    index = CorpusIndex.open(tmp_path, embedder)
+
+    # Manually insert a legacy agent_config row
+    index.table.add([{
+        "chunk_id": "legacy-1",
+        "file_path": "/agents/old.md",
+        "source_name": "test",
+        "text": "old agent config",
+        "vector": [0.1] * 768,
+        "start_line": 1, "end_line": 1,
+        "file_type": ".md",
+        "content_hash": "abc",
+        "embedding_model": "nomic-embed-text",
+        "indexed_at": "2024-01-01T00:00:00",
+        "construct_type": "agent_config",
+    }])
+
+    # Re-open triggers migration
+    index2 = CorpusIndex.open(tmp_path, embedder)
+    df = index2.table.to_pandas()
+    row = df[df["chunk_id"] == "legacy-1"].iloc[0]
+    assert row["construct_type"] == "agent"

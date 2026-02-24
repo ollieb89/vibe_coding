@@ -19,7 +19,7 @@ from corpus_analyzer.core.scanner import scan_directory
 from corpus_analyzer.core.utils import file_content_hash, get_file_mtime
 from corpus_analyzer.extractors import extract_document
 from corpus_analyzer.ingest.embedder import OllamaEmbedder
-from corpus_analyzer.ingest.indexer import CorpusIndex
+from corpus_analyzer.ingest.indexer import CorpusIndex, SourceStatus
 from corpus_analyzer.ingest.scanner import walk_source
 from corpus_analyzer.search.engine import CorpusSearch
 from corpus_analyzer.search.formatter import extract_snippet
@@ -125,22 +125,27 @@ def index_command(
             console.print(f"[yellow]Warning:[/] Source path not found: {source.path} — skipping")
             continue
 
-        # Show active extensions on first index so user can adjust corpus.toml if needed
-        is_first_run = len(index._get_existing_files(source.name)) == 0
-        if is_first_run:
+        # Pre-check: skip sources that haven't changed (no filesystem walk needed)
+        status = index.check_source_status(source)
+        if not status.needs_indexing:
+            console.print(f"[dim]  - {source.name}: up to date[/]")
+            continue
+
+        # Show active extensions only on first run (onboarding/diagnostic signal)
+        if status.reason == "new source":
             ext_str = ", ".join(source.extensions) if source.extensions else "(none — all files skipped)"
             console.print(
                 f"[dim]Active extensions for {source.name}: {ext_str}[/dim]\n"
                 f"[dim]Add 'extensions = [...]' to this source in corpus.toml to customize.[/dim]"
             )
 
-        # Count total files
+        # Count total files for progress bar
         total = sum(
             1 for _ in walk_source(
-                source_path, 
-                source.include, 
-                source.exclude, 
-                extensions=source.extensions
+                source_path,
+                source.include,
+                source.exclude,
+                extensions=source.extensions,
             )
         )
 
@@ -176,13 +181,81 @@ def index_command(
             )
 
 
+@app.command("check")
+def check_command(
+    json_output: Annotated[bool, typer.Option("--json", help="Output as JSON for scripting")] = False,
+) -> None:
+    """Check which sources need indexing without modifying any state."""
+    config = load_config(CONFIG_PATH)
+
+    if not config.sources:
+        if json_output:
+            console.print(json_module.dumps([]))
+        else:
+            console.print("[yellow]No sources configured. Run 'corpus add <dir>' first.[/]")
+        raise typer.Exit(code=0)
+
+    embedder = OllamaEmbedder(model=config.embedding.model, host=config.embedding.host)
+
+    try:
+        index = CorpusIndex.open(DATA_DIR, embedder)
+    except Exception:
+        if json_output:
+            console.print(json_module.dumps({"error": "Index not initialised. Run 'corpus index' first."}))
+        else:
+            console.print("[yellow]Index not initialised. Run 'corpus index' first.[/]")
+        raise typer.Exit(code=0) from None
+
+    statuses: list[SourceStatus] = []
+    for source in config.sources:
+        statuses.append(index.check_source_status(source))
+
+    if json_output:
+        console.print(
+            json_module.dumps(
+                [
+                    {
+                        "name": s.source_name,
+                        "needs_indexing": s.needs_indexing,
+                        "reason": s.reason,
+                        "last_indexed_at": s.last_indexed_at,
+                        "file_count": s.file_count,
+                    }
+                    for s in statuses
+                ],
+                indent=2,
+            )
+        )
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Source")
+    table.add_column("Status")
+    table.add_column("Reason")
+    table.add_column("Last Indexed")
+    table.add_column("Files", justify="right")
+
+    for s in statuses:
+        if s.needs_indexing:
+            status_cell = "[yellow]⚠ needs indexing[/]"
+        else:
+            status_cell = "[green]✔ up to date[/]"
+
+        last_indexed = s.last_indexed_at if s.last_indexed_at else "[dim]never[/]"
+        file_count = str(s.file_count) if s.file_count else "[dim]—[/]"
+        table.add_row(s.source_name, status_cell, s.reason, last_indexed, file_count)
+
+    console.print(table)
+
+
 @app.command("search")
 def search_command(
     query: Annotated[str, typer.Argument(help="Natural language search query")],
     source: Annotated[str | None, typer.Option("--source", "-s", help="Filter by source name")] = None,
     type_: Annotated[str | None, typer.Option("--type", "-t", help="Filter by file type (.md, .py, etc.)")] = None,
-    construct: Annotated[str | None, typer.Option("--construct", "-c", help="Filter by construct type")] = None,
+    construct: Annotated[str | None, typer.Option("--construct", "-c", help="Filter by construct type (agent, skill, workflow, command, rule, prompt, code, documentation)")] = None,
     limit: Annotated[int, typer.Option("--limit", "-n", help="Maximum number of results")] = 10,
+    sort: Annotated[str, typer.Option("--sort", help="Sort order: relevance|construct|confidence|date|path")] = "relevance",
 ) -> None:
     """Search the indexed corpus with a natural language query."""
     config = load_config(CONFIG_PATH)
@@ -204,6 +277,7 @@ def search_command(
             file_type=type_,
             construct_type=construct,
             limit=limit,
+            sort_by=sort,
         )
     except ValueError as e:
         console.print(f"[red]Error:[/] {e}")
@@ -212,6 +286,11 @@ def search_command(
     if not results:
         console.print(f'[yellow]No results for "[bold]{query}[/bold]"[/yellow]')
         return
+
+    if construct and sort == "construct":
+        console.print(
+            f"[dim]Note: Results already limited to '{construct}'; sorting by priority is implicit.[/]"
+        )
 
     for result in results:
         console.print(

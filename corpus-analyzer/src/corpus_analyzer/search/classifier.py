@@ -16,7 +16,7 @@ import frontmatter  # type: ignore[import-untyped]
 import ollama
 
 CONSTRUCT_TYPES: frozenset[str] = frozenset(
-    {"skill", "prompt", "workflow", "agent_config", "code", "documentation"}
+    {"skill", "prompt", "workflow", "agent", "command", "rule", "code", "documentation"}
 )
 
 
@@ -35,12 +35,14 @@ class ClassificationResult:
     source: str
 
 LLM_CLASSIFY_PROMPT = """You are classifying a file in an AI agent library.
-Choose exactly one label from: skill, prompt, workflow, agent_config, code, documentation.
+Choose exactly one label from: skill, prompt, workflow, agent, command, rule, code, documentation.
 
 - skill: A reusable capability or tool definition
 - prompt: A prompt template or instruction set
 - workflow: A multi-step process or pipeline definition
-- agent_config: An agent configuration with name, description, and tools
+- agent: An agent definition with name, description, and tools
+- command: A discrete, stateless action or slash command definition
+- rule: Constraints, guardrails, or project conventions (CLAUDE.md, .cursorrules, etc.)
 - code: Source code (implementation file)
 - documentation: Everything else (readme, guide, reference)
 
@@ -116,21 +118,36 @@ def classify_by_rules(file_path: Path, text: str) -> ClassificationResult | None
     """
 
     suffix = file_path.suffix.lower()
+    name = file_path.name.lower()
 
     # 1) Extension-based code signal
     if suffix in {".py", ".ts", ".js"}:
         return ClassificationResult("code", 0.6, "rule_based")
 
-    # 2-4) Path-part signals
+    # 2) Filename-specific rule signals (high specificity)
+    if name in {"claude.md", ".cursorrules", ".clinerules"} or suffix in {
+        ".cursorrules",
+        ".clinerules",
+    }:
+        return ClassificationResult("rule", 0.7, "rule_based")
+
+    # 3) Path-part signals (directory name heuristics)
+    # rules checked before agents so that paths like rules/no-agents.md bind correctly
     parts = [part.lower() for part in file_path.parts]
+    if any(part == "rules" or part == "rule" for part in parts):
+        return ClassificationResult("rule", 0.6, "rule_based")
+    if any(part == "agents" or part == "agent" for part in parts):
+        return ClassificationResult("agent", 0.6, "rule_based")
     if any(part == "skills" or "skill" in part for part in parts):
         return ClassificationResult("skill", 0.6, "rule_based")
     if any(part == "prompts" or "prompt" in part for part in parts):
         return ClassificationResult("prompt", 0.6, "rule_based")
     if any(part == "workflows" or "workflow" in part for part in parts):
         return ClassificationResult("workflow", 0.6, "rule_based")
+    if any(part == "commands" or "command" in part for part in parts):
+        return ClassificationResult("command", 0.6, "rule_based")
 
-    # 5-6) Frontmatter signals (structural: name + description)
+    # 4) Frontmatter structural signals (name + description [+ tools])
     if suffix in {".md", ".yaml", ".yml"}:
         try:
             post = frontmatter.loads(text)
@@ -140,19 +157,21 @@ def classify_by_rules(file_path: Path, text: str) -> ClassificationResult | None
             has_tools = "tools" in metadata
 
             if has_name and has_description and has_tools:
-                return ClassificationResult("agent_config", 0.6, "rule_based")
+                return ClassificationResult("agent", 0.6, "rule_based")
             if has_name and has_description:
                 return ClassificationResult("skill", 0.6, "rule_based")
         except Exception:
             # Invalid or missing frontmatter is not fatal for classification.
             pass
 
-    # 7-8) Filename stem signals
+    # 5) Filename stem signals
     stem = file_path.stem.lower()
     if "workflow" in stem:
         return ClassificationResult("workflow", 0.6, "rule_based")
     if "prompt" in stem:
         return ClassificationResult("prompt", 0.6, "rule_based")
+    if "cmd" in stem or "command" in stem:
+        return ClassificationResult("command", 0.6, "rule_based")
 
     return None
 

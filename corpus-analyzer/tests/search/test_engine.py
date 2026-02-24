@@ -13,8 +13,8 @@ from pathlib import Path
 import lancedb  # type: ignore[import-untyped]
 import pytest
 
-from corpus_analyzer.search.engine import CorpusSearch
-from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2
+from corpus_analyzer.search.engine import CONSTRUCT_PRIORITY, CorpusSearch
+from corpus_analyzer.store.schema import ChunkRecord, ensure_schema_v2, ensure_schema_v3
 
 
 class MockEmbedder:
@@ -210,3 +210,160 @@ def test_zero_results_no_crash(search: CorpusSearch) -> None:
 def test_rejects_unsafe_filter_value(search: CorpusSearch) -> None:
     with pytest.raises(ValueError):
         search.hybrid_search("search", source="bad value")
+
+
+# --- Sort tests ---
+
+@pytest.fixture
+def sortable_table(tmp_path: Path):
+    """Table seeded with three rows of different construct types and confidence scores."""
+    db = lancedb.connect(str(tmp_path / "sort_idx"))
+    table = db.create_table("chunks", schema=ChunkRecord, mode="overwrite")
+    ensure_schema_v2(table)
+    ensure_schema_v3(table)
+
+    rows: list[dict[str, object]] = [
+        {
+            "chunk_id": "r1",
+            "file_path": "/z/skill.md",
+            "source_name": "src",
+            "text": "search content skill text",
+            "vector": [0.1] * 768,
+            "start_line": 1, "end_line": 2,
+            "file_type": ".md",
+            "content_hash": "h1",
+            "embedding_model": "nomic-embed-text",
+            "indexed_at": "2024-01-01T00:00:00",
+            "construct_type": "skill",
+            "classification_confidence": 0.6,
+            "summary": None,
+        },
+        {
+            "chunk_id": "r2",
+            "file_path": "/a/agent.md",
+            "source_name": "src",
+            "text": "search content agent text",
+            "vector": [0.2] * 768,
+            "start_line": 1, "end_line": 2,
+            "file_type": ".md",
+            "content_hash": "h2",
+            "embedding_model": "nomic-embed-text",
+            "indexed_at": "2024-01-03T00:00:00",
+            "construct_type": "agent",
+            "classification_confidence": 0.9,
+            "summary": None,
+        },
+        {
+            "chunk_id": "r3",
+            "file_path": "/m/rule.md",
+            "source_name": "src",
+            "text": "search content rule text",
+            "vector": [0.3] * 768,
+            "start_line": 1, "end_line": 2,
+            "file_type": ".md",
+            "content_hash": "h3",
+            "embedding_model": "nomic-embed-text",
+            "indexed_at": "2024-01-02T00:00:00",
+            "construct_type": "rule",
+            "classification_confidence": 0.7,
+            "summary": None,
+        },
+    ]
+    table.add(rows)
+    table.create_fts_index("text", replace=True)
+    return table
+
+
+@pytest.fixture
+def sortable_search(sortable_table):
+    return CorpusSearch(sortable_table, MockEmbedder())
+
+
+class TestHybridSearchSort:
+    """Tests for the sort_by parameter of hybrid_search()."""
+
+    def test_sort_by_construct_uses_priority_order(
+        self, sortable_search: CorpusSearch
+    ) -> None:
+        """sort_by='construct' orders results by CONSTRUCT_PRIORITY (agent before skill before rule)."""
+        results = sortable_search.hybrid_search("search content", sort_by="construct")
+        construct_types = [r["construct_type"] for r in results if r.get("construct_type")]
+        priorities = [CONSTRUCT_PRIORITY.get(ct, 99) for ct in construct_types]
+        assert priorities == sorted(priorities)
+
+    def test_sort_by_confidence_descending(self, sortable_search: CorpusSearch) -> None:
+        """sort_by='confidence' orders results highest confidence first."""
+        results = sortable_search.hybrid_search("search content", sort_by="confidence")
+        confidences = [r.get("classification_confidence") or 0.0 for r in results]
+        assert confidences == sorted(confidences, reverse=True)
+
+    def test_sort_by_date_descending(self, sortable_search: CorpusSearch) -> None:
+        """sort_by='date' orders results most recently indexed first."""
+        results = sortable_search.hybrid_search("search content", sort_by="date")
+        dates = [r["indexed_at"] for r in results]
+        assert dates == sorted(dates, reverse=True)
+
+    def test_sort_by_path_ascending(self, sortable_search: CorpusSearch) -> None:
+        """sort_by='path' orders results alphabetically by file_path."""
+        results = sortable_search.hybrid_search("search content", sort_by="path")
+        paths = [r["file_path"] for r in results]
+        assert paths == sorted(paths)
+
+    def test_invalid_sort_raises_value_error(self, sortable_search: CorpusSearch) -> None:
+        """Unknown sort_by value raises ValueError."""
+        with pytest.raises(ValueError, match="sort_by"):
+            sortable_search.hybrid_search("search content", sort_by="invalid")
+
+    def test_sort_by_construct_uses_confidence_as_tiebreaker(self, tmp_path: Path) -> None:
+        """sort_by='construct' uses confidence descending as secondary key for equal-priority rows."""
+        from corpus_analyzer.store.schema import ensure_schema_v3
+
+        db = lancedb.connect(str(tmp_path / "tie_idx"))
+        table = db.create_table("chunks", schema=ChunkRecord, mode="overwrite")
+        ensure_schema_v2(table)
+        ensure_schema_v3(table)
+
+        now = datetime.now(UTC).isoformat()
+        rows: list[dict[str, object]] = [
+            {
+                "chunk_id": "t1",
+                "file_path": "/low/agent.md",
+                "source_name": "src",
+                "text": "search agent low confidence",
+                "vector": [0.1] * 768,
+                "start_line": 1, "end_line": 2,
+                "file_type": ".md",
+                "content_hash": "h1",
+                "embedding_model": "nomic-embed-text",
+                "indexed_at": now,
+                "construct_type": "agent",
+                "classification_confidence": 0.3,
+                "summary": None,
+            },
+            {
+                "chunk_id": "t2",
+                "file_path": "/high/agent.md",
+                "source_name": "src",
+                "text": "search agent high confidence",
+                "vector": [0.2] * 768,
+                "start_line": 1, "end_line": 2,
+                "file_type": ".md",
+                "content_hash": "h2",
+                "embedding_model": "nomic-embed-text",
+                "indexed_at": now,
+                "construct_type": "agent",
+                "classification_confidence": 0.9,
+                "summary": None,
+            },
+        ]
+        table.add(rows)
+        table.create_fts_index("text", replace=True)
+
+        search = CorpusSearch(table, MockEmbedder())
+        results = search.hybrid_search("search agent", sort_by="construct")
+        agents = [r for r in results if r.get("construct_type") == "agent"]
+        assert len(agents) == 2
+        confidences = [float(r.get("classification_confidence") or 0.0) for r in agents]
+        assert confidences == sorted(confidences, reverse=True), (
+            "Within the same construct type, higher confidence should rank first"
+        )
