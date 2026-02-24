@@ -87,7 +87,11 @@ Plans:
   3. `from corpus import search` accepts `sort_by` and `min_score` keyword arguments and forwards them to the engine
   4. MCP `corpus_search` tool accepts a `min_score` parameter and passes it to the engine
   5. `uv run ruff check .` and `uv run mypy src/` both exit 0 after all changes
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — TDD: add --min-score (FILT-02), FILT-03 hint, and --sort-by to CLI search command
+- [ ] 14-02-PLAN.md — TDD: add sort_by + min_score to Python API and min_score to MCP corpus_search
 
 ## Progress
 
