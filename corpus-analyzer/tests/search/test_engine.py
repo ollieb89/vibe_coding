@@ -285,7 +285,10 @@ class TestHybridSearchSort:
     def test_sort_by_construct_uses_priority_order(
         self, sortable_search: CorpusSearch
     ) -> None:
-        """sort_by='construct' orders results by CONSTRUCT_PRIORITY (agent before skill before rule)."""
+        """sort_by='construct' orders results by CONSTRUCT_PRIORITY.
+
+        Order: agent before skill before rule.
+        """
         results = sortable_search.hybrid_search("search content", sort_by="construct")
         construct_types = [r["construct_type"] for r in results if r.get("construct_type")]
         priorities = [CONSTRUCT_PRIORITY.get(ct, 99) for ct in construct_types]
@@ -315,7 +318,10 @@ class TestHybridSearchSort:
             sortable_search.hybrid_search("search content", sort_by="invalid")
 
     def test_sort_by_construct_uses_confidence_as_tiebreaker(self, tmp_path: Path) -> None:
-        """sort_by='construct' uses confidence descending as secondary key for equal-priority rows."""
+        """sort_by='construct' uses confidence descending as secondary key for equal-priority rows.
+
+        Equal-priority construct types are broken by confidence descending.
+        """
         from corpus_analyzer.store.schema import ensure_schema_v3
 
         db = lancedb.connect(str(tmp_path / "tie_idx"))

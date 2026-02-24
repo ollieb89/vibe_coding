@@ -72,7 +72,9 @@ class TestSourceConfig:
     def test_extensions_default(self) -> None:
         """SourceConfig without extensions field gets default allowlist."""
         config = SourceConfig(name="x", path="/x")
-        assert config.extensions == [".md", ".py", ".ts", ".tsx", ".js", ".jsx", ".yaml", ".yml", ".txt"]
+        assert config.extensions == [
+            ".md", ".py", ".ts", ".tsx", ".js", ".jsx", ".yaml", ".yml", ".txt"
+        ]
 
     def test_extensions_custom_explicit(self) -> None:
         """SourceConfig with explicit extensions uses provided list."""

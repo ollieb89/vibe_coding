@@ -35,8 +35,11 @@ def test_auto_migration_missing_columns(tmp_path):
 
     # 2. Try to retrieve an *existing* document that was in the DB during migration
     # First, let's add one via raw SQL to ensure it has NULLs
-    db.db.execute("INSERT INTO documents (path, relative_path, file_type, title, mtime, size_bytes) VALUES (?, ?, ?, ?, ?, ?)",
-                  ["legacy.md", "legacy.md", "md", "Legacy", datetime.now().isoformat(), 100])
+    db.db.execute(
+        "INSERT INTO documents (path, relative_path, file_type, title, mtime, size_bytes)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        ["legacy.md", "legacy.md", "md", "Legacy", datetime.now().isoformat(), 100],
+    )
 
     # Try to load all documents
     all_docs = list(db.get_documents())

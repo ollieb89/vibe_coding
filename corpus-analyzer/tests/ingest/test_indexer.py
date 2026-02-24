@@ -362,7 +362,10 @@ def test_index_skips_summary_on_unchanged_file(tmp_path) -> None:
     source = SourceConfig(name="my-source", path=str(source_dir), summarize=True)
 
     with (
-        patch("corpus_analyzer.ingest.indexer.classify_file", return_value=ClassificationResult("skill", 0.6, "rule_based")),
+        patch(
+            "corpus_analyzer.ingest.indexer.classify_file",
+            return_value=ClassificationResult("skill", 0.6, "rule_based"),
+        ),
         patch(
             "corpus_analyzer.ingest.indexer.generate_summary",
             return_value="Summary text.",

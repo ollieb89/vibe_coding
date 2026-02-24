@@ -32,7 +32,9 @@ def test_quality_scoring(tmp_path):
             Heading(level=2, text="Summary", line_number=30),
             Heading(level=2, text="Next Steps", line_number=40)
         ],
-        code_blocks=[CodeBlock(content="print('hi')", content_hash="123", line_start=21, line_end=22)]
+        code_blocks=[
+            CodeBlock(content="print('hi')", content_hash="123", line_start=21, line_end=22)
+        ]
     )
     score_high = analyzer.calculate_score(doc_high)
     assert score_high >= 0.7

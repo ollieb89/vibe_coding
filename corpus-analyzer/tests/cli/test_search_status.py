@@ -123,7 +123,9 @@ def test_search_construct_sort_note_when_redundant() -> None:
         ]
         mock_search_cls.return_value = mock_search
 
-        result = runner.invoke(app, ["search", "query", "--construct", "agent", "--sort", "construct"])
+        result = runner.invoke(
+            app, ["search", "query", "--construct", "agent", "--sort", "construct"]
+        )
 
     assert result.exit_code == 0
     assert "sorting by priority is implicit" in result.stdout

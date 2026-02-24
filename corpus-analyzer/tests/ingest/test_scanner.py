@@ -165,7 +165,9 @@ class TestWalkSource:
         (tmp_path / "script.py").touch()
         (tmp_path / "run.sh").touch()
 
-        results = list(walk_source(tmp_path, include=["**/*"], exclude=[], extensions=[".md", ".py"]))
+        results = list(
+            walk_source(tmp_path, include=["**/*"], exclude=[], extensions=[".md", ".py"])
+        )
 
         assert len(results) == 2
         names = {p.name for p in results}
