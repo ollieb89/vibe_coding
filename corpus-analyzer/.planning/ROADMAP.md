@@ -57,7 +57,10 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 **Success Criteria** (what must be TRUE):
   1. `index_source()` has no `use_llm_classification` parameter in its signature or any call sites
   2. All existing tests pass with no regressions after the removal
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 08-01-PLAN.md — Remove use_llm_classification from indexer, config, and tests
 
 ## Progress
 
