@@ -54,6 +54,7 @@ class CorpusSearch:
         limit: int = 10,
         sort_by: str = "relevance",
         min_score: float = 0.0,
+        name: str | None = None,
     ) -> list[dict[str, Any]]:
         """Run a hybrid BM25+vector query with optional AND-filter chaining.
 
@@ -65,6 +66,10 @@ class CorpusSearch:
                 below this score are excluded. Default 0.0 keeps all results
                 (all real RRF scores are positive). RRF scores range approximately
                 0.009–0.033 for K=60. Negative values behave the same as 0.0.
+            name: Optional case-insensitive substring filter on chunk_name. None means
+                no filter. When query is empty/whitespace-only, the text-term match
+                check is skipped so name filtering alone can surface results
+                (name-only search, NAME-03).
         """
         if sort_by not in _VALID_SORT_VALUES:
             raise ValueError(
@@ -72,66 +77,93 @@ class CorpusSearch:
                 f"Allowed values: {sorted(_VALID_SORT_VALUES)}"
             )
 
-        query_vec = self._embedder.embed_batch([query])[0]
+        is_empty_query = not query.strip()
 
-        builder = (
-            self._table.search(query_type="hybrid")
-            .vector(query_vec)
-            .text(query)
-            .rerank(reranker=RRFReranker())
-        )
+        if is_empty_query:
+            # Empty query: scan the table without text/vector search.
+            # LanceDB hybrid search requires a non-empty text query, so we fall back
+            # to a plain table scan and apply filters manually.
+            where_clauses: list[str] = []
+            if source is not None:
+                self._validate_filter(source, "source")
+                where_clauses.append(f"source_name = '{source}'")
+            if file_type is not None:
+                self._validate_filter(file_type, "file_type")
+                where_clauses.append(f"file_type = '{file_type}'")
+            if construct_type is not None:
+                self._validate_filter(construct_type, "construct_type")
+                where_clauses.append(f"construct_type = '{construct_type}'")
+            scan = self._table.search()
+            if where_clauses:
+                scan = scan.where(" AND ".join(where_clauses))
+            results = [dict(row) for row in scan.limit(limit).to_list()]
+        else:
+            query_vec = self._embedder.embed_batch([query])[0]
 
-        if source is not None:
-            self._validate_filter(source, "source")
-            builder = builder.where(f"source_name = '{source}'")
+            builder = (
+                self._table.search(query_type="hybrid")
+                .vector(query_vec)
+                .text(query)
+                .rerank(reranker=RRFReranker())
+            )
 
-        if file_type is not None:
-            self._validate_filter(file_type, "file_type")
-            builder = builder.where(f"file_type = '{file_type}'")
+            if source is not None:
+                self._validate_filter(source, "source")
+                builder = builder.where(f"source_name = '{source}'")
 
-        if construct_type is not None:
-            self._validate_filter(construct_type, "construct_type")
-            builder = builder.where(f"construct_type = '{construct_type}'")
+            if file_type is not None:
+                self._validate_filter(file_type, "file_type")
+                builder = builder.where(f"file_type = '{file_type}'")
 
-        results = [dict(row) for row in builder.limit(limit).to_list()]
+            if construct_type is not None:
+                self._validate_filter(construct_type, "construct_type")
+                builder = builder.where(f"construct_type = '{construct_type}'")
+
+            results = [dict(row) for row in builder.limit(limit).to_list()]
 
         # Hybrid search can return vector-nearest neighbors even when the query has
         # no meaningful textual match. For the Phase 2 contract, treat "no text
-        # match" as "no results".
+        # match" as "no results" — unless the query is empty (name-only search, NAME-03).
         query_terms = {t for t in query.lower().split() if t}
-        if not query_terms:
-            return results
+        if query_terms:
+            results = [
+                r
+                for r in results
+                if any(term in str(r.get("text", "")).lower() for term in query_terms)
+            ]
+        # else: empty query — skip text-term filter (name-only search, NAME-03)
 
-        filtered = [
-            r
-            for r in results
-            if any(term in str(r.get("text", "")).lower() for term in query_terms)
-        ]
+        if name:
+            name_lower = name.lower()
+            results = [
+                r for r in results
+                if name_lower in str(r.get("chunk_name", "") or "").lower()
+            ]
 
         # RRF scores range ~0.009–0.033 for K=60; min_score=0.0 is a no-op.
         if min_score > 0.0:
-            filtered = [
-                r for r in filtered
+            results = [
+                r for r in results
                 if float(r.get("_relevance_score", 0.0)) >= min_score
             ]
 
         if sort_by == "construct":
-            filtered.sort(
+            results.sort(
                 key=lambda r: (
                     CONSTRUCT_PRIORITY.get(str(r.get("construct_type") or ""), 99),
                     -float(r.get("classification_confidence") or 0.0),
                 )
             )
         elif sort_by == "confidence":
-            filtered.sort(
+            results.sort(
                 key=lambda r: float(r.get("classification_confidence") or 0.0), reverse=True
             )
         elif sort_by == "date":
-            filtered.sort(key=lambda r: str(r.get("indexed_at") or ""), reverse=True)
+            results.sort(key=lambda r: str(r.get("indexed_at") or ""), reverse=True)
         elif sort_by == "path":
-            filtered.sort(key=lambda r: str(r.get("file_path") or ""))
+            results.sort(key=lambda r: str(r.get("file_path") or ""))
 
-        return filtered
+        return results
 
     def status(self, embedding_model: str) -> dict[str, Any]:
         """Return basic index stats suitable for the CLI status command."""
