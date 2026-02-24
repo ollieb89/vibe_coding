@@ -7,7 +7,7 @@
 
 ### MCP Completeness
 
-- [ ] **CHUNK-03**: MCP `corpus_search` response includes `start_line`, `end_line`, and full untruncated `text` per result — self-contained unit of knowledge for LLM callers
+- [x] **CHUNK-03**: MCP `corpus_search` response includes `start_line`, `end_line`, and full untruncated `text` per result — self-contained unit of knowledge for LLM callers
 - [ ] **SORT-01**: MCP `corpus_search` accepts `sort_by` parameter (same vocabulary as CLI: `relevance | construct | confidence | date | path`); translated to engine vocabulary via existing `_API_SORT_MAP`
 - [ ] **NORM-01**: Scores normalised to 0–1 per query via min-max normalisation inside the search engine; Python API `SearchResult.score`, CLI display, and MCP response all see the same normalised value
 
@@ -76,7 +76,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHUNK-03 | Phase 19 | Pending |
+| CHUNK-03 | Phase 19 | Complete |
 | SUB-01 | Phase 20 | Pending |
 | SUB-02 | Phase 20 | Pending |
 | SUB-03 | Phase 21 | Pending |

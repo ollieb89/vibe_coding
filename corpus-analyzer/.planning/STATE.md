@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 ## Current Position
 
 Phase: 19 (MCP Chunk Response)
-Plan: —
-Status: Not started
-Last activity: 2026-02-24 — v2.1 roadmap created
+Plan: 01 complete
+Status: Phase 19 complete — 1/1 plans done
+Last activity: 2026-02-24 — 19-01 CHUNK-03 MCP chunk response
 
-Progress: [          ] 0/7 phases — v2.1 not started
+Progress: [=         ] 1/7 phases — v2.1 in progress
 
 ## Performance Metrics
 
@@ -54,8 +54,8 @@ Progress: [          ] 0/7 phases — v2.1 not started
 - Timeline: 1 day (2026-02-24)
 
 **v2.1 In Progress:**
-- Plans completed: 0
-- Phases: 0/7 complete (19–25)
+- Plans completed: 1 (19-01)
+- Phases: 1/7 complete (19–25)
 - Timeline: started 2026-02-24
 
 ## Accumulated Context
@@ -69,6 +69,11 @@ Key v3 planning decisions:
 - GWALK-01 requires a visited: set[str] for cycle detection before any recursive graph walk ships; A→B→A cycle test is mandatory
 - RERANK-02 sentence-transformers is an optional extra ([rerank]) — never a core dep; lazy-import only inside --rerank branch
 - Phase 32 score range docs must be updated for post-NORM-01 normalised 0–1 scores; no doc or test should reference raw RRF range (0.009–0.033) as output
+
+Key 19-01 decisions:
+- MCP corpus_search result_dict uses content-first ordering: text is the first key so LLM callers see chunk body immediately
+- Legacy rows (chunk_text empty/missing) use str(row.get("chunk_text", "") or "") and int(row.get("start_line", 0) or 0) for safe fallback
+- Path, extract_snippet, and full OSError/content_error block removed from server.py — no file reads in MCP hot path
 
 Key 18-02 decisions:
 - extract_snippet removed from cli.py import after render loop replacement (F401 — unused); still exported from module
@@ -107,6 +112,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: v2.1 roadmap created
+Stopped at: Completed 19-01-PLAN.md (CHUNK-03 MCP chunk response)
 Resume file: None
-Next step: Phase 19 — `/gsd:plan-phase 19`
+Next step: Phase 20 — sub-chunking
