@@ -58,7 +58,11 @@ def split_on_headings(content: str, max_chunk_size: int = 8000) -> list[Document
     in_code_block: bool = False
     atom_start_idx: int = 0
 
-    def finalize_atom(force_heading=None, force_level=0, is_code_atom=False):
+    def finalize_atom(
+        force_heading: str | None = None,
+        force_level: int = 0,
+        is_code_atom: bool = False,
+    ) -> None:
         nonlocal current_lines, current_heading, current_level, atom_start_idx
         if current_lines:
             # Use specific heading for this atom if provided (e.g. the heading line itself)
@@ -131,11 +135,11 @@ def split_on_headings(content: str, max_chunk_size: int = 8000) -> list[Document
     current_chunk_atoms: list[Atom] = []
     current_chunk_size = 0
 
-    def get_chunk_text(atoms_list):
+    def get_chunk_text(atoms_list: list[Atom]) -> str:
         return "\n".join(chain_lines(atoms_list))
 
-    def chain_lines(atoms_list):
-        res = []
+    def chain_lines(atoms_list: list[Atom]) -> list[str]:
+        res: list[str] = []
         for a in atoms_list:
             res.extend(a.lines)
         return res
