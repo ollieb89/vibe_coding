@@ -2,10 +2,10 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24 after v1.2 milestone started)
+See: .planning/PROJECT.md (updated 2026-02-24 after v1.2 milestone)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v1.2 Graph Linker — Phase 8: Cleanup (complete)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
@@ -38,8 +38,7 @@ Progress: [██████████] 100% (8/8 phases done)
 
 ### Decisions
 
-- Removed `use_llm_classification` dead parameter from `index_source()` and `SourceConfig` — field defaulted to False and was never set to True in production; removal shrinks API surface
-- Hardcode `use_llm=False` at `classify_file` call site rather than removing argument — classify_file defaults to `use_llm=True` which would silently switch to LLM classification
+*(cleared — full log in PROJECT.md Key Decisions table)*
 
 ### Pending Todos
 
@@ -52,5 +51,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 08-01-PLAN.md (v1.2 milestone complete)
-Resume with: N/A — v1.2 complete
+Stopped at: v1.2 milestone archived and tagged
+Resume with: `/gsd:new-milestone` to start v2 planning

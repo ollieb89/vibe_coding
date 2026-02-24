@@ -41,3 +41,24 @@
 
 ---
 
+
+## v1.2 Graph Linker (Shipped: 2026-02-24)
+
+**Phases completed:** 2 phases (7–8), 1 GSD plan
+**Timeline:** 2026-02-24 (1 day)
+**Python LOC:** ~7,300
+
+**Delivered:** Added a directed relationship graph to the indexing pipeline — `corpus index` now auto-extracts `## Related Skills` / `## Related Files` links from Markdown and persists them as queryable graph edges, while dead API surface was removed.
+
+**Key accomplishments:**
+- `corpus index` auto-extracts `## Related Skills` / `## Related Files` edges into `graph.sqlite` with no extra commands
+- `corpus graph <slug>` exposes upstream (←) and downstream (→) neighbours for any indexed file
+- Closest-prefix ambiguity resolution picks the nearest-path candidate when multiple files share a slug
+- `corpus index` warns on duplicate slug collisions in yellow at index time
+- `corpus graph --show-duplicates` lists all slug collisions and the paths involved
+- Removed dead `use_llm_classification` parameter from `index_source()` / `SourceConfig`, shrinking the API surface
+
+**Archive:** `.planning/milestones/v1.2-ROADMAP.md`
+
+---
+

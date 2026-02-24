@@ -34,11 +34,12 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ Per-source extension allowlist in corpus.toml; default covers doc/code types, excludes junk (CONF-06, CONF-07, CONF-08) — v1.1
 - ✓ Frontmatter-aware construct classifier: `type:`, `component_type:`, `tags` at 0.95/0.95/0.70 confidence (CLASS-04, CLASS-05) — v1.1
 - ✓ `classification_source` + `classification_confidence` persisted in LanceDB; schema v3 in-place migration — v1.1
+- ✓ Relationship graph: `corpus index` extracts + persists `## Related Skills` / `## Related Files` edges; `corpus graph <slug>` queries upstream/downstream neighbours; closest-prefix ambiguity resolution; `--show-duplicates` (GRAPH-01–GRAPH-05) — v1.2
+- ✓ Dead `use_llm_classification` parameter removed from `index_source()` and `SourceConfig` (CLEAN-01) — v1.2
 
 ### Active
 
-- [ ] Relationship graph: extract + persist `## Related Skills` / `## Related Files` links during `corpus index` (GRAPH-01–GRAPH-05)
-- [ ] Remove dead `use_llm_classification` parameter from `index_source()` (CLEAN-01)
+*(no active requirements — v1.2 shipped all v1 requirements)*
 
 ### Out of Scope
 
@@ -51,15 +52,14 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.2 in progress (started 2026-02-24). v1.1 shipped 2026-02-23.**
+**v1.2 shipped 2026-02-24. v1.1 shipped 2026-02-23. All v1 requirements complete.**
 
-- ~6,248 lines Python source (graph module adds ~300 lines)
-- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text); graph layer uses SQLite
-- 282 tests passing (pytest)
+- ~7,300 lines Python source (graph module ~300 lines over v1.1 baseline)
+- Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text); graph layer uses SQLite (`graph.sqlite`)
+- 281 tests passing (pytest; 1 deleted test for removed field)
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
-
-Graph layer uses a separate `graph.sqlite` file (not LanceDB) to store directed edges; keeps concerns cleanly separated.
+- Pre-existing mypy (42 errors) and ruff (529 errors) across unrelated files — noted for v2 cleanup
 
 Known limitations heading into v2 planning:
 - Search returns file-level results; chunk-level line ranges would improve precision
@@ -96,8 +96,10 @@ Known limitations heading into v2 planning:
 | `ensure_schema_v3()` in-place migration | Existing users don't rebuild index on upgrade | ✓ Good — idempotent, zero data loss |
 | Extension allowlist default includes doc/code types | Sensible out-of-box behavior without requiring config | ✓ Good — excludes `.sh`, `.html`, `.json`, `.lock`, binaries automatically |
 
-| SQLite for graph store (not LanceDB) | Graph edges are relational; SQLite is simpler and avoids LanceDB schema overhead | — Pending |
-| Closest-prefix ambiguity resolution for slugs | Context-aware: picks the candidate closest in filesystem path to the referencing file | — Pending |
+| SQLite for graph store (not LanceDB) | Graph edges are relational; SQLite is simpler and avoids LanceDB schema overhead | ✓ Good — separate `graph.sqlite` keeps concerns cleanly separated |
+| Closest-prefix ambiguity resolution for slugs | Context-aware: picks the candidate closest in filesystem path to the referencing file | ✓ Good — handles multi-repo agent libraries without false matches |
+| Hardcode `use_llm=False` at call site (not remove arg) | `classify_file` defaults to `use_llm=True`; removing kwarg would silently switch to LLM classification | ✓ Good — preserved rule-based classification behaviour |
 
 ---
-*Last updated: 2026-02-24 after v1.2 milestone started*
+---
+*Last updated: 2026-02-24 after v1.2 milestone*
