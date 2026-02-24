@@ -193,6 +193,77 @@ def _subsplit_section(
     return chunks
 
 
+def _chunk_class(node: ast.ClassDef, lines: list[str]) -> list[dict[str, Any]]:
+    """Extract the header chunk from a ClassDef AST node.
+
+    The header chunk covers the class contract: decorators, class signature,
+    class-level attributes, docstring, and __init__ self-assignments up to the
+    first non-assignment statement.
+
+    Args:
+        node: The ClassDef AST node.
+        lines: All source lines (0-indexed) of the file.
+
+    Returns:
+        A list containing a single header chunk dict.
+    """
+    # Determine start_line (1-indexed): first decorator or class keyword
+    if node.decorator_list:
+        start_line = node.decorator_list[0].lineno
+    else:
+        start_line = node.lineno
+
+    # Find method nodes in class body (FunctionDef or AsyncFunctionDef)
+    method_nodes = [
+        n for n in node.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+
+    if not method_nodes:
+        # No methods: header covers entire class
+        header_end_line = node.end_lineno
+    else:
+        first_method = method_nodes[0]
+        if first_method.name == "__init__":
+            # __init__ is the first method — include leading self-assignments
+            header_end_line = first_method.lineno - 1  # default: end before __init__
+            for stmt in first_method.body:
+                is_self_assign = False
+                if isinstance(stmt, (ast.Assign, ast.AugAssign)):
+                    # Check targets for self.x pattern
+                    targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+                    is_self_assign = any(
+                        isinstance(t, ast.Attribute)
+                        and isinstance(t.value, ast.Name)
+                        and t.value.id == "self"
+                        for t in targets
+                    )
+                elif isinstance(stmt, ast.AnnAssign):
+                    # Annotated assign: self.x: type = value
+                    is_self_assign = (
+                        isinstance(stmt.target, ast.Attribute)
+                        and isinstance(stmt.target.value, ast.Name)
+                        and stmt.target.value.id == "self"
+                    )
+                if is_self_assign:
+                    header_end_line = stmt.end_lineno
+                else:
+                    # First non-self-assignment stops the scan
+                    break
+        else:
+            # First method is not __init__ — header ends before it
+            header_end_line = first_method.lineno - 1
+
+    chunk_text = "\n".join(lines[start_line - 1 : header_end_line]).rstrip()
+    return [{
+        "text": chunk_text,
+        "start_line": start_line,
+        "end_line": header_end_line,
+        "chunk_name": node.name,
+        "chunk_text": chunk_text,
+    }]
+
+
 def chunk_python(path: Path) -> list[dict[str, Any]]:
     """Split a Python file into chunks by top-level definitions.
 
@@ -228,6 +299,10 @@ def chunk_python(path: Path) -> list[dict[str, Any]]:
 
     chunks = []
     for i, node in enumerate(top_level_nodes):
+        if isinstance(node, ast.ClassDef):
+            chunks.extend(_chunk_class(node, lines))
+            continue
+
         start_line = node.lineno
 
         # Determine end line (one line before next node starts)
