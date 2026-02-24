@@ -17,6 +17,8 @@ dependencies = [
     "tomli-w>=1.2.0",
     "platformdirs>=4.9.2",
     "pandas>=2.0.0",
+    "tree-sitter>=0.25.0",
+    "tree-sitter-language-pack>=0.13.0",
 ]
 
 [project.optional-dependencies]
@@ -63,4 +65,8 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 module = ["frontmatter"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tree_sitter", "tree_sitter_language_pack"]
 ignore_missing_imports = true
