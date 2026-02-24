@@ -14,6 +14,7 @@ from corpus_analyzer.ingest.embedder import OllamaEmbedder  # noqa: E402,I001
 from corpus_analyzer.ingest.indexer import CorpusIndex  # noqa: E402,I001
 from corpus_analyzer.search.engine import CorpusSearch  # noqa: E402,I001
 from corpus_analyzer.config.schema import CONFIG_PATH, DATA_DIR  # noqa: E402,I001
+from corpus_analyzer.graph.store import GraphStore  # noqa: E402,I001
 
 
 @lifespan
@@ -35,6 +36,49 @@ async def corpus_lifespan(server: FastMCP) -> Any:
 
 
 mcp = FastMCP("corpus", lifespan=corpus_lifespan)
+
+
+@mcp.tool
+async def corpus_graph(
+    slug: str,
+    ctx: Context = None,  # type: ignore[assignment]
+) -> str:
+    """Show upstream and downstream relationships for a component.
+
+    Args:
+        slug: The component slug or path fragment to look up.
+    """
+    if ctx and ctx.lifespan_context:
+        config = ctx.lifespan_context.get("config")
+    else:
+        config = load_config(CONFIG_PATH)
+
+    db_path = config.data_dir / "graph.sqlite"
+    store = GraphStore(db_path)
+    
+    paths = store.search_paths(slug)
+    if not paths:
+        return f"No components found matching '{slug}'."
+        
+    lines = [f"Found {len(paths)} components matching '{slug}':\n"]
+    for path in paths:
+        lines.append(f"Component: {path}")
+        
+        upstream = store.edges_to(path)
+        if upstream:
+            lines.append("  Upstream (depends on this):")
+            for edge in upstream:
+                lines.append(f"    - {edge['source_path']}")
+                
+        downstream = store.edges_from(path)
+        if downstream:
+            lines.append("  Downstream (this depends on):")
+            for edge in downstream:
+                lines.append(f"    - {edge['target_path']} (resolved: {edge['resolved']})")
+                
+        lines.append("")
+        
+    return "\n".join(lines).strip()
 
 
 @mcp.tool

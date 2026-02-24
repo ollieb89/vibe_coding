@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -460,3 +461,61 @@ def test_corpus_search_sort_by_default_is_relevance() -> None:
 
     call_kwargs = engine.hybrid_search.call_args[1]
     assert call_kwargs["sort_by"] == "relevance"
+
+
+# -----------------------------------------------------------------------------
+# Tests — corpus_graph tool
+# -----------------------------------------------------------------------------
+
+def test_corpus_graph_no_results() -> None:
+    """GRAPH-01: corpus_graph returns 'No components found' when no matches."""
+    from corpus_analyzer.mcp.server import corpus_graph
+
+    ctx = MagicMock()
+    ctx.lifespan_context = {"config": MagicMock(data_dir=Path("/tmp"))}
+
+    with patch("corpus_analyzer.mcp.server.GraphStore") as mock_store_cls:
+        mock_store = MagicMock()
+        mock_store.search_paths.return_value = []
+        mock_store_cls.return_value = mock_store
+
+        async def _run() -> str:
+            return await corpus_graph(slug="nonexistent", ctx=ctx)
+
+        result = asyncio.run(_run())
+
+    assert "No components found" in result
+    mock_store.search_paths.assert_called_once_with("nonexistent")
+
+
+def test_corpus_graph_returns_upstream_downstream() -> None:
+    """GRAPH-01: corpus_graph returns upstream and downstream relationships."""
+    from corpus_analyzer.mcp.server import corpus_graph
+
+    ctx = MagicMock()
+    ctx.lifespan_context = {"config": MagicMock(data_dir=Path("/tmp"))}
+
+    with patch("corpus_analyzer.mcp.server.GraphStore") as mock_store_cls:
+        mock_store = MagicMock()
+        mock_store.search_paths.return_value = ["/path/to/component.md"]
+        mock_store.edges_to.return_value = [
+            {"source_path": "/upstream/a.md", "resolved": True},
+            {"source_path": "/upstream/b.md", "resolved": False},
+        ]
+        mock_store.edges_from.return_value = [
+            {"target_path": "/downstream/c.md", "resolved": True},
+        ]
+        mock_store_cls.return_value = mock_store
+
+        async def _run() -> str:
+            return await corpus_graph(slug="component", ctx=ctx)
+
+        result = asyncio.run(_run())
+
+    assert "Component: /path/to/component.md" in result
+    assert "Upstream (depends on this):" in result
+    assert "  - /upstream/a.md" in result
+    assert "  - /upstream/b.md" in result
+    assert "Downstream (this depends on):" in result
+    assert "  - /downstream/c.md" in result
+    assert "resolved: True" in result

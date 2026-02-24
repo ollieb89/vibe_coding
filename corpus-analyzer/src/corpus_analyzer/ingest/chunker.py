@@ -134,7 +134,7 @@ def chunk_markdown(path: Path, max_words: int = 200) -> list[dict[str, Any]]:
                 {
                     "text": section_text,
                     "start_line": start_idx + 1,  # 1-indexed
-                    "end_line": actual_end_line + 1,  # Convert to 1-indexed
+                    "end_line": actual_end_line,  # Already 1-indexed from calculation above
                     "chunk_name": heading_line,
                     "chunk_text": section_text,
                 }

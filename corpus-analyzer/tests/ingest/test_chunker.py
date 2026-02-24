@@ -55,9 +55,9 @@ Line 5
         chunks = chunk_markdown(md_file)
 
         assert chunks[0]["start_line"] == 1
-        assert chunks[0]["end_line"] == 4  # Includes blank line before next heading
+        assert chunks[0]["end_line"] == 3  # Ends at last content line (Line 3), not blank line
         assert chunks[1]["start_line"] == 5
-        assert chunks[1]["end_line"] == 7  # End of file
+        assert chunks[1]["end_line"] == 6  # Ends at Line 5, last content line
 
     def test_content_before_first_heading(self, tmp_path: Path) -> None:
         """First chunk includes content before first heading if present."""
