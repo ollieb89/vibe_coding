@@ -14,7 +14,7 @@
 ### Method Sub-Chunking
 
 - [x] **SUB-01**: Python AST chunker produces a class header chunk (`ClassName`) containing docstring + `__init__` body up to first non-assignment statement; replaces monolithic class chunk
-- [ ] **SUB-02**: Python AST chunker produces per-method chunks (`ClassName.method_name`) for each method in a class; `__init__`, `__str__`, etc. follow the same dot-notation
+- [x] **SUB-02**: Python AST chunker produces per-method chunks (`ClassName.method_name`) for each method in a class; `__init__`, `__str__`, etc. follow the same dot-notation
 - [ ] **SUB-03**: TypeScript AST chunker produces per-method chunks (`ClassName.method_name`) for `method_definition` nodes in class bodies; constructor becomes `ClassName.constructor`
 
 ### Name Filtering
@@ -78,7 +78,7 @@
 |-------------|-------|--------|
 | CHUNK-03 | Phase 19 | Complete |
 | SUB-01 | Phase 20 | Complete |
-| SUB-02 | Phase 20 | Pending |
+| SUB-02 | Phase 20 | Complete |
 | SUB-03 | Phase 21 | Pending |
 | NAME-01 | Phase 22 | Pending |
 | NAME-02 | Phase 22 | Pending |

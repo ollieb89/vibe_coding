@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-24 after v2.1 milestone started)
 ## Current Position
 
 Phase: 20 (Python Method Sub-Chunking)
-Plan: 01 complete
-Status: Phase 20 in progress — 1/? plans done
-Last activity: 2026-02-24 — 20-01 SUB-01 class header chunk
+Plan: 02 complete
+Status: Phase 20 in progress — 2/? plans done
+Last activity: 2026-02-24 — 20-02 SUB-02 per-method chunk extraction
 
 Progress: [=         ] 1/7 phases — v2.1 in progress
 
@@ -54,7 +54,7 @@ Progress: [=         ] 1/7 phases — v2.1 in progress
 - Timeline: 1 day (2026-02-24)
 
 **v2.1 In Progress:**
-- Plans completed: 2 (19-01, 20-01)
+- Plans completed: 3 (19-01, 20-01, 20-02)
 - Phases: 1/7 complete (19–25)
 - Timeline: started 2026-02-24
 
@@ -91,6 +91,8 @@ Key 17-02 decisions:
 - ensure_schema_v2 → ensure_schema_v3 → ensure_schema_v4 call order preserved in CorpusIndex.open()
 - [Phase 20-01]: _chunk_class() returns list[dict] to allow Plan 02 method chunk additions without signature change
 - [Phase 20-01]: init body traversal uses direct iteration over init_node.body (not ast.walk) to preserve linear order for truncation logic
+- [Phase 20-02]: Method chunks use direct node.body iteration (not ast.walk) to keep nested ClassDef bodies opaque — only FunctionDef/AsyncFunctionDef at class body level produce method chunks
+- [Phase 20-02]: Decorator start_line included in method chunk (decorator_list[0].lineno) so full method signature with decorators is captured
 
 ### v2.1 Roadmap Notes
 
@@ -114,6 +116,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 20-01-PLAN.md (SUB-01 class header chunk)
+Stopped at: Completed 20-02-PLAN.md (SUB-02 per-method chunk extraction)
 Resume file: None
-Next step: Phase 20 Plan 02 — method sub-chunks (SUB-02)
+Next step: Phase 20 complete — proceed to Phase 21 (TypeScript method sub-chunking)
