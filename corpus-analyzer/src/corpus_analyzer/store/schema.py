@@ -8,6 +8,10 @@ for the shape of every row stored in the LanceDB ``chunks`` table — and the
 types are baked into the LanceDB table at creation time.  Changing them
 requires dropping and rebuilding the entire table.  Do not modify this file
 without also running a full ``corpus reindex --force``.
+
+Phase 17 adds ``chunk_name`` and ``chunk_text`` as non-nullable string fields
+with empty-string defaults.  Existing rows in older tables are backfilled via
+``ensure_schema_v4()``.
 """
 
 from __future__ import annotations
@@ -63,6 +67,23 @@ def ensure_schema_v2(table: lancedb.table.Table) -> None:
         table.add_columns({"construct_type": "cast(NULL as string)"})
     if "summary" not in existing_cols:
         table.add_columns({"summary": "cast(NULL as string)"})
+
+
+def ensure_schema_v4(table: lancedb.table.Table) -> None:
+    """Add Phase 17 v4 columns to an existing chunks table if they don't exist.
+
+    Adds chunk_name and chunk_text with empty-string defaults.
+    start_line and end_line already exist (created with ChunkRecord schema).
+    Idempotent: re-running on an already-migrated table is a no-op.
+
+    Args:
+        table: The LanceDB chunks table to upgrade.
+    """
+    existing_cols = {field.name for field in table.schema}
+    if "chunk_name" not in existing_cols:
+        table.add_columns({"chunk_name": "cast('' as string)"})
+    if "chunk_text" not in existing_cols:
+        table.add_columns({"chunk_text": "cast('' as string)"})
 
 
 def ensure_schema_v3(table: lancedb.table.Table) -> None:
@@ -168,4 +189,18 @@ class ChunkRecord(LanceModel):  # type: ignore[misc]
 
     Set to None for chunks indexed before Phase 6. Frontmatter matches → 0.95,
     tags matches → 0.70, rule-based → 0.60, LLM → 0.80.
+    """
+
+    # --- Phase 17 fields (non-nullable, empty-string defaults for existing rows) ---
+    chunk_name: str = ""
+    """Heading text (Markdown), function/class name (Python), or construct name (TypeScript).
+
+    Empty string for chunks indexed before Phase 17.
+    """
+
+    chunk_text: str = ""
+    """Raw file slice from start_line to end_line (1-indexed, inclusive).
+
+    Exact source text — comments, docstrings, and formatting intact. No size cap.
+    Empty string for chunks indexed before Phase 17.
     """
