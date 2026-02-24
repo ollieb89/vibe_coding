@@ -352,7 +352,10 @@ def chunk_file(path: Path) -> list[dict[str, Any]]:
             chunks = chunk_markdown(path)
         elif ext == ".py":
             chunks = chunk_python(path)
-        elif ext in (".ts", ".js", ".json", ".yaml", ".yml", ".txt", ".toml"):
+        elif ext in (".ts", ".tsx", ".js", ".jsx"):
+            from corpus_analyzer.ingest.ts_chunker import chunk_typescript
+            chunks = chunk_typescript(path)
+        elif ext in (".json", ".yaml", ".yml", ".txt", ".toml"):
             chunks = chunk_lines(path)
         else:
             # Default to line-based chunking for unknown types
