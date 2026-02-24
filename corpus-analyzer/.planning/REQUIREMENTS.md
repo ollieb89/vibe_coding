@@ -9,7 +9,7 @@ Requirements for the Search Precision milestone. All map to roadmap phases.
 
 ### Search Filtering
 
-- [ ] **FILT-01**: User can filter `corpus search` results below a threshold with `--min-score <float>` (default `0.0` — no filtering)
+- [x] **FILT-01**: User can filter `corpus search` results below a threshold with `--min-score <float>` (default `0.0` — no filtering)
 - [ ] **FILT-02**: `--min-score` help text documents the RRF score range (~0.009–0.033) so users can calibrate thresholds
 - [ ] **FILT-03**: When `--min-score` filters all results, user sees a contextual hint: "No results above X.xxx. Run without --min-score to see available scores."
 
@@ -46,7 +46,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILT-01 | Phase 13 | Pending |
+| FILT-01 | Phase 13 | Complete |
 | FILT-02 | Phase 14 | Pending |
 | FILT-03 | Phase 14 | Pending |
 | PARITY-01 | Phase 14 | Pending |

@@ -58,7 +58,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 **Milestone Goal:** Give users control over search output — expose relevance scores, add sorting, and filter noise via a minimum-score threshold — across CLI, Python API, and MCP.
 
-- [ ] **Phase 13: Engine Min-Score Filter** - Add `min_score` parameter to `hybrid_search()` with post-retrieval Python filtering — **1 plan**
+- [x] **Phase 13: Engine Min-Score Filter** - Add `min_score` parameter to `hybrid_search()` with post-retrieval Python filtering — **1 plan** (completed 2026-02-24)
 - [ ] **Phase 14: API / MCP / CLI Parity** - Wire `min_score` and `sort_by` through all three caller surfaces with help text and empty-result hint
 
 ## Phase Details
@@ -105,5 +105,5 @@ Plans:
 | 10. Manual Ruff — Leaf to Hub | v1.3 | 3/3 | Complete | 2026-02-24 |
 | 11. Manual Ruff — CLI + Mypy | v1.3 | 5/5 | Complete | 2026-02-24 |
 | 12. Validation Gate | v1.3 | 1/1 | Complete | 2026-02-24 |
-| 13. Engine Min-Score Filter | v1.4 | 0/1 | Not started | - |
+| 13. Engine Min-Score Filter | 1/1 | Complete   | 2026-02-24 | - |
 | 14. API / MCP / CLI Parity | v1.4 | 0/? | Not started | - |
