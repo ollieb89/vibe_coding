@@ -296,7 +296,6 @@ class CorpusIndex:
         self,
         source: SourceConfig,
         progress_callback: Callable[[int], None] | None = None,
-        use_llm_classification: bool = True,
         *,
         graph_store: GraphStore | None = None,
         registry: SlugRegistry | None = None,
@@ -313,7 +312,6 @@ class CorpusIndex:
         Args:
             source: SourceConfig to index.
             progress_callback: Optional callback(files_processed) for progress.
-            use_llm_classification: Unused legacy param (kept for compatibility).
             graph_store: Optional GraphStore for writing relationship edges.
             registry: Optional SlugRegistry for resolving slug references to paths.
 
@@ -389,7 +387,7 @@ class CorpusIndex:
                 file_path,
                 full_text,
                 model=self._embedder.model,
-                use_llm=source.use_llm_classification,
+                use_llm=False,
             )
 
             stored_summary = stored_summaries.get(resolved_path)

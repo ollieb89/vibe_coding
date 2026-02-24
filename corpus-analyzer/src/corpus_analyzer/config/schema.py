@@ -67,14 +67,6 @@ class SourceConfig(BaseModel):
     summarize: bool = False
     """Whether to generate and embed AI summaries for chunks in this source."""
 
-    use_llm_classification: bool = False
-    """Whether to use LLM-based classification for construct type detection.
-
-    When True, Ollama is called to classify each changed file during indexing.
-    When False (default), rule-based classification is used.
-    Set to True per source for richer classification when LLM cost is acceptable.
-    """
-
     extensions: list[str] = Field(default_factory=lambda: list(DEFAULT_EXTENSIONS))
     """File extensions to index for this source (e.g. [".md", ".py"]).
 
