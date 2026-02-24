@@ -2,8 +2,10 @@ import json
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 import sqlite_utils
+from sqlite_utils.db import Table
 
 from corpus_analyzer.core.models import (
     Chunk,
@@ -89,16 +91,16 @@ class CorpusDatabase:
         ).fetchone()
 
         if existing:
-            doc_id = existing[0]
+            doc_id = int(existing[0])
             # Delete existing chunks to avoid orphans/duplicates
-            self.db["chunks"].delete_where("document_id = ?", [doc_id])
+            cast(Table, self.db["chunks"]).delete_where("document_id = ?", [doc_id])
             # Update existing document
-            self.db["documents"].update(doc_id, data, alter=True)
+            cast(Table, self.db["documents"]).update(doc_id, data, alter=True)
             return doc_id
 
         # If not exists, insert new
-        self.db["documents"].insert(data, alter=True)
-        return self.db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        cast(Table, self.db["documents"]).insert(data, alter=True)
+        return int(self.db.execute("SELECT last_insert_rowid()").fetchone()[0])
 
     def get_file_fingerprint(self, path_str: str) -> tuple[str, float] | None:
         """Return the stored (content_hash, last_modified) for a path, or None if not indexed.
@@ -172,8 +174,8 @@ class CorpusDatabase:
             "chunk_index": chunk.chunk_index,
             "token_estimate": chunk.token_estimate,
         }
-        self.db["chunks"].insert(data)
-        return self.db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        cast(Table, self.db["chunks"]).insert(data)
+        return int(self.db.execute("SELECT last_insert_rowid()").fetchone()[0])
 
     def get_documents(
         self,
@@ -226,11 +228,11 @@ class CorpusDatabase:
         if domain_tags is not None:
             data["domain_tags"] = json.dumps([t.value for t in domain_tags])
 
-        self.db["documents"].update(doc_id, data, alter=True)
+        cast(Table, self.db["documents"]).update(doc_id, data, alter=True)
 
     def update_document_tags(self, doc_id: int, domain_tags: list[DomainTag]) -> None:
         """Update only document domain tags."""
-        self.db["documents"].update(
+        cast(Table, self.db["documents"]).update(
             doc_id,
             {"domain_tags": json.dumps([t.value for t in domain_tags])},
             alter=True
@@ -240,7 +242,7 @@ class CorpusDatabase:
         self, doc_id: int, score: float, is_gold_standard: bool
     ) -> None:
         """Update document quality metrics."""
-        self.db["documents"].update(
+        cast(Table, self.db["documents"]).update(
             doc_id,
             {
                 "quality_score": score,
@@ -251,7 +253,7 @@ class CorpusDatabase:
 
     def set_gold_standard(self, doc_id: int, is_gold: bool) -> None:
         """Toggle gold standard status for a document."""
-        self.db["documents"].update(
+        cast(Table, self.db["documents"]).update(
             doc_id,
             {"is_gold_standard": 1 if is_gold else 0},
             alter=True
