@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24 — v2 milestone planned)
 
 ## Current Position
 
-Phase: 16 of 25 complete (Phase 17 next: Schema v4 — Chunk Data Layer)
-Plan: 0 of 2 in Phase 17
-Status: v2 milestone planned — requirements, roadmap, and milestone context written
-Last activity: 2026-02-24 — v2 milestone documentation created
+Phase: 17 in progress (Schema v4 — Chunk Data Layer)
+Plan: 1 of 2 in Phase 17 complete (17-01 RED tests done)
+Status: Phase 17 active — 17-01 RED state committed, 17-02 GREEN implementation next
+Last activity: 2026-02-24 — 17-01 RED tests committed (11 new failing tests)
 
-Progress: [░░░░░░░░░░] 0% of v2 (Phase 17 not started)
+Progress: [█░░░░░░░░░] 10% of v2 (Phase 17 Plan 1 of 2 complete)
 
 ## Performance Metrics
 
@@ -76,6 +76,12 @@ Key 16-03 decisions:
 - Smoke test used Python API (chunk_file dispatch) rather than corpus index CLI — direct API call confirms dispatch wiring cleanly without requiring LanceDB configured sources
 - v1.5 milestone declared complete after all quality gates confirmed: ruff 0 violations, mypy 0 errors, 320 tests passing
 
+### 17-01 Decisions
+
+- Deferred import of ensure_schema_v4 inside test methods (not module level) keeps pre-existing schema tests collectable and GREEN while ensure_schema_v4 tests fail with ImportError
+- MockEmbedder in test_round_trip.py uses model="test-model" with zero vectors to avoid model-mismatch guard in CorpusIndex.open()
+- Round-trip assertions use index._table.search().limit(20).to_list() — full-table dump, no vector similarity needed
+
 ### v2 Planning Decisions
 
 - CLI format: `file:start-end [construct] score:X.XXX` (grep/compiler-error pattern, IDE-clickable)
@@ -97,6 +103,6 @@ None — 320 tests passing. Ruff-clean. Mypy-clean. v2 planning documentation wr
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: v2 milestone documentation complete (v2-REQUIREMENTS.md, v2-ROADMAP.md, MILESTONE-CONTEXT.md, PROJECT.md updated).
+Stopped at: 17-01-PLAN.md complete — RED test suite committed (3be5ace)
 Resume file: None
-Next step: Phase 17-01-PLAN.md — TDD RED for schema v4 (`ChunkRecord` v4 fields + `ensure_schema_v4()` migration)
+Next step: Phase 17-02-PLAN.md — TDD GREEN for schema v4 (implement ChunkRecord v4 fields, ensure_schema_v4(), chunker v4 emission)
