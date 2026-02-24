@@ -77,7 +77,12 @@ Plans:
   2. All B-series violations (B905/B007/B017/B023/B904/B008) are resolved without breaking behaviour
   3. All F841/E741 violations (unused variables, ambiguous names) are eliminated
   4. All E402 import ordering violations in `llm/rewriter.py` are fixed
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Fix semantic violations: E741 renames, E402 rewriter.py imports, B017 test assertions, scripts/ auto-fix
+- [ ] 10-02-PLAN.md — Wrap E501 violations in classifiers, analyzers, utils, search, and ingest modules
+- [ ] 10-03-PLAN.md — Wrap E501 violations in core/database.py, generators/, and all test files; final ruff gate
 
 ### Phase 11: Manual Ruff — CLI + Mypy
 **Goal**: `cli.py` is ruff-clean and all 42 mypy errors across 9 files are resolved — the codebase is type-correct under `--strict`
