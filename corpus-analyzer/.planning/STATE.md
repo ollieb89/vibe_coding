@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24 after v1.5 milestone start)
 
 **Core value:** Surface relevant agent files instantly — query your entire local agent library and get ranked results in under a second
-**Current focus:** v1.5 TypeScript AST Chunking
+**Current focus:** v1.5 TypeScript AST Chunking — Phase 15: Core AST Chunker
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-24 — Milestone v1.5 started
+Phase: 15 of 16 (Core AST Chunker)
+Plan: — of — in current phase
+Status: Ready to plan
+Last activity: 2026-02-24 — Roadmap created for v1.5 (Phases 15–16)
+
+Progress: [░░░░░░░░░░] 0% (v1.5)
 
 ## Performance Metrics
 
@@ -47,16 +49,22 @@ Last activity: 2026-02-24 — Milestone v1.5 started
 
 Cleared — v1.4 complete. See PROJECT.md Key Decisions table for full log.
 
+Key v1.5 decisions from research:
+- Use `get_parser(dialect)` from `tree_sitter_language_pack` with `@lru_cache` (simpler than module-level globals)
+- `.tsx` and `.jsx` both use TSX grammar (TypeScript grammar produces ERROR nodes on JSX elements)
+- Fall back only on uncaught exception or zero constructs — NOT on `root_node.has_error` alone
+- All changes confined to three files: `chunker.py`, `test_chunker.py`, `pyproject.toml`
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-None — 293 tests passing. Ruff-clean, mypy-clean. v1.4 archived.
+None — 293 tests passing. Ruff-clean, mypy-clean. Research complete (HIGH confidence across all areas).
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Milestone v1.4 archived. Ready for `/gsd:new-milestone`.
+Stopped at: v1.5 roadmap created. Ready for `/gsd:plan-phase 15`.
 Resume file: None

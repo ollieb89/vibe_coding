@@ -55,29 +55,27 @@ Requirements for milestone v1.5 TypeScript AST Chunking.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEP-01 | — | Pending |
-| IDX-01 | — | Pending |
-| IDX-02 | — | Pending |
-| IDX-03 | — | Pending |
-| IDX-04 | — | Pending |
-| IDX-05 | — | Pending |
-| IDX-06 | — | Pending |
-| IDX-07 | — | Pending |
-| IDX-08 | — | Pending |
-| IDX-09 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| QUAL-01 | — | Pending |
+| DEP-01 | Phase 15 | Pending |
+| IDX-01 | Phase 15 | Pending |
+| IDX-02 | Phase 15 | Pending |
+| IDX-03 | Phase 15 | Pending |
+| IDX-04 | Phase 15 | Pending |
+| IDX-05 | Phase 15 | Pending |
+| IDX-06 | Phase 15 | Pending |
+| IDX-07 | Phase 15 | Pending |
+| IDX-08 | Phase 16 | Pending |
+| IDX-09 | Phase 16 | Pending |
+| TEST-01 | Phase 15 | Pending |
+| TEST-02 | Phase 15 | Pending |
+| QUAL-01 | Phase 16 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-24 after initial definition*
+*Last updated: 2026-02-24 after roadmap creation*
