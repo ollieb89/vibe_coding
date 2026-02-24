@@ -65,10 +65,41 @@
 
 ## v1.3 Code Quality (Shipped: 2026-02-24)
 
-**Phases completed:** 4 phases, 11 plans, 0 tasks
+**Phases completed:** 4 phases, 11 plans
+**Timeline:** 2026-02-24 (1 day)
+
+**Delivered:** Achieved a zero-violation linting baseline across all 53 source files — `ruff check .` and `mypy src/` both exit 0 — via surgical config, auto-fix sweeps, and targeted manual fixes.
 
 **Key accomplishments:**
-- (none recorded)
+- `pyproject.toml` surgical ruff/mypy config: `extend-exclude` for `.planning/`, per-file-ignores for E501 and B006
+- `ruff --fix` sweep eliminated ~370 auto-fixable violations across 37 files
+- Manual E741/E402/B017/B023/B904/E501 fixes across leaf modules, database hub, and cli.py
+- `cast(Table, ...)` pattern at all 8 sqlite-utils call sites — grep-able and refactor-safe
+- `DEFAULT_SYSTEM_PROMPT` trailing comma bug fixed (was `tuple[str]` at runtime, now `str`)
+- `Atom` dataclass promoted to module level; nested closures fully annotated in chunked_processor.py
+
+**Archive:** `.planning/milestones/v1.3-ROADMAP.md`
+
+---
+
+
+## v1.4 Search Precision (Shipped: 2026-02-24)
+
+**Phases completed:** 2 phases, 3 plans
+**Timeline:** 2026-02-24 (1 day)
+**Files modified:** 23 (+2,566 / -48 lines)
+
+**Delivered:** Gave users full control over search output quality — minimum-score filtering and sort-order control are now available across CLI, Python API, and MCP with RRF score guidance and a contextual hint when filtering eliminates all results.
+
+**Key accomplishments:**
+- `min_score: float = 0.0` parameter added to `hybrid_search()` with post-retrieval RRF score filtering (FILT-01)
+- `--min-score` CLI option with RRF range help text (0.009–0.033) so users can calibrate thresholds (FILT-02)
+- FILT-03 contextual hint: "No results above X.xxx. Run without --min-score to see available scores." on filtered-all
+- `--sort-by score|date|title` CLI option with `_CLI_SORT_BY_MAP` translation to engine vocabulary
+- Python `search()` API gains `sort_by` + `min_score` with `ValueError` on invalid sort values (PARITY-01/02)
+- MCP `corpus_search()` gains `min_score: Optional[float]` with `None`→`0.0` + `filtered_by_min_score` signal (PARITY-03)
+
+**Archive:** `.planning/milestones/v1.4-ROADMAP.md`
 
 ---
 

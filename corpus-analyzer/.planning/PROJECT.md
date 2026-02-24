@@ -12,6 +12,8 @@ v1.2 adds a relationship graph layer: `corpus index` now extracts `## Related Sk
 
 v1.3 achieves a clean linting baseline across the entire codebase: zero mypy errors (`uv run mypy src/` exits 0 across 53 files) and zero ruff violations (`uv run ruff check .` exits 0). Per-file line-length override (120 chars) suppresses E501 in `llm/*.py`; B006 suppressed for Typer list defaults in `cli.py`.
 
+v1.4 gives users full control over search output: `--min-score <float>` filters results below the RRF threshold (0.009–0.033 range documented in help text); `--sort-by score|date|title` orders results; a contextual FILT-03 hint fires when filtering eliminates all results. Python API and MCP are at parity — `search()` accepts `sort_by` and `min_score`; `corpus_search()` MCP tool accepts `min_score: Optional[float]`.
+
 ## Core Value
 
 Surface relevant agent files instantly — query an entire local agent library and get ranked, relevant results in under a second.
@@ -46,15 +48,17 @@ Surface relevant agent files instantly — query an entire local agent library a
 - ✓ `DEFAULT_SYSTEM_PROMPT` trailing comma bug fixed (was `tuple[str]`, now `str`) (MYPY-05) — v1.3
 - ✓ `uv run ruff check .` → 0 violations; `uv run mypy src/` → 0 errors; 281 tests green (VALID-01–VALID-03) — v1.3
 
+### Validated
+
+- ✓ `--min-score <float>` CLI flag filters results below RRF threshold; help text documents 0.009–0.033 range (FILT-01, FILT-02) — v1.4
+- ✓ FILT-03 contextual hint when `--min-score` filters all results — v1.4
+- ✓ `--sort-by score|date|title` CLI flag with engine vocabulary translation — v1.4
+- ✓ Python `search()` API accepts `sort_by` and `min_score` with `ValueError` validation (PARITY-01, PARITY-02) — v1.4
+- ✓ MCP `corpus_search()` accepts `min_score: Optional[float]` with `None`→`0.0` + `filtered_by_min_score` signal (PARITY-03) — v1.4
+
 ### Active
 
-<!-- v1.4 Search Precision — current milestone -->
-
-- [ ] Relevance score displayed in `corpus search` output
-- [ ] `--sort` flag on `corpus search`: `relevance` (default) and `path`
-- [ ] `--min-score <float>` flag to hard-filter low-relevance results
-- [ ] Python `search()` API accepts `sort_by` and `min_score` parameters
-- [ ] MCP `corpus_search` tool accepts `min_score` parameter
+<!-- v1.5 or later — no milestone planned yet -->
 
 ### Out of Scope
 
@@ -67,19 +71,20 @@ Surface relevant agent files instantly — query an entire local agent library a
 
 ## Context
 
-**v1.3 shipped 2026-02-24. All v1.3 requirements complete. Codebase is now ruff-clean and mypy-clean.**
+**v1.4 shipped 2026-02-24. All v1.4 requirements complete. Search output is now user-controllable across all three interfaces.**
 
-- ~7,513 lines Python source across 53 files
+- ~7,513 lines Python source across 53 files (23 files touched in v1.4: +2,566 / -48 lines)
 - Tech stack: LanceDB, FastMCP, Pydantic, Typer, Rich, OllamaEmbedder (nomic-embed-text); graph layer uses SQLite (`graph.sqlite`)
-- 281 tests passing (pytest)
+- 293 tests passing (pytest) — 8 new tests added in v1.4 (4 engine, 3 CLI, 2 MCP + 1 API updated)
 - XDG Base Directory compliant: config in `~/.config/corpus/`, data in `~/.local/share/corpus/`
 - Single-user local tool; no daemon, no cloud dependency
-- Zero mypy errors, zero ruff violations — clean linting baseline established
+- Zero mypy errors, zero ruff violations — maintained clean linting baseline through v1.4
 
 Known limitations heading into v2 planning:
 - Search returns file-level results; chunk-level line ranges would improve precision
 - TypeScript/JS files use line-based chunking (no AST awareness)
 - Cold-start on first index after KEEP_ALIVE expiry still possible (pre-warm only covers MCP startup)
+- FILT-04 (MCP sort_by) and FILT-05 (score normalisation) explicitly deferred to v2
 
 ## Constraints
 
@@ -119,16 +124,10 @@ Known limitations heading into v2 planning:
 | `DEFAULT_SYSTEM_PROMPT` trailing comma removed (not cast away) | Was a real `tuple[str]` runtime bug — `+=` on a tuple would raise `TypeError` at runtime | ✓ Good — genuine bug fixed, not suppressed |
 | `Atom` promoted to module level (not type: ignore on nested) | Nested dataclasses prevent typed annotations on helper closures | ✓ Good — cleaner module structure, zero mypy errors |
 | `OllamaClient.db: CorpusDatabase \| None = None` added | `advanced_rewriter.py` uses `client.db`; TYPE_CHECKING guard avoids circular import | ✓ Good — optional field, no runtime impact if unused |
-
-## Current Milestone: v1.4 Search Precision
-
-**Goal:** Give users control over search output — expose relevance scores, add sorting, and filter noise via a minimum-score threshold — across CLI, Python API, and MCP.
-
-**Target features:**
-- Relevance score display in `corpus search` output
-- `--sort relevance|path` flag for ordering results
-- `--min-score <float>` flag to discard low-relevance results
-- Python API and MCP parity for the new controls
+| Post-retrieval Python filter for `min_score` (not LanceDB `.where()`) | RRF scores aren't stored as a native LanceDB column; filtering in-process is simpler and correct | ✓ Good — 4 tests confirm behaviour; no schema change needed |
+| `_CLI_SORT_BY_MAP` + `_API_SORT_MAP` translation dicts | CLI/API vocabulary (`score/date/title`) decoupled from engine vocabulary (`relevance/date/path`) | ✓ Good — user-facing names are stable even if engine internals change |
+| MCP `min_score: Optional[float]` with `None`→`0.0` guard | MCP schema requires Optional for backward-compat; explicit guard makes the no-op intent clear | ✓ Good — tested with both `None` and `0.02` cases |
+| FILT-03 branch checks `min_score > 0.0` before generic no-results | Contextual hint only fires when the user deliberately filtered; doesn't appear on regular empty results | ✓ Good — tested by asserting absence of generic message alongside presence of hint |
 
 ---
-*Last updated: 2026-02-24 after v1.4 milestone start*
+*Last updated: 2026-02-24 after v1.4 milestone*
