@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24 — v2 milestone planned)
 
 ## Current Position
 
-Phase: 17 in progress (Schema v4 — Chunk Data Layer)
-Plan: 1 of 2 in Phase 17 complete (17-01 RED tests done)
-Status: Phase 17 active — 17-01 RED state committed, 17-02 GREEN implementation next
-Last activity: 2026-02-24 — 17-01 RED tests committed (11 new failing tests)
+Phase: 17 complete (Schema v4 — Chunk Data Layer)
+Plan: 2 of 2 in Phase 17 complete (17-02 GREEN implementation done)
+Status: Phase 17 complete — CHUNK-01 zero-hallucination contract implemented; 330 tests green
+Last activity: 2026-02-24 — 17-02 GREEN implementation committed (e0ca208)
 
-Progress: [█░░░░░░░░░] 10% of v2 (Phase 17 Plan 1 of 2 complete)
+Progress: [██░░░░░░░░] 20% of v2 (Phase 17 complete — 2 of 2 plans done)
 
 ## Performance Metrics
 
@@ -82,6 +82,12 @@ Key 16-03 decisions:
 - MockEmbedder in test_round_trip.py uses model="test-model" with zero vectors to avoid model-mismatch guard in CorpusIndex.open()
 - Round-trip assertions use index._table.search().limit(20).to_list() — full-table dump, no vector similarity needed
 
+### 17-02 Decisions
+
+- chunk_text is read via chunk.get("chunk_text", "") in indexer — safe because summary prepend mutates chunk["text"] only, not chunk["chunk_text"]
+- Test fixtures that directly insert rows into LanceDB tables were auto-fixed (Rule 1) with chunk_name="" and chunk_text="" empty-string defaults
+- ensure_schema_v2 → ensure_schema_v3 → ensure_schema_v4 call order preserved in CorpusIndex.open()
+
 ### v2 Planning Decisions
 
 - CLI format: `file:start-end [construct] score:X.XXX` (grep/compiler-error pattern, IDE-clickable)
@@ -98,11 +104,11 @@ None — v2 planning complete, ready to start Phase 17.
 
 ### Blockers/Concerns
 
-None — 320 tests passing. Ruff-clean. Mypy-clean. v2 planning documentation written.
+None — 330 tests passing. Ruff-clean. Mypy-clean. Phase 17 complete.
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: 17-01-PLAN.md complete — RED test suite committed (3be5ace)
+Stopped at: 17-02-PLAN.md complete — GREEN implementation committed (e0ca208)
 Resume file: None
-Next step: Phase 17-02-PLAN.md — TDD GREEN for schema v4 (implement ChunkRecord v4 fields, ensure_schema_v4(), chunker v4 emission)
+Next step: Phase 18 (search layer improvements using chunk_name/chunk_text)

@@ -45,7 +45,7 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md` and earlier milestone ROADM
 
 Plans:
 - [x] 17-01-PLAN.md — TDD RED: write failing tests for `ChunkRecord` v4 fields and `ensure_schema_v4()` migration
-- [ ] 17-02-PLAN.md — GREEN: implement `ensure_schema_v4()`, update `ChunkRecord`, wire all chunkers to populate new fields
+- [x] 17-02-PLAN.md — GREEN: implement `ensure_schema_v4()`, update `ChunkRecord`, wire all chunkers to populate new fields
 
 ---
 
@@ -236,7 +236,7 @@ Plans:
 | 14. API / MCP / CLI Parity | v1.4 | 2/2 | Complete | 2026-02-24 |
 | 15. Core AST Chunker | v1.5 | 2/2 | Complete | 2026-02-24 |
 | 16. Integration Hardening | v1.5 | 3/3 | Complete | 2026-02-24 |
-| 17. Schema v4 — Chunk Data Layer | v2 | 0/2 | Planned | — |
+| 17. Schema v4 — Chunk Data Layer | v2 | 2/2 | Complete | 2026-02-24 |
 | 18. CLI Chunk Display | v2 | 0/2 | Planned | — |
 | 19. MCP Chunk Response | v2 | 0/2 | Planned | — |
 | 20. Python Method Sub-Chunking | v2 | 0/2 | Planned | — |
