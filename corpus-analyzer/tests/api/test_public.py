@@ -63,6 +63,8 @@ def test_search_calls_hybrid_search_and_maps_to_dataclasses() -> None:
         file_type=None,
         construct_type=None,
         limit=10,
+        sort_by="relevance",
+        min_score=0.0,
     )
 
 
@@ -83,6 +85,8 @@ def test_search_passes_filters_to_hybrid_search() -> None:
         file_type=".py",
         construct_type="code",
         limit=5,
+        sort_by="relevance",
+        min_score=0.0,
     )
 
 
@@ -119,6 +123,55 @@ def test_index_calls_index_source_for_each_source() -> None:
     assert mock_index.index_source.call_count == 2
     assert results[0]["source_name"] == "source-a"
     assert results[0]["files_indexed"] == 3
+
+
+def test_search_sort_by_translates_and_forwards() -> None:
+    """search() translates API sort_by vocabulary to engine vocabulary before forwarding."""
+    from corpus_analyzer.api.public import search
+
+    mock_engine = MagicMock()
+    mock_engine.hybrid_search.return_value = []
+
+    with patch("corpus_analyzer.api.public._open_engine", return_value=(mock_engine, MagicMock())):
+        search("q", sort_by="title")
+
+    call_kwargs = mock_engine.hybrid_search.call_args[1]
+    assert call_kwargs["sort_by"] == "path"
+
+    mock_engine.reset_mock()
+    mock_engine.hybrid_search.return_value = []
+
+    with patch("corpus_analyzer.api.public._open_engine", return_value=(mock_engine, MagicMock())):
+        search("q", sort_by="date")
+
+    call_kwargs = mock_engine.hybrid_search.call_args[1]
+    assert call_kwargs["sort_by"] == "date"
+
+
+def test_search_invalid_sort_by_raises_value_error() -> None:
+    """search() raises ValueError with message containing 'Invalid sort_by' for bad values."""
+    from corpus_analyzer.api.public import search
+
+    mock_engine = MagicMock()
+    mock_engine.hybrid_search.return_value = []
+
+    with patch("corpus_analyzer.api.public._open_engine", return_value=(mock_engine, MagicMock())):
+        with pytest.raises(ValueError, match="Invalid sort_by"):
+            search("q", sort_by="invalid")
+
+
+def test_search_min_score_forwarded() -> None:
+    """search() forwards min_score to hybrid_search() unchanged."""
+    from corpus_analyzer.api.public import search
+
+    mock_engine = MagicMock()
+    mock_engine.hybrid_search.return_value = []
+
+    with patch("corpus_analyzer.api.public._open_engine", return_value=(mock_engine, MagicMock())):
+        search("q", min_score=0.02)
+
+    call_kwargs = mock_engine.hybrid_search.call_args[1]
+    assert call_kwargs["min_score"] == pytest.approx(0.02)
 
 
 def test_find_config_walks_up_from_cwd(tmp_path: Path) -> None:

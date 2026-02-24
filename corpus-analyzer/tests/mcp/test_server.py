@@ -159,7 +159,40 @@ def test_corpus_search_passes_filters_to_hybrid_search() -> None:
         file_type=".py",
         construct_type="skill",
         limit=3,
+        min_score=0.0,
     )
+
+
+def test_corpus_search_min_score_forwarded() -> None:
+    """corpus_search() forwards non-None min_score to hybrid_search() unchanged."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", min_score=0.015, ctx=ctx)
+
+    asyncio.run(_run_test())
+
+    call_kwargs = engine.hybrid_search.call_args[1]
+    assert call_kwargs["min_score"] == pytest.approx(0.015)
+
+
+def test_corpus_search_min_score_none_uses_zero() -> None:
+    """corpus_search() converts None min_score to 0.0 before forwarding."""
+    from corpus_analyzer.mcp.server import corpus_search
+
+    engine = _make_engine([])
+    ctx = _make_ctx(engine)
+
+    async def _run_test() -> None:
+        await corpus_search(query="q", min_score=None, ctx=ctx)
+
+    asyncio.run(_run_test())
+
+    call_kwargs = engine.hybrid_search.call_args[1]
+    assert call_kwargs["min_score"] == pytest.approx(0.0)
 
 
 def test_server_module_does_not_write_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
