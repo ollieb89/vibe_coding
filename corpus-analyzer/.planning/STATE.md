@@ -34,7 +34,7 @@ Progress: [██░░░░░░░░] 20% (v1.3)
 - Timeline: 1 day (2026-02-24)
 
 **v1.3 Summary (in progress):**
-- Total plans completed: 4
+- Total plans completed: 5
 - Phases: 4 (9–12)
 
 ## Accumulated Context
@@ -60,6 +60,8 @@ Recent decisions affecting current work:
 - [10-03]: database.py ternary: use explicit 'is not None' for nullable float/bool fields — 'or' shortcut mishandles 0.0
 - [10-03]: Long test docstrings: wrap as multi-line PEP 257 (summary + blank + detail), not noqa suppression
 - [11-03]: chain_lines local res variable typed as list[str] to satisfy mypy inference for extend() calls
+- [11-04]: response.message.content (typed Optional[str]) not dict subscript (Any) for ollama ChatResponse access
+- [11-04]: OllamaClient is a plain class — self.db: CorpusDatabase | None = None with TYPE_CHECKING guard resolves both no-any-return and unblocks plan 05
 
 ### Pending Todos
 
@@ -72,5 +74,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 11-02-PLAN.md (MYPY-01: database.py zero mypy errors — cast(Table,...) wrapping, parameterised generics, float() guards)
+Stopped at: Completed 11-04-PLAN.md (MYPY-03/04/06: 9 mypy errors fixed across 6 files, OllamaClient.db added with TYPE_CHECKING guard)
 Resume file: None
